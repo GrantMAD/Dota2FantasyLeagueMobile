@@ -1,4 +1,5 @@
-import { ApiError, apiFetch } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface GameweekSummary {
   id: number;
@@ -98,7 +99,8 @@ function parseGameweek(value: unknown): GameweekSummary {
 }
 
 export async function getGameweeks(): Promise<GameweekSummary[]> {
-  const result = await apiFetch<unknown>('/api/gameweeks');
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_gameweeks');
+  if (error) throw new ApiError(`Unable to load gameweeks: ${error.message}`, 500);
   if (!isRecord(result) || !Array.isArray(result.gameweeks)) {
     throw new ApiError('Gameweek data was returned in an unexpected format.', 502);
   }

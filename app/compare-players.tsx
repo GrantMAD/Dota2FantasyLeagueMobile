@@ -92,7 +92,7 @@ export default function ComparePlayersScreen() {
               </ScrollView>
             </View>
             <Text className="text-xs leading-5 text-slate-500">
-              Values are read from the shared player and scoring APIs. Advanced premium analytics are not included here.
+              Values are read from authenticated Supabase player and scoring RPCs. Advanced premium analytics are not included here.
             </Text>
           </>
         ) : null}

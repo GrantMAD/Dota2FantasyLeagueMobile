@@ -1,4 +1,5 @@
-import { ApiError, apiFetch } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface LeagueStanding {
   userId: string;
@@ -141,7 +142,8 @@ function parseLeague(value: unknown): LeagueSummary {
 }
 
 export async function getLeagues(): Promise<LeagueSummary[]> {
-  const result = await apiFetch<unknown>('/api/leagues');
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_leagues');
+  if (error) throw new ApiError(`Unable to load leagues: ${error.message}`, 500);
   if (!isRecord(result) || !Array.isArray(result.leagues)) {
     throw new ApiError('League data was returned in an unexpected format.', 502);
   }
@@ -149,10 +151,19 @@ export async function getLeagues(): Promise<LeagueSummary[]> {
 }
 
 async function submitLeagueRequest(body: CreateLeagueInput | { action: 'join'; inviteCode: string }) {
-  const result = await apiFetch<unknown>('/api/leagues', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+  const isJoin = 'action' in body;
+  const { data: result, error } = isJoin
+    ? await getSupabaseClient().rpc('mobile_join_league', {
+        p_invite_code: body.inviteCode,
+      })
+    : await getSupabaseClient().rpc('mobile_create_league', {
+        p_name: body.name,
+        p_description: body.description,
+        p_type: body.type,
+        p_privacy_level: body.privacyLevel,
+        p_max_participants: body.maxParticipants,
+      });
+  if (error) throw new ApiError(`Unable to complete league request: ${error.message}`, 400);
   if (
     !isRecord(result) ||
     !isRecord(result.data) ||

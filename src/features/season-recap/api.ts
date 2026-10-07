@@ -1,4 +1,5 @@
-import { ApiError, apiFetch } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface SeasonRecap {
   seasonId: number;
@@ -105,7 +106,8 @@ function parseRecap(value: unknown): SeasonRecap {
 }
 
 export async function getSeasonRecaps(): Promise<SeasonRecap[]> {
-  const result = await apiFetch<unknown>('/api/season-recap');
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_season_recaps');
+  if (error) throw new ApiError(`Unable to load season recap: ${error.message}`, 500);
   if (!isRecord(result) || !Array.isArray(result.recaps)) {
     throw new ApiError('Season recap data was returned in an unexpected format.', 502);
   }

@@ -1,4 +1,5 @@
-import { ApiError, apiFetch } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface AnalyticsTrend {
   gameweekId: number;
@@ -102,7 +103,8 @@ function parseMarketPlayer(value: unknown): AnalyticsMarketPlayer {
 }
 
 export async function getAnalytics(): Promise<ManagerAnalytics> {
-  const result = await apiFetch<unknown>('/api/analytics');
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_analytics');
+  if (error) throw new ApiError(`Unable to load analytics: ${error.message}`, 500);
   if (
     !isRecord(result) ||
     !isRecord(result.user) ||

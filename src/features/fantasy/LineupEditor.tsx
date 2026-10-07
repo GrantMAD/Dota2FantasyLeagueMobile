@@ -150,13 +150,14 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
   }
 
   function submitLineup() {
-    if (isLocked || mutation.isPending || !context.gameweek) return;
+    if (isLocked || mutation.isPending || !context.gameweek || !context.fantasySeasonId) return;
     if (lineupError) {
       setSaveError(lineupError);
       return;
     }
 
     mutation.mutate({
+      fantasySeasonId: context.fantasySeasonId,
       gameweekId: context.gameweek.id,
       lineup: lineup.map((entry) => ({
         playerId: entry.player_id,

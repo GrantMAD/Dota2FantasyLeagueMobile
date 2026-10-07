@@ -1,4 +1,5 @@
-import { ApiError, apiFetch } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface MatchSummary {
   id: number;
@@ -34,7 +35,7 @@ export interface MatchDetails {
 }
 
 export interface MatchPlayerStat {
-  id: number;
+  id: number | string;
   player_id: number;
   team_id: number;
   hero_name: string | null;
@@ -72,7 +73,7 @@ function parseStatPlayer(value: unknown): MatchPlayerStat['player'] {
   if (value === null || value === undefined) return null;
   if (
     !isRecord(value) ||
-    !Number.isInteger(value.id) ||
+    !((typeof value.id === 'number' || typeof value.id === 'string') && Number.isInteger(Number(value.id))) ||
     typeof value.name !== 'string' ||
     !nullableString(value.in_game_name)
   ) {
@@ -147,13 +148,15 @@ export async function getMatches(status: string): Promise<MatchSummary[]> {
 }
 
 export async function getMatchesByFilters(filters: { status?: string; gameweekId?: number }): Promise<MatchSummary[]> {
-  const params = new URLSearchParams({ limit: '100', order: 'asc' });
   const status = filters.status ?? 'all';
-  if (status !== 'all') {
-    params.set('status', status === 'upcoming' ? 'scheduled' : status);
-  }
-  if (filters.gameweekId !== undefined) params.set('gameweekId', String(filters.gameweekId));
-  const result = await apiFetch<unknown>(`/api/matches?${params.toString()}`);
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_matches', {
+    p_status: status === 'all' ? null : status === 'upcoming' ? 'scheduled' : status,
+    p_gameweek_id: filters.gameweekId ?? null,
+    p_team_id: null,
+    p_tournament_id: null,
+    p_limit: 100,
+  });
+  if (error) throw new ApiError(`Unable to load matches: ${error.message}`, 500);
   if (!isRecord(result) || !Array.isArray(result.matches)) {
     throw new ApiError('Match data was returned in an unexpected format.', 502);
   }
@@ -165,7 +168,10 @@ export async function getMatchesByFilters(filters: { status?: string; gameweekId
 }
 
 export async function getMatchDetails(id: number): Promise<MatchDetails> {
-  const result = await apiFetch<unknown>(`/api/matches/${id}`);
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_match_details', {
+    p_match_id: id,
+  });
+  if (error) throw new ApiError(`Unable to load match details: ${error.message}`, 500);
   if (
     !isRecord(result) ||
     !Array.isArray(result.playerStats) ||
@@ -177,7 +183,7 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
   const playerStats = result.playerStats.map((row): MatchPlayerStat => {
     if (
       !isRecord(row) ||
-      !Number.isInteger(row.id) ||
+      !(Number.isInteger(row.id) || typeof row.id === 'string') ||
       !Number.isInteger(row.player_id) ||
       !Number.isInteger(row.team_id) ||
       !nullableString(row.hero_name) ||
@@ -201,7 +207,7 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
     }
 
     return {
-      id: Number(row.id),
+      id: typeof row.id === 'string' ? row.id : Number(row.id),
       player_id: Number(row.player_id),
       team_id: Number(row.team_id),
       hero_name: row.hero_name,
@@ -270,7 +276,8 @@ function parseTournament(value: unknown): TournamentSummary {
 }
 
 export async function getTournaments(): Promise<TournamentSummary[]> {
-  const result = await apiFetch<unknown>('/api/tournaments');
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_tournaments');
+  if (error) throw new ApiError(`Unable to load tournaments: ${error.message}`, 500);
   if (!isRecord(result) || !Array.isArray(result.tournaments)) {
     throw new ApiError('Tournament data was returned in an unexpected format.', 502);
   }
@@ -278,7 +285,10 @@ export async function getTournaments(): Promise<TournamentSummary[]> {
 }
 
 export async function getTournamentDetails(id: number): Promise<TournamentDetails> {
-  const result = await apiFetch<unknown>(`/api/tournaments/${id}`);
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_tournament_details', {
+    p_tournament_id: id,
+  });
+  if (error) throw new ApiError(`Unable to load tournament details: ${error.message}`, 500);
   if (!isRecord(result) || !isRecord(result.tournament) || !Array.isArray(result.matches)) {
     throw new ApiError('Tournament data was returned in an unexpected format.', 502);
   }

@@ -3,7 +3,7 @@ import * as Linking from 'expo-linking';
 import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { Button } from '@/src/components/Button';
 import { Screen } from '@/src/components/Screen';
-import { getApiBaseUrl } from '@/src/lib/api';
+import { getWebBaseUrl } from '@/src/lib/web';
 
 export default function ForgotPasswordScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -13,7 +13,7 @@ export default function ForgotPasswordScreen() {
     setErrorMessage(null);
     setOpening(true);
     try {
-      const recoveryUrl = new URL('/forgot-password', getApiBaseUrl()).toString();
+      const recoveryUrl = new URL('/forgot-password', getWebBaseUrl()).toString();
       await Linking.openURL(recoveryUrl);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to open password recovery.');

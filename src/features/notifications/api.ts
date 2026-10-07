@@ -1,4 +1,5 @@
-import { ApiError, apiFetch } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export type NotificationCategory = 'all' | 'unread' | 'deadline' | 'market' | 'scoring' | 'league';
 
@@ -60,8 +61,11 @@ function parseNotification(value: unknown): ManagerNotification {
 }
 
 export async function getNotifications(category: NotificationCategory): Promise<NotificationPage> {
-  const params = new URLSearchParams({ category, limit: '100' });
-  const result = await apiFetch<unknown>(`/api/notifications?${params.toString()}`);
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_notifications', {
+    p_category: category,
+    p_limit: 100,
+  });
+  if (error) throw new ApiError(`Unable to load notifications: ${error.message}`, 500);
   if (
     !isRecord(result) ||
     !Array.isArray(result.notifications) ||
@@ -76,15 +80,23 @@ export async function getNotifications(category: NotificationCategory): Promise<
 }
 
 export async function markNotificationRead(id: number): Promise<void> {
-  await apiFetch<unknown>(`/api/notifications/${id}/read`, { method: 'PUT' });
+  const { data, error } = await getSupabaseClient().rpc('mobile_mark_notification_read', {
+    p_notification_id: id,
+  });
+  if (error) throw new ApiError(`Unable to mark notification as read: ${error.message}`, 500);
+  if (data !== true) throw new ApiError('Notification not found or does not belong to you.', 404);
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
-  await apiFetch<unknown>('/api/notifications', { method: 'PUT' });
+  const { data, error } = await getSupabaseClient().rpc('mobile_mark_all_notifications_read');
+  if (error) throw new ApiError(`Unable to mark notifications as read: ${error.message}`, 500);
+  if (data !== true) throw new ApiError('Notifications could not be marked as read.', 502);
 }
 
 export async function clearReadNotifications(): Promise<void> {
-  await apiFetch<unknown>('/api/notifications', { method: 'DELETE' });
+  const { data, error } = await getSupabaseClient().rpc('mobile_clear_read_notifications');
+  if (error) throw new ApiError(`Unable to clear read notifications: ${error.message}`, 500);
+  if (data !== true) throw new ApiError('Read notifications could not be cleared.', 502);
 }
 
 export function notificationCategoryForType(type: string): Exclude<NotificationCategory, 'all' | 'unread'> | null {

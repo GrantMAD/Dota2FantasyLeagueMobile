@@ -1,6 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { ApiError, apiFetch } from '../src/lib/api';
-import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
+import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { getGameweeks } from '../src/features/gameweeks/api';
 import { getPlayerDetail, getPlayers, normalizePlayerComparisonIds } from '../src/features/players/api';
@@ -34,7 +33,7 @@ import {
   notificationCategoryForType,
 } from '../src/features/notifications/api';
 
-process.env.EXPO_PUBLIC_API_URL = 'https://api.example.test';
+process.env.EXPO_PUBLIC_WEB_URL = 'https://web.example.test';
 process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://project.example.test';
 process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
 
@@ -55,69 +54,29 @@ const session: Session = {
   },
 };
 
-function jsonResponse(status: number, payload: unknown): Response {
-  return {
-    status,
-    ok: status >= 200 && status < 300,
-    json: async () => payload,
-  } as Response;
-}
-
-describe('mobile API client', () => {
+describe('mobile data access', () => {
   const supabase = getSupabaseClient();
   let getSession: jest.SpyInstance;
   let refreshSession: jest.SpyInstance;
+  let signUp: jest.SpyInstance;
+  let mobileFantasyContextRpc: jest.SpyInstance;
 
   beforeEach(() => {
     getSession = jest.spyOn(supabase.auth, 'getSession');
     refreshSession = jest.spyOn(supabase.auth, 'refreshSession');
+    signUp = jest.spyOn(supabase.auth, 'signUp');
     getSession.mockResolvedValue({ data: { session }, error: null });
     refreshSession.mockResolvedValue({ data: { session, user: session.user }, error: null });
+    mobileFantasyContextRpc = jest.spyOn(supabase, 'rpc');
     jest.spyOn(globalThis, 'fetch');
   });
 
-  it('sends the current access token to the configured API origin', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, { totalPoints: 42 }));
-
-    await expect(apiFetch<{ totalPoints: number }>('/api/fantasy/context')).resolves.toEqual({
-      totalPoints: 42,
-    });
-
-    const [url, init] = jest.mocked(fetch).mock.calls[0];
-    expect(url).toBe('https://api.example.test/api/fantasy/context');
-    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer test-access-token');
-    expect(init?.credentials).toBe('omit');
-  });
-
-  it('refreshes the session and retries an idempotent request once after a 401', async () => {
-    jest
-      .mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse(401, { error: 'Invalid or expired token' }))
-      .mockResolvedValueOnce(jsonResponse(200, { totalPoints: 42 }));
-
-    await expect(apiFetch<{ totalPoints: number }>('/api/fantasy/context')).resolves.toEqual({
-      totalPoints: 42,
-    });
-
-    expect(refreshSession).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not replay a non-idempotent request after a 401', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(401, { error: 'Invalid or expired token' }));
-
-    await expect(apiFetch('/api/fantasy/lineup', { method: 'POST', body: '{}' })).rejects.toMatchObject({
-      name: 'ApiError',
-      status: 401,
-    } satisfies Partial<ApiError>);
-
-    expect(refreshSession).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
+  function mockFantasyContextRpc(value: unknown): void {
+    mobileFantasyContextRpc.mockResolvedValue({ data: value, error: null });
+  }
 
   it('validates the fantasy context response before exposing dashboard data', async () => {
-    jest.mocked(fetch).mockResolvedValue(
-      jsonResponse(200, {
+    mockFantasyContextRpc({
         fantasySeasonId: null,
         seasonId: null,
         budget: 100,
@@ -135,18 +94,28 @@ describe('mobile API client', () => {
         },
         lineup: [],
         ownedPlayers: [],
-      })
-    );
+      });
 
     await expect(getFantasyContext()).resolves.toMatchObject({
       budget: 100,
       freeTransfers: 2,
       ownedPlayers: [],
     });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_fantasy_context');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('surfaces errors returned by the direct fantasy-context RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'Authentication is required.' },
+    });
+
+    await expect(getFantasyContext()).rejects.toThrow('Unable to load fantasy context: Authentication is required.');
   });
 
   it('rejects unexpected fantasy context shapes instead of assuming defaults', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {}));
+    mockFantasyContextRpc({});
 
     await expect(getFantasyContext()).rejects.toMatchObject({
       name: 'ApiError',
@@ -155,7 +124,7 @@ describe('mobile API client', () => {
   });
 
   it('preserves professional team details from fantasy context for planner use', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+    mockFantasyContextRpc({
       fantasySeasonId: 9,
       seasonId: 2,
       budget: 10,
@@ -184,7 +153,7 @@ describe('mobile API client', () => {
         last_gw_points: 0,
         recent_points: 0,
       }],
-    }));
+    });
 
     await expect(getFantasyContext()).resolves.toMatchObject({
       ownedPlayers: [{
@@ -194,8 +163,8 @@ describe('mobile API client', () => {
     });
   });
 
-  it('validates the shared gameweek schedule response', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('validates the authenticated gameweek schedule RPC response', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       gameweeks: [{
         id: 7,
         gameweek_number: 3,
@@ -209,7 +178,7 @@ describe('mobile API client', () => {
         top_scorer: { name: 'Player One', in_game_name: 'One', total_points: 18 },
         user_score: 42,
       }],
-    }));
+    }, error: null });
 
     await expect(getGameweeks()).resolves.toMatchObject([{
       id: 7,
@@ -220,12 +189,11 @@ describe('mobile API client', () => {
       flags: [{ flag: 'double' }],
       user_score: 42,
     }]);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/gameweeks');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_gameweeks');
   });
 
   it('parses player team details and upcoming scheduled fixtures for the squad planner', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       matches: [{
         id: 31,
         status: 'scheduled',
@@ -236,7 +204,7 @@ describe('mobile API client', () => {
         dire_team: { name: 'Dire' },
         tournaments: { name: 'Autumn Cup' },
       }],
-    }));
+    }, error: null });
 
     await expect(getUpcomingTeamFixtures(4)).resolves.toMatchObject([{
       id: 31,
@@ -246,14 +214,17 @@ describe('mobile API client', () => {
       team_b: { name: 'Dire' },
       tournament_name: 'Autumn Cup',
     }]);
-    const [url] = jest.mocked(fetch).mock.calls[0];
-    expect(String(url)).toContain('/api/matches?');
-    expect(String(url)).toContain('teamId=4');
-    expect(String(url)).toContain('status=scheduled');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_matches', {
+      p_status: 'scheduled',
+      p_gameweek_id: null,
+      p_team_id: 4,
+      p_tournament_id: null,
+      p_limit: 100,
+    });
   });
 
-  it('queries and validates the shared player directory contract', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('queries and validates the authenticated player directory RPC contract', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       data: [{
         id: 41,
         name: 'Player Name',
@@ -269,7 +240,7 @@ describe('mobile API client', () => {
       total: 38,
       limit: 20,
       offset: 0,
-    }));
+    }, error: null });
 
     await expect(getPlayers({
       search: 'Tag',
@@ -287,14 +258,17 @@ describe('mobile API client', () => {
         profile_image_url: 'https://images.example.test/player.png',
       }],
     });
-    const [url] = jest.mocked(fetch).mock.calls[0];
-    expect(String(url)).toContain('/api/players?');
-    expect(String(url)).toContain('role=Carry');
-    expect(String(url)).toContain('search=Tag');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_players', {
+      p_search: 'Tag',
+      p_role: 'Carry',
+      p_available_only: true,
+      p_offset: 0,
+      p_limit: 20,
+    });
   });
 
-  it('validates player detail and recent performance response from the shared API', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('validates player detail and recent performance from the authenticated RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       player: {
         id: 41,
         name: 'Player Name',
@@ -319,7 +293,7 @@ describe('mobile API client', () => {
           fantasy_points_breakdown: { total_points: 12 },
         }],
       },
-    }));
+    }, error: null });
 
     await expect(getPlayerDetail(41)).resolves.toMatchObject({
       id: 41,
@@ -327,15 +301,17 @@ describe('mobile API client', () => {
       total_season_points: 104.5,
       performances: [{ gameweek_id: 7, kills: 8, deaths: 2, assists: 11, total_points: 12 }],
     });
-    expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/players/41');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_player_detail', {
+      p_player_id: 41,
+    });
   });
 
   it('normalizes player comparison IDs to unique positive IDs and caps the selection at four', () => {
     expect(normalizePlayerComparisonIds('4,4,2,-1,5,7,8,9,invalid')).toEqual([4, 2, 5, 7]);
   });
 
-  it('loads and filters shared match results for the match center', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('loads and filters match results through the authenticated RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       matches: [{
         id: 81,
         status: 'scheduled',
@@ -349,7 +325,7 @@ describe('mobile API client', () => {
         dire_team: { name: 'Dire', tag: 'DIR' },
         tournaments: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
       }],
-    }));
+    }, error: null });
 
     await expect(getMatches('upcoming')).resolves.toMatchObject([{
       id: 81,
@@ -357,13 +333,17 @@ describe('mobile API client', () => {
       radiant_team: { name: 'Radiant' },
       tournament: { id: 9, name: 'Autumn Cup' },
     }]);
-    const [url] = jest.mocked(fetch).mock.calls[0];
-    expect(String(url)).toContain('/api/matches?');
-    expect(String(url)).toContain('status=scheduled');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_matches', {
+      p_status: 'scheduled',
+      p_gameweek_id: null,
+      p_team_id: null,
+      p_tournament_id: null,
+      p_limit: 100,
+    });
   });
 
-  it('validates match detail player statistics and fantasy points', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('validates match detail player statistics and fantasy points from the RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       match: {
         id: 81,
         status: 'completed',
@@ -389,17 +369,20 @@ describe('mobile API client', () => {
         professional_players: { id: 41, name: 'Player Name', in_game_name: 'PlayerTag' },
       }],
       fantasyBreakdown: [{ player_id: 41, total_points: 12.5 }],
-    }));
+    }, error: null });
 
     await expect(getMatchDetails(81)).resolves.toMatchObject({
       match: { id: 81, status: 'completed' },
       playerStats: [{ id: 501, player_id: 41, hero_name: 'Crystal Maiden', kills: 3, assists: 15 }],
       fantasyBreakdown: [{ player_id: 41, total_points: 12.5 }],
     });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_match_details', {
+      p_match_id: 81,
+    });
   });
 
   it('rejects malformed match player statistics rather than silently ignoring them', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       match: {
         id: 81,
         status: 'completed',
@@ -415,13 +398,13 @@ describe('mobile API client', () => {
       },
       playerStats: [{ id: 501, player_id: 'invalid', team_id: 4, kills: 2, deaths: 1, assists: 3 }],
       fantasyBreakdown: [],
-    }));
+    }, error: null });
 
     await expect(getMatchDetails(81)).rejects.toMatchObject({ name: 'ApiError', status: 502 });
   });
 
-  it('validates the tournament directory response', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('validates the tournament directory RPC response', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       tournaments: [{
         id: 9,
         name: 'Autumn Cup',
@@ -434,7 +417,7 @@ describe('mobile API client', () => {
         series_count: 4,
         participating_teams: [{ id: 4, name: 'Radiant' }],
       }],
-    }));
+    }, error: null });
 
     await expect(getTournaments()).resolves.toMatchObject([{
       id: 9,
@@ -442,11 +425,11 @@ describe('mobile API client', () => {
       eligible: true,
       participating_teams: [{ id: 4, name: 'Radiant' }],
     }]);
-    expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/tournaments');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_tournaments');
   });
 
-  it('validates tournament detail data and its enriched schedule', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('validates tournament detail data and its enriched schedule from the RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       tournament: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
       matches: [{
         id: 81,
@@ -461,17 +444,19 @@ describe('mobile API client', () => {
         dire_team: { name: 'Dire', tag: 'DIRE' },
         tournaments: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
       }],
-    }));
+    }, error: null });
 
     await expect(getTournamentDetails(9)).resolves.toMatchObject({
       tournament: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
       matches: [{ id: 81, radiant_team: { name: 'Radiant' }, gameweek_id: 7 }],
     });
-    expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/tournaments/9');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_tournament_details', {
+      p_tournament_id: 9,
+    });
   });
 
   it('loads and validates league standings and head-to-head fixtures', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       leagues: [{
         id: 21,
         name: 'Weekend League',
@@ -504,7 +489,7 @@ describe('mobile API client', () => {
           isBye: false,
         }],
       }],
-    }));
+    }, error: null });
 
     await expect(getLeagues()).resolves.toMatchObject([{
       id: 21,
@@ -512,21 +497,19 @@ describe('mobile API client', () => {
       standings: [{ userId: 'manager-1', gameweekPoints: 12, wins: 3 }],
       fixtures: [{ gameweekId: 5, homePoints: 12, awayPoints: 8 }],
     }]);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/leagues');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_leagues');
   });
 
-  it('creates and joins leagues through the existing API without replaying writes', async () => {
-    jest
-      .mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse(201, {
+  it('creates and joins leagues through authenticated RPCs', async () => {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({ data: {
         data: { id: 21, name: 'Weekend League' },
         message: 'League created successfully.',
-      }))
-      .mockResolvedValueOnce(jsonResponse(200, {
+      }, error: null })
+      .mockResolvedValueOnce({ data: {
         data: { id: 22, name: 'Open League' },
         message: 'Joined Open League successfully.',
-      }));
+      }, error: null });
 
     await expect(createLeague({
       name: 'Weekend League',
@@ -537,17 +520,20 @@ describe('mobile API client', () => {
     })).resolves.toMatchObject({ id: 21, name: 'Weekend League' });
     await expect(joinLeague('abc-1234')).resolves.toMatchObject({ id: 22, name: 'Open League' });
 
-    expect(fetch).toHaveBeenCalledTimes(2);
-    const [, createRequest] = jest.mocked(fetch).mock.calls[0];
-    const [, joinRequest] = jest.mocked(fetch).mock.calls[1];
-    expect(createRequest?.method).toBe('POST');
-    expect(JSON.parse(String(createRequest?.body))).toMatchObject({ name: 'Weekend League', type: 'h2h' });
-    expect(joinRequest?.method).toBe('POST');
-    expect(JSON.parse(String(joinRequest?.body))).toEqual({ action: 'join', inviteCode: 'ABC-1234' });
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(1, 'mobile_create_league', {
+      p_name: 'Weekend League',
+      p_description: 'Friends league',
+      p_type: 'h2h',
+      p_privacy_level: 'private',
+      p_max_participants: 10,
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(2, 'mobile_join_league', {
+      p_invite_code: 'ABC-1234',
+    });
   });
 
-  it('loads paginated overall or gameweek leaderboard data from the shared API', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('loads paginated overall or gameweek leaderboard data from the authenticated RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       leaderboard: [{
         id: 88,
         rank: 3,
@@ -563,7 +549,7 @@ describe('mobile API client', () => {
       }],
       lastRecalculatedAt: '2026-10-07T10:00:00.000Z',
       pagination: { page: 2, limit: 50, total: 72 },
-    }));
+    }, error: null });
 
     await expect(getLeaderboard({ page: 2, gameweekId: 7 })).resolves.toMatchObject({
       page: 2,
@@ -575,11 +561,14 @@ describe('mobile API client', () => {
         fantasyTeam: { name: 'Team Radiant', userId: 'manager-19', managerName: 'Radiant Manager' },
       }],
     });
-    expect(String(jest.mocked(fetch).mock.calls[0][0])).toContain('/api/leaderboard?page=2&limit=50&gameweekId=7');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_leaderboard', {
+      p_page: 2,
+      p_gameweek_id: 7,
+    });
   });
 
-  it('validates manager analytics and leaderboard-related trends from the shared API', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('validates manager analytics and leaderboard-related trends from the authenticated RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       user: { totalPoints: 151, globalRank: 28, budget: 12.5, squadValue: 87.5, freeTransfers: 2 },
       trend: [{ gameweekId: 3, userScore: 48, globalAverage: 41.2 }],
       roleBreakdown: [{ role: 'Carry', points: 34.5 }],
@@ -587,7 +576,7 @@ describe('mobile API client', () => {
       market: [{ playerName: 'Carry Player', team: 'Radiant', role: 'Carry', ownership: 12, price: 8, roi: 15 }],
       dreamTeam: [{ playerName: 'Carry Player', team: 'Radiant', role: 'Carry', points: 18 }],
       valueForMoney: [{ playerName: 'Carry Player', team: 'Radiant', role: 'Carry', points: 18, ownership: 12, price: 8, roi: 15 }],
-    }));
+    }, error: null });
 
     await expect(getAnalytics()).resolves.toMatchObject({
       user: { totalPoints: 151, globalRank: 28 },
@@ -595,11 +584,11 @@ describe('mobile API client', () => {
       captainEfficiency: { efficiency: 80 },
       dreamTeam: [{ playerName: 'Carry Player', points: 18 }],
     });
-    expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/analytics');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_analytics');
   });
 
-  it('validates finished season recap data and optional statistics', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+  it('validates finished season recap data and optional statistics from the authenticated RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
       recaps: [{
         seasonId: 2,
         fantasySeasonId: 19,
@@ -614,7 +603,7 @@ describe('mobile API client', () => {
         transferCount: 7,
         bestLeagueRank: 2,
       }],
-    }));
+    }, error: null });
 
     await expect(getSeasonRecaps()).resolves.toMatchObject([{
       seasonName: 'Autumn Season',
@@ -623,28 +612,35 @@ describe('mobile API client', () => {
       bestGameweek: { gameweek: 4, points: 62 },
       transferCount: 7,
     }]);
-    expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/season-recap');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_season_recaps');
   });
 
   it('loads manager notifications and unread count by category', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
-      notifications: [{
-        id: 91,
-        type: 'league_result',
-        title: 'League result',
-        message: 'Your league standings changed.',
-        is_read: false,
-        created_at: '2026-10-07T10:00:00.000Z',
-        metadata: { league_id: 21 },
-      }],
-      unreadCount: 4,
-    }));
+    mobileFantasyContextRpc.mockResolvedValueOnce({
+      data: {
+        notifications: [{
+          id: 91,
+          type: 'league_result',
+          title: 'League result',
+          message: 'Your league standings changed.',
+          is_read: false,
+          created_at: '2026-10-07T10:00:00.000Z',
+          metadata: { league_id: 21 },
+        }],
+        unreadCount: 4,
+      },
+      error: null,
+    });
 
     await expect(getNotifications('league')).resolves.toMatchObject({
       unreadCount: 4,
       notifications: [{ id: 91, type: 'league_result', is_read: false, metadata: { league_id: 21 } }],
     });
-    expect(String(jest.mocked(fetch).mock.calls[0][0])).toContain('/api/notifications?category=league&limit=100');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_notifications', {
+      p_category: 'league',
+      p_limit: 100,
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('filters league invitations into the League category on mobile', () => {
@@ -713,30 +709,28 @@ describe('mobile API client', () => {
     })).toEqual({ label: 'Open leagues', href: '/leagues' });
   });
 
-  it('uses existing notification read and clear endpoints without retrying writes', async () => {
-    jest
-      .mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse(200, { message: 'Notification marked as read.' }))
-      .mockResolvedValueOnce(jsonResponse(200, { message: 'Notifications marked as read.' }))
-      .mockResolvedValueOnce(jsonResponse(200, { message: 'Read notifications cleared.' }));
+  it('marks and clears notifications through authenticated Supabase functions', async () => {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({ data: true, error: null })
+      .mockResolvedValueOnce({ data: true, error: null })
+      .mockResolvedValueOnce({ data: true, error: null });
 
     await expect(markNotificationRead(91)).resolves.toBeUndefined();
     await expect(markAllNotificationsRead()).resolves.toBeUndefined();
     await expect(clearReadNotifications()).resolves.toBeUndefined();
 
-    expect(fetch).toHaveBeenCalledTimes(3);
-    expect(jest.mocked(fetch).mock.calls.map(([url, init]) => [String(url), init?.method])).toEqual([
-      ['https://api.example.test/api/notifications/91/read', 'PUT'],
-      ['https://api.example.test/api/notifications', 'PUT'],
-      ['https://api.example.test/api/notifications', 'DELETE'],
-    ]);
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(1, 'mobile_mark_notification_read', {
+      p_notification_id: 91,
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(2, 'mobile_mark_all_notifications_read');
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(3, 'mobile_clear_read_notifications');
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('loads and updates manager profile fields using the existing authenticated API', async () => {
-    jest
-      .mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse(200, {
-        profile: {
+  it('loads and updates manager profile fields through authenticated Supabase RPCs', async () => {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({
+        data: { profile: {
           id: 'test-user',
           username: 'captain',
           display_name: 'Captain',
@@ -745,10 +739,11 @@ describe('mobile API client', () => {
           push_notifications: false,
           theme_preference: 'dark',
           member_since: '2026-01-01T00:00:00.000Z',
-        },
-      }))
-      .mockResolvedValueOnce(jsonResponse(200, {
-        profile: {
+        } },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { profile: {
           id: 'test-user',
           username: 'manager',
           display_name: 'Manager',
@@ -757,8 +752,9 @@ describe('mobile API client', () => {
           push_notifications: true,
           theme_preference: 'light',
           member_since: '2026-01-01T00:00:00.000Z',
-        },
-      }));
+        } },
+        error: null,
+      });
 
     await expect(getManagerProfile()).resolves.toMatchObject({
       id: 'test-user',
@@ -782,41 +778,61 @@ describe('mobile API client', () => {
       themePreference: 'light',
     });
 
-    const [url, init] = jest.mocked(fetch).mock.calls[1];
-    expect(url).toBe('https://api.example.test/api/user/profile');
-    expect(init?.method).toBe('PUT');
-    expect(JSON.parse(String(init?.body))).toEqual({
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(1, 'mobile_get_profile');
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(2, 'mobile_update_profile', {
+      p_updates: {
       username: 'manager',
       display_name: 'Manager',
       email_notifications: false,
       push_notifications: true,
+      },
     });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('loads and saves the account theme preference through the existing endpoint', async () => {
-    jest
-      .mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse(200, { theme: 'dark' }))
-      .mockResolvedValueOnce(jsonResponse(200, { theme: 'light' }));
+  it('loads and saves the account theme preference through authenticated Supabase RPCs', async () => {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({
+        data: { profile: {
+          id: 'test-user',
+          username: 'captain',
+          display_name: 'Captain',
+          email: 'test@example.com',
+          email_notifications: true,
+          push_notifications: false,
+          theme_preference: 'dark',
+          member_since: '2026-01-01T00:00:00.000Z',
+        } },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { profile: {
+          id: 'test-user',
+          username: 'captain',
+          display_name: 'Captain',
+          email: 'test@example.com',
+          email_notifications: true,
+          push_notifications: false,
+          theme_preference: 'light',
+          member_since: '2026-01-01T00:00:00.000Z',
+        } },
+        error: null,
+      });
 
     await expect(getThemePreference()).resolves.toBe('dark');
     await expect(updateThemePreference('light')).resolves.toBe('light');
 
-    const [getUrl, getInit] = jest.mocked(fetch).mock.calls[0];
-    const [putUrl, putInit] = jest.mocked(fetch).mock.calls[1];
-    expect(getUrl).toBe('https://api.example.test/api/user/theme');
-    expect(getInit?.method).toBeUndefined();
-    expect(putUrl).toBe('https://api.example.test/api/user/theme');
-    expect(putInit?.method).toBe('PUT');
-    expect(JSON.parse(String(putInit?.body))).toEqual({ theme: 'light' });
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(1, 'mobile_get_profile');
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(2, 'mobile_update_profile', {
+      p_updates: { theme_preference: 'light' },
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('updates the push preference and registers or removes the current device token', async () => {
-    jest
-      .mocked(fetch)
-      .mockResolvedValueOnce(jsonResponse(200, {
-        profile: {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({
+        data: { profile: {
           id: 'test-user',
           username: 'captain',
           display_name: 'Captain',
@@ -825,10 +841,11 @@ describe('mobile API client', () => {
           push_notifications: true,
           theme_preference: 'dark',
           member_since: '2026-01-01T00:00:00.000Z',
-        },
-      }))
-      .mockResolvedValueOnce(jsonResponse(200, { registered: true }))
-      .mockResolvedValueOnce(jsonResponse(200, { removed: true }));
+        } },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: true, error: null })
+      .mockResolvedValueOnce({ data: true, error: null });
 
     await expect(updatePushNotificationPreference(true)).resolves.toMatchObject({
       id: 'test-user',
@@ -837,27 +854,24 @@ describe('mobile API client', () => {
     await expect(registerPushToken('ExponentPushToken[device-123]', 'ios')).resolves.toBeUndefined();
     await expect(removePushToken('ExponentPushToken[device-123]')).resolves.toBeUndefined();
 
-    const calls = jest.mocked(fetch).mock.calls;
-    expect(calls.map(([url, init]) => [String(url), init?.method])).toEqual([
-      ['https://api.example.test/api/user/profile', 'PUT'],
-      ['https://api.example.test/api/user/push-token', 'POST'],
-      ['https://api.example.test/api/user/push-token', 'DELETE'],
-    ]);
-    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ push_notifications: true });
-    expect(JSON.parse(String(calls[1][1]?.body))).toEqual({
-      token: 'ExponentPushToken[device-123]',
-      platform: 'ios',
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_update_profile', {
+      p_updates: { push_notifications: true },
     });
-    expect(JSON.parse(String(calls[2][1]?.body))).toEqual({
-      token: 'ExponentPushToken[device-123]',
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_register_push_token', {
+      p_token: 'ExponentPushToken[device-123]',
+      p_platform: 'ios',
     });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_remove_push_token', {
+      p_token: 'ExponentPushToken[device-123]',
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('creates a manager account once through the unauthenticated signup endpoint', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(201, {
-      message: 'User created successfully. Please check your email to confirm.',
-      user: { id: 'new-user', email: 'new@example.com' },
-    }));
+  it('creates a manager account through Supabase Auth with mobile profile metadata', async () => {
+    signUp.mockResolvedValue({
+      data: { user: { ...session.user, id: 'new-user', email: 'new@example.com' }, session: null },
+      error: null,
+    });
 
     await expect(createManagerAccount({
       email: ' NEW@example.com ',
@@ -867,21 +881,22 @@ describe('mobile API client', () => {
       message: 'User created successfully. Please check your email to confirm.',
     });
 
-    const [url, init] = jest.mocked(fetch).mock.calls[0];
-    expect(url).toBe('https://api.example.test/api/auth/signup');
-    expect(init?.method).toBe('POST');
-    expect(new Headers(init?.headers).has('Authorization')).toBe(false);
-    expect(JSON.parse(String(init?.body))).toEqual({
+    expect(signUp).toHaveBeenCalledWith({
       email: 'new@example.com',
-      username: 'new-manager',
       password: 'long-password',
+      options: {
+        data: {
+          username: 'new-manager',
+          display_name: 'new-manager',
+          mobile_client: 'fantasy-dota-mobile',
+        },
+      },
     });
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(getSession).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('submits a lineup using the existing API contract without replaying the write', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, { message: 'Lineup saved successfully.' }));
+  it('submits a lineup through the authenticated ownership-checking RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: true, error: null });
     const lineup = [
       { playerId: 1, slot: 'carry', isCaptain: true, isViceCaptain: false },
       { playerId: 2, slot: 'mid', isCaptain: false, isViceCaptain: true },
@@ -890,18 +905,21 @@ describe('mobile API client', () => {
       { playerId: 5, slot: 'hard_support', isCaptain: false, isViceCaptain: false },
     ];
 
-    await expect(saveLineup({ gameweekId: 7, lineup })).resolves.toBeUndefined();
+    await expect(saveLineup({ fantasySeasonId: 9, gameweekId: 7, lineup })).resolves.toBeUndefined();
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const [, init] = jest.mocked(fetch).mock.calls[0];
-    expect(init?.method).toBe('PUT');
-    expect(JSON.parse(String(init?.body))).toEqual({ gameweekId: 7, lineup });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_save_lineup', {
+      p_fantasy_season_id: 9,
+      p_gameweek_id: 7,
+      p_lineup: lineup,
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('adds selected players through the existing squad API and validates its result', async () => {
-    jest.mocked(fetch).mockResolvedValue(
-      jsonResponse(200, { budget: 12.5, squadSize: 3, squadMaxSize: 8 })
-    );
+  it('adds selected players through the authenticated ownership-checking RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: { budget: 12.5, squadSize: 3, squadMaxSize: 8 },
+      error: null,
+    });
 
     await expect(addPlayersToSquad({
       fantasySeasonId: 9,
@@ -912,17 +930,18 @@ describe('mobile API client', () => {
       squadMaxSize: 8,
     });
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = jest.mocked(fetch).mock.calls[0];
-    expect(url).toBe('https://api.example.test/api/fantasy/squad/add');
-    expect(init?.method).toBe('POST');
-    expect(JSON.parse(String(init?.body))).toEqual({ fantasySeasonId: 9, playerIds: [101, 102] });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_add_players_to_squad', {
+      p_fantasy_season_id: 9,
+      p_player_ids: [101, 102],
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('submits a transfer once and validates the authoritative server result', async () => {
-    jest.mocked(fetch).mockResolvedValue(
-      jsonResponse(200, { budget: 12.5, free_transfers_remaining: 1, penalty_points: 4 })
-    );
+  it('submits a transfer through the authenticated ownership-checking RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: { success: true, budget: 12.5, free_transfers_remaining: 1, penalty_points: 4 },
+      error: null,
+    });
 
     await expect(processTransfer({
       fantasySeasonId: 9,
@@ -934,20 +953,19 @@ describe('mobile API client', () => {
       penaltyPoints: 4,
     });
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const [, init] = jest.mocked(fetch).mock.calls[0];
-    expect(init?.method).toBe('POST');
-    expect(JSON.parse(String(init?.body))).toEqual({
-      fantasySeasonId: 9,
-      transfersIn: [101],
-      transfersOut: [202],
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_process_fantasy_transfer', {
+      p_fantasy_season_id: 9,
+      p_transfers_in: [101],
+      p_transfers_out: [202],
     });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('submits multiple Wildcard transfers together and validates the server result', async () => {
-    jest.mocked(fetch).mockResolvedValue(
-      jsonResponse(200, { budget: 14, free_transfers_remaining: 97, penalty_points: 0 })
-    );
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: { success: true, budget: 14, free_transfers_remaining: 97, penalty_points: 0 },
+      error: null,
+    });
 
     await expect(processTransfer({
       fantasySeasonId: 9,
@@ -959,45 +977,118 @@ describe('mobile API client', () => {
       penaltyPoints: 0,
     });
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const [, init] = jest.mocked(fetch).mock.calls[0];
-    expect(init?.method).toBe('POST');
-    expect(JSON.parse(String(init?.body))).toEqual({
-      fantasySeasonId: 9,
-      transfersIn: [101, 102],
-      transfersOut: [201, 202],
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_process_fantasy_transfer', {
+      p_fantasy_season_id: 9,
+      p_transfers_in: [101, 102],
+      p_transfers_out: [201, 202],
     });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('activates Wildcard once through its existing endpoint', async () => {
-    jest.mocked(fetch).mockResolvedValue(
-      jsonResponse(200, { message: 'Wildcard activated.', gameweekId: 7 })
-    );
+  it('surfaces database transfer validation errors without disguising them as successful results', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: { success: false, message: 'No upcoming gameweek available for transfers.' },
+      error: null,
+    });
+
+    await expect(processTransfer({
+      fantasySeasonId: 9,
+      transfersIn: [101],
+      transfersOut: [202],
+    })).rejects.toThrow('No upcoming gameweek available for transfers.');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('loads transfer history using an authenticated Supabase function', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: {
+        transfers: [{
+          id: 15,
+          createdAt: '2026-10-07T10:00:00.000Z',
+          gameweekNumber: 4,
+          penaltyPoints: 4,
+          moves: [{ playerOut: 'Player Out', playerIn: 'Player In' }],
+        }],
+      },
+      error: null,
+    });
+
+    await expect(getTransferHistory()).resolves.toEqual([{
+      id: 15,
+      createdAt: '2026-10-07T10:00:00.000Z',
+      gameweekNumber: 4,
+      penaltyPoints: 4,
+      moves: [{ playerOut: 'Player Out', playerIn: 'Player In' }],
+    }]);
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_transfer_history', {
+      p_limit: 100,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('loads the transfer market through an authenticated Supabase function', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: {
+        data: [{
+          id: 41,
+          name: 'Carry Player',
+          in_game_name: 'Carry',
+          primary_role: 'Carry',
+          availability_status: 'available',
+          current_price: 13.5,
+          recent_points: 27.4,
+        }],
+      },
+      error: null,
+    });
+
+    await expect(getPlayerMarket(' carry ')).resolves.toEqual([{
+      id: 41,
+      name: 'Carry Player',
+      in_game_name: 'Carry',
+      primary_role: 'Carry',
+      availability_status: 'available',
+      current_price: 13.5,
+      recent_points: 27.4,
+    }]);
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_player_market', {
+      p_search: 'carry',
+      p_limit: 50,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('activates Wildcard through the authenticated ownership-checking RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: { success: true, message: 'Wildcard activated.', gameweek_id: 7 },
+      error: null,
+    });
 
     await expect(activateWildcard({ fantasySeasonId: 9 })).resolves.toEqual({
       message: 'Wildcard activated.',
       gameweekId: 7,
     });
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = jest.mocked(fetch).mock.calls[0];
-    expect(url).toBe('https://api.example.test/api/fantasy/wildcard');
-    expect(init?.method).toBe('POST');
-    expect(JSON.parse(String(init?.body))).toEqual({ fantasySeasonId: 9 });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_activate_wildcard', {
+      p_fantasy_season_id: 9,
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('activates a chip through its existing endpoint without replaying the write', async () => {
-    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, { message: 'Triple Captain activated.', gameweekId: 7 }));
+  it('activates a chip through its authenticated ownership-checking RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: { success: true, message: 'Triple Captain activated.', gameweek_id: 7 },
+      error: null,
+    });
 
     await expect(activateChip({ fantasySeasonId: 9, chip: 'triple-captain' })).resolves.toEqual({
       message: 'Triple Captain activated.',
       gameweekId: 7,
     });
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = jest.mocked(fetch).mock.calls[0];
-    expect(url).toBe('https://api.example.test/api/fantasy/triple-captain');
-    expect(init?.method).toBe('POST');
-    expect(JSON.parse(String(init?.body))).toEqual({ fantasySeasonId: 9 });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_activate_triple_captain', {
+      p_fantasy_season_id: 9,
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

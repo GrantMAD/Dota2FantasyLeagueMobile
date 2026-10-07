@@ -1,4 +1,5 @@
-import { ApiError, apiFetch } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface LeaderboardEntry {
   id: number;
@@ -83,9 +84,11 @@ export async function getLeaderboard(params: {
   page: number;
   gameweekId: number | null;
 }): Promise<LeaderboardPage> {
-  const search = new URLSearchParams({ page: String(params.page), limit: '50' });
-  if (params.gameweekId !== null) search.set('gameweekId', String(params.gameweekId));
-  const result = await apiFetch<unknown>(`/api/leaderboard?${search.toString()}`);
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_leaderboard', {
+    p_page: params.page,
+    p_gameweek_id: params.gameweekId,
+  });
+  if (error) throw new ApiError(`Unable to load leaderboard: ${error.message}`, 500);
 
   if (
     !isRecord(result) ||

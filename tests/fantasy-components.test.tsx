@@ -153,6 +153,7 @@ describe('fantasy management components', () => {
     await waitFor(() => expect(view.getByText('Lineup saved successfully.')).toBeTruthy());
     await waitFor(() => expect(queryClients[0].isMutating()).toBe(0));
     expect(mockedSaveLineup).toHaveBeenCalledWith({
+      fantasySeasonId: 12,
       gameweekId: 24,
       lineup: expect.arrayContaining([
         expect.objectContaining({ playerId: 2, slot: 'mid', isCaptain: true, isViceCaptain: false }),

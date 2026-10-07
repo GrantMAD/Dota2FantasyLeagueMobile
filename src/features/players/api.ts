@@ -1,4 +1,5 @@
-import { ApiError, apiFetch } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface DirectoryPlayer {
   id: number;
@@ -91,17 +92,14 @@ export async function getPlayers(params: {
   offset: number;
   limit: number;
 }): Promise<PlayerPage> {
-  const query = new URLSearchParams({
-    limit: String(params.limit),
-    offset: String(params.offset),
-    sort: 'name',
-    desc: 'false',
-    show_all: params.availableOnly ? 'false' : 'true',
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_players', {
+    p_search: params.search.trim(),
+    p_role: params.role,
+    p_available_only: params.availableOnly,
+    p_offset: params.offset,
+    p_limit: params.limit,
   });
-  if (params.search.trim()) query.set('search', params.search.trim());
-  if (params.role) query.set('role', params.role);
-
-  const result = await apiFetch<unknown>(`/api/players?${query.toString()}`);
+  if (error) throw new ApiError(`Unable to load players: ${error.message}`, 500);
   if (
     !isRecord(result) ||
     !Array.isArray(result.data) ||
@@ -124,7 +122,10 @@ export async function getPlayers(params: {
 }
 
 export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
-  const result = await apiFetch<unknown>(`/api/players/${playerId}`);
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_player_detail', {
+    p_player_id: playerId,
+  });
+  if (error) throw new ApiError(`Unable to load player details: ${error.message}`, 500);
   if (!isRecord(result) || !isRecord(result.player)) {
     throw new ApiError('Player details were returned in an unexpected format.', 502);
   }

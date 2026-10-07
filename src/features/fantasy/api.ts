@@ -1,4 +1,5 @@
-import { ApiError, apiFetch } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface FantasyPlayer {
   id: number;
@@ -147,13 +148,14 @@ function parseTeamFixture(value: unknown): TeamFixture {
 }
 
 export async function getUpcomingTeamFixtures(teamId: number): Promise<TeamFixture[]> {
-  const params = new URLSearchParams({
-    teamId: String(teamId),
-    status: 'scheduled',
-    order: 'asc',
-    limit: '100',
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_matches', {
+    p_status: 'scheduled',
+    p_gameweek_id: null,
+    p_team_id: teamId,
+    p_tournament_id: null,
+    p_limit: 100,
   });
-  const result = await apiFetch<unknown>(`/api/matches?${params.toString()}`);
+  if (error) throw new ApiError(`Unable to load team fixtures: ${error.message}`, 500);
   if (!isRecord(result) || !Array.isArray(result.matches)) {
     throw new ApiError('Fixture data was returned in an unexpected format.', 502);
   }
@@ -191,7 +193,10 @@ function parseLineupEntry(value: unknown): FantasyLineupEntry {
 }
 
 export async function getFantasyContext(): Promise<FantasyContext> {
-  const value = await apiFetch<unknown>('/api/fantasy/context');
+  const { data: value, error } = await getSupabaseClient().rpc('mobile_get_fantasy_context');
+  if (error) {
+    throw new ApiError(`Unable to load fantasy context: ${error.message}`, 500);
+  }
   const chips = isRecord(value) ? value.chips : null;
   if (
     !isRecord(value) ||
@@ -260,6 +265,7 @@ export async function getFantasyContext(): Promise<FantasyContext> {
 }
 
 export interface SaveLineupPayload {
+  fantasySeasonId: number;
   gameweekId: number;
   lineup: {
     playerId: number;
@@ -270,20 +276,24 @@ export interface SaveLineupPayload {
 }
 
 export async function saveLineup(payload: SaveLineupPayload): Promise<void> {
-  await apiFetch<unknown>('/api/fantasy/lineup', {
-    method: 'PUT',
-    body: JSON.stringify(payload),
+  const { data, error } = await getSupabaseClient().rpc('mobile_save_lineup', {
+    p_fantasy_season_id: payload.fantasySeasonId,
+    p_gameweek_id: payload.gameweekId,
+    p_lineup: payload.lineup,
   });
+  if (error) throw new ApiError(`Unable to save lineup: ${error.message}`, 400);
+  if (data !== true) throw new ApiError('Lineup could not be saved.', 502);
 }
 
 export async function addPlayersToSquad(payload: {
   fantasySeasonId: number;
   playerIds: number[];
 }): Promise<{ budget: number; squadSize: number; squadMaxSize: number }> {
-  const result = await apiFetch<unknown>('/api/fantasy/squad/add', {
-    method: 'POST',
-    body: JSON.stringify(payload),
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_add_players_to_squad', {
+    p_fantasy_season_id: payload.fantasySeasonId,
+    p_player_ids: payload.playerIds,
   });
+  if (error) throw new ApiError(`Unable to add players to your squad: ${error.message}`, 400);
   if (
     !isRecord(result) ||
     typeof result.budget !== 'number' ||
@@ -340,9 +350,11 @@ function parseMarketPlayer(value: unknown): MarketPlayer {
 }
 
 export async function getPlayerMarket(search: string): Promise<MarketPlayer[]> {
-  const params = new URLSearchParams({ limit: '50', offset: '0', sort: 'price', desc: 'true' });
-  if (search.trim()) params.set('search', search.trim());
-  const result = await apiFetch<unknown>(`/api/players?${params.toString()}`);
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_player_market', {
+    p_search: search.trim(),
+    p_limit: 50,
+  });
+  if (error) throw new ApiError(`Unable to load the player market: ${error.message}`, 500);
   if (!isRecord(result) || !Array.isArray(result.data)) {
     throw new ApiError('Player market data was returned in an unexpected format.', 502);
   }
@@ -354,12 +366,18 @@ export async function processTransfer(payload: {
   transfersIn: number[];
   transfersOut: number[];
 }): Promise<{ budget: number; freeTransfersRemaining: number; penaltyPoints: number }> {
-  const result = await apiFetch<unknown>('/api/fantasy/transfer', {
-    method: 'POST',
-    body: JSON.stringify(payload),
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_process_fantasy_transfer', {
+    p_fantasy_season_id: payload.fantasySeasonId,
+    p_transfers_in: payload.transfersIn,
+    p_transfers_out: payload.transfersOut,
   });
+  if (error) throw new ApiError(`Unable to process transfer: ${error.message}`, 400);
+  if (isRecord(result) && result.success === false && typeof result.message === 'string') {
+    throw new ApiError(result.message, 400);
+  }
   if (
     !isRecord(result) ||
+    result.success !== true ||
     typeof result.budget !== 'number' ||
     typeof result.free_transfers_remaining !== 'number' ||
     typeof result.penalty_points !== 'number'
@@ -376,25 +394,33 @@ export async function processTransfer(payload: {
 export async function activateWildcard(payload: {
   fantasySeasonId: number;
 }): Promise<{ message: string; gameweekId: number | null }> {
-  const result = await apiFetch<unknown>('/api/fantasy/wildcard', {
-    method: 'POST',
-    body: JSON.stringify(payload),
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_activate_wildcard', {
+    p_fantasy_season_id: payload.fantasySeasonId,
   });
+  if (error) throw new ApiError(`Unable to activate Wildcard: ${error.message}`, 400);
+  if (isRecord(result) && result.success === false && typeof result.message === 'string') {
+    throw new ApiError(result.message, 400);
+  }
+  const gameweekId = isRecord(result) ? result.gameweekId ?? result.gameweek_id : undefined;
   if (
     !isRecord(result) ||
+    result.success !== true ||
     typeof result.message !== 'string' ||
-    (result.gameweekId !== undefined && !isNullableNumber(result.gameweekId))
+    !isNullableNumber(gameweekId)
   ) {
     throw new ApiError('Wildcard activation result was returned in an unexpected format.', 502);
   }
   return {
     message: result.message,
-    gameweekId: isNullableNumber(result.gameweekId) ? result.gameweekId : null,
+    gameweekId,
   };
 }
 
 export async function getTransferHistory(): Promise<TransferHistoryEntry[]> {
-  const result = await apiFetch<unknown>('/api/fantasy/transfer-history');
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_transfer_history', {
+    p_limit: 100,
+  });
+  if (error) throw new ApiError(`Unable to load transfer history: ${error.message}`, 500);
   if (!isRecord(result) || !Array.isArray(result.transfers)) {
     throw new ApiError('Transfer history was returned in an unexpected format.', 502);
   }
@@ -427,19 +453,27 @@ export async function activateChip(payload: {
   fantasySeasonId: number;
   chip: 'triple-captain' | 'bench-boost';
 }): Promise<{ message: string; gameweekId: number | null }> {
-  const result = await apiFetch<unknown>(`/api/fantasy/${payload.chip}`, {
-    method: 'POST',
-    body: JSON.stringify({ fantasySeasonId: payload.fantasySeasonId }),
+  const functionName = payload.chip === 'triple-captain'
+    ? 'mobile_activate_triple_captain'
+    : 'mobile_activate_bench_boost';
+  const { data: result, error } = await getSupabaseClient().rpc(functionName, {
+    p_fantasy_season_id: payload.fantasySeasonId,
   });
+  if (error) throw new ApiError(`Unable to activate ${payload.chip}: ${error.message}`, 400);
+  if (isRecord(result) && result.success === false && typeof result.message === 'string') {
+    throw new ApiError(result.message, 400);
+  }
+  const gameweekId = isRecord(result) ? result.gameweekId ?? result.gameweek_id : undefined;
   if (
     !isRecord(result) ||
+    result.success !== true ||
     typeof result.message !== 'string' ||
-    (result.gameweekId !== undefined && !isNullableNumber(result.gameweekId))
+    !isNullableNumber(gameweekId)
   ) {
     throw new ApiError('Chip activation result was returned in an unexpected format.', 502);
   }
   return {
     message: result.message,
-    gameweekId: isNullableNumber(result.gameweekId) ? result.gameweekId : null,
+    gameweekId,
   };
 }

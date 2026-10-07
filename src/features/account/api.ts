@@ -1,4 +1,5 @@
-import { ApiError, apiFetch, unauthenticatedApiPost } from '@/src/lib/api';
+import { ApiError } from '@/src/lib/errors';
+import { getSupabaseClient } from '@/src/lib/supabase';
 
 export type ThemePreference = 'light' | 'dark';
 
@@ -63,67 +64,65 @@ function parseProfileResponse(value: unknown): ManagerProfile | null {
 }
 
 export async function getManagerProfile(): Promise<ManagerProfile | null> {
-  return parseProfileResponse(await apiFetch<unknown>('/api/user/profile'));
+  const { data, error } = await getSupabaseClient().rpc('mobile_get_profile');
+  if (error) throw new ApiError(`Unable to load profile: ${error.message}`, 500);
+  return parseProfileResponse(data);
 }
 
 export async function getThemePreference(): Promise<ThemePreference> {
-  const result: unknown = await apiFetch('/api/user/theme');
-  if (!isRecord(result) || (result.theme !== 'light' && result.theme !== 'dark')) {
-    throw new ApiError('Theme preference was returned in an unexpected format.', 502);
-  }
-  return result.theme;
+  const profile = await getManagerProfile();
+  if (!profile) throw new ApiError('Profile data was returned in an unexpected format.', 502);
+  return profile.themePreference;
+}
+
+async function updateProfile(updates: Record<string, unknown>): Promise<ManagerProfile> {
+  const { data, error } = await getSupabaseClient().rpc('mobile_update_profile', {
+    p_updates: updates,
+  });
+  if (error) throw new ApiError(`Unable to save profile: ${error.message}`, 400);
+  const profile = parseProfileResponse(data);
+  if (!profile) throw new ApiError('The profile update did not return a saved profile.', 502);
+  return profile;
 }
 
 export async function updateThemePreference(theme: ThemePreference): Promise<ThemePreference> {
-  const result: unknown = await apiFetch('/api/user/theme', {
-    method: 'PUT',
-    body: JSON.stringify({ theme }),
-  });
-  if (!isRecord(result) || result.theme !== theme) {
+  const profile = await updateProfile({ theme_preference: theme });
+  if (profile.themePreference !== theme) {
     throw new ApiError('The theme preference was not saved.', 502);
   }
-  return theme;
+  return profile.themePreference;
 }
 
 export async function updateManagerProfile(update: ManagerProfileUpdate): Promise<ManagerProfile> {
-  const result = parseProfileResponse(await apiFetch<unknown>('/api/user/profile', {
-    method: 'PUT',
-    body: JSON.stringify({
-      username: update.username,
-      display_name: update.displayName,
-      email_notifications: update.emailNotifications,
-      push_notifications: update.pushNotifications,
-    }),
-  }));
-  if (!result) throw new ApiError('The profile update did not return a saved profile.', 502);
-  return result;
+  return updateProfile({
+    username: update.username,
+    display_name: update.displayName,
+    email_notifications: update.emailNotifications,
+    push_notifications: update.pushNotifications,
+  });
 }
 
 export async function updatePushNotificationPreference(enabled: boolean): Promise<ManagerProfile> {
-  const result = parseProfileResponse(await apiFetch<unknown>('/api/user/profile', {
-    method: 'PUT',
-    body: JSON.stringify({ push_notifications: enabled }),
-  }));
-  if (!result) throw new ApiError('The push notification preference was not saved.', 502);
-  return result;
+  return updateProfile({ push_notifications: enabled });
 }
 
 export async function registerPushToken(token: string, platform: 'ios' | 'android'): Promise<void> {
-  const result: unknown = await apiFetch('/api/user/push-token', {
-    method: 'POST',
-    body: JSON.stringify({ token, platform }),
+  const { data, error } = await getSupabaseClient().rpc('mobile_register_push_token', {
+    p_token: token,
+    p_platform: platform,
   });
-  if (!isRecord(result) || result.registered !== true) {
+  if (error) throw new ApiError(`Unable to register this device for push notifications: ${error.message}`, 400);
+  if (data !== true) {
     throw new ApiError('This device could not be registered for push notifications.', 502);
   }
 }
 
 export async function removePushToken(token: string): Promise<void> {
-  const result: unknown = await apiFetch('/api/user/push-token', {
-    method: 'DELETE',
-    body: JSON.stringify({ token }),
+  const { data, error } = await getSupabaseClient().rpc('mobile_remove_push_token', {
+    p_token: token,
   });
-  if (!isRecord(result) || result.removed !== true) {
+  if (error) throw new ApiError(`Unable to remove this device registration: ${error.message}`, 400);
+  if (data !== true) {
     throw new ApiError('This device could not be removed from push notifications.', 502);
   }
 }
@@ -133,13 +132,26 @@ export async function createManagerAccount(input: {
   username: string;
   password: string;
 }): Promise<ManagerSignupResult> {
-  const result: unknown = await unauthenticatedApiPost('/api/auth/signup', {
+  const { data, error } = await getSupabaseClient().auth.signUp({
     email: input.email.trim().toLowerCase(),
-    username: input.username.trim(),
     password: input.password,
+    options: {
+      data: {
+        username: input.username.trim(),
+        display_name: input.username.trim(),
+        mobile_client: 'fantasy-dota-mobile',
+      },
+    },
   });
-  if (!isRecord(result) || typeof result.message !== 'string' || !isRecord(result.user) || typeof result.user.id !== 'string') {
-    throw new ApiError('Account creation returned an unexpected response.', 502);
+  if (error) {
+    throw new ApiError(`Sign up failed: ${error.message}`, 400);
   }
-  return { message: result.message };
+  if (!data.user) {
+    throw new ApiError('Account creation did not return a user.', 502);
+  }
+  return {
+    message: data.session
+      ? 'Your account was created successfully.'
+      : 'User created successfully. Please check your email to confirm.',
+  };
 }
