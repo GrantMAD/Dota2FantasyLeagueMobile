@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Screen } from '@/src/components/Screen';
 import { ChipActivationPanel } from '@/src/features/fantasy/ChipActivationPanel';
 import { LineupEditor } from '@/src/features/fantasy/LineupEditor';
@@ -20,7 +20,18 @@ export default function TeamScreen() {
 
   return (
     <Screen>
-      <ScrollView className="flex-1" contentContainerClassName="gap-5 px-5 pb-8 pt-5">
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName="gap-5 px-5 pb-8 pt-5"
+        refreshControl={
+          <RefreshControl
+            colors={['#fb923c']}
+            onRefresh={() => void query.refetch()}
+            refreshing={query.isRefetching}
+            tintColor="#fb923c"
+          />
+        }
+      >
         <View>
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Fantasy Dota 2</Text>
           <Text className="mt-2 text-3xl font-bold text-white">My Team</Text>

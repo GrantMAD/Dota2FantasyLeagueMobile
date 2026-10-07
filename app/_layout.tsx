@@ -21,6 +21,7 @@ import { queryClient } from '@/src/lib/query-client';
 import { Screen } from '@/src/components/Screen';
 import { MobileThemeProvider, useMobileTheme } from '@/src/lib/theme';
 import { MobilePushNotificationsProvider } from '@/src/lib/push-notifications';
+import { ConnectivityProvider } from '@/src/lib/connectivity';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -71,9 +72,11 @@ function RootLayoutNav() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
-        <MobileThemeProvider>
-          <ThemedApp />
-        </MobileThemeProvider>
+        <ConnectivityProvider>
+          <MobileThemeProvider>
+            <ThemedApp />
+          </MobileThemeProvider>
+        </ConnectivityProvider>
       </QueryClientProvider>
     </AuthProvider>
   );
