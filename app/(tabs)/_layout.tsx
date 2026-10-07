@@ -1,67 +1,74 @@
 import { SymbolView } from 'expo-symbols';
-import { Link, Tabs } from 'expo-router';
-import { Platform, Pressable } from 'react-native';
+import { Redirect, Tabs } from 'expo-router';
+import { ActivityIndicator } from 'react-native';
 
 import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { Screen } from '@/src/components/Screen';
+import { useAuth } from '@/src/lib/auth';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { ready, session } = useAuth();
+
+  if (!ready) {
+    return (
+      <Screen>
+        <ActivityIndicator accessibilityLabel="Restoring session" className="flex-1" color="#fb923c" />
+      </Screen>
+    );
+  }
+
+  if (!session) return <Redirect href="/sign-in" />;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
+        tabBarActiveTintColor: Colors.dark.tint,
+        headerShown: false,
+        tabBarStyle: { backgroundColor: '#020617', borderTopColor: '#1e293b' },
+        tabBarInactiveTintColor: '#94a3b8',
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tab One',
+          title: 'Home',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
-              tintColor={color}
-              size={28}
-            />
-          ),
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable style={{ marginRight: 15 }}>
-                {({ pressed }) => (
-                  <SymbolView
-                    name={{ ios: 'info.circle', android: 'info', web: 'info' }}
-                    size={25}
-                    tintColor={Colors[colorScheme].text}
-                    style={{ opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
+            <SymbolView name={{ ios: 'house.fill', android: 'home', web: 'home' }} tintColor={color} size={22} />
           ),
         }}
       />
       <Tabs.Screen
-        name="two"
+        name="team"
         options={{
-          title: 'Tab Two',
+          title: 'My Team',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
-              tintColor={color}
-              size={28}
-            />
+            <SymbolView name={{ ios: 'person.3.fill', android: 'groups', web: 'groups' }} tintColor={color} size={22} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: 'Discover',
+          tabBarIcon: ({ color }) => (
+            <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} tintColor={color} size={22} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="leagues"
+        options={{
+          title: 'Leagues',
+          tabBarIcon: ({ color }) => (
+            <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} tintColor={color} size={22} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: 'More',
+          tabBarIcon: ({ color }) => (
+            <SymbolView name={{ ios: 'ellipsis', android: 'more_horiz', web: 'more_horiz' }} tintColor={color} size={22} />
           ),
         }}
       />
