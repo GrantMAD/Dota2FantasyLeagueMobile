@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
 import type { FantasyContext, FantasyPlayer, MarketPlayer } from './api';
 import { addPlayersToSquad, getPlayerMarket } from './api';
+import { useMobileTheme } from '@/src/lib/theme';
 
 const SQUAD_MAX_SIZE = 8;
 
@@ -31,6 +32,7 @@ function canFillStarterRoles(players: (FantasyPlayer | MarketPlayer)[]): boolean
 
 export function SquadBuilder({ context, userId }: SquadBuilderProps) {
   const queryClient = useQueryClient();
+  const { colors } = useMobileTheme();
   const [search, setSearch] = useState('');
   const [selectedPlayers, setSelectedPlayers] = useState<Map<number, MarketPlayer>>(new Map());
   const deferredSearch = useDeferredValue(search);
@@ -104,7 +106,7 @@ export function SquadBuilder({ context, userId }: SquadBuilderProps) {
         editable={!addMutation.isPending}
         onChangeText={setSearch}
         placeholder="Search available players"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={colors.placeholder}
         value={search}
       />
 
@@ -206,7 +208,7 @@ export function SquadBuilder({ context, userId }: SquadBuilderProps) {
         onPress={confirmAddPlayers}
       >
         {addMutation.isPending ? (
-          <ActivityIndicator accessibilityLabel="Adding players" color="#ffffff" />
+          <ActivityIndicator accessibilityLabel="Adding players" color={colors.onAccent} />
         ) : (
           <Text className="font-semibold text-white">Add selected players</Text>
         )}

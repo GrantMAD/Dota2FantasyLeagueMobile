@@ -1,19 +1,22 @@
-import { Link, Redirect } from 'expo-router';
+import { Link, Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { Button } from '@/src/components/Button';
 import { Screen } from '@/src/components/Screen';
 import { TextField } from '@/src/components/TextField';
 import { useAuth } from '@/src/lib/auth';
+import { managerReturnRoute } from '@/src/lib/deep-links';
 
 export default function SignInScreen() {
+  const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
   const { configurationError, ready, session, signIn } = useAuth();
+  const returnRoute = managerReturnRoute(params.returnTo);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  if (ready && session) return <Redirect href="/(tabs)" />;
+  if (ready && session) return <Redirect href={returnRoute} />;
 
   async function handleSignIn() {
     setErrorMessage(null);
@@ -87,6 +90,9 @@ export default function SignInScreen() {
             />
             <Link href="/forgot-password" className="text-center text-sm font-semibold text-brand-300">
               Forgot password?
+            </Link>
+            <Link href="/(auth)/sign-up" className="text-center text-sm font-semibold text-slate-300">
+              Create an account
             </Link>
             <Text className="text-center text-xs leading-5 text-slate-500">
               Use the same account as the Fantasy Dota 2 web app.

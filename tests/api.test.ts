@@ -3,15 +3,26 @@ import { ApiError, apiFetch } from '../src/lib/api';
 import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { getGameweeks } from '../src/features/gameweeks/api';
-import { getPlayerDetail, getPlayers } from '../src/features/players/api';
-import { getMatches, getTournaments } from '../src/features/competition/api';
+import { getPlayerDetail, getPlayers, normalizePlayerComparisonIds } from '../src/features/players/api';
+import {
+  getMatchDetails,
+  getMatches,
+  getTournamentDetails,
+  getTournaments,
+} from '../src/features/competition/api';
 import { createLeague, getLeagues, joinLeague } from '../src/features/leagues/api';
 import { getLeaderboard } from '../src/features/leaderboard/api';
 import { getAnalytics } from '../src/features/analytics/api';
 import { getSeasonRecaps } from '../src/features/season-recap/api';
 import {
+  createManagerAccount,
   getManagerProfile,
+  getThemePreference,
+  registerPushToken,
+  removePushToken,
   updateManagerProfile,
+  updatePushNotificationPreference,
+  updateThemePreference,
 } from '../src/features/account/api';
 import {
   clearReadNotifications,
@@ -252,6 +263,7 @@ describe('mobile API client', () => {
         current_price: 9.5,
         gameweek_points: 12,
         recent_points: 8.4,
+        profile_image_url: 'https://images.example.test/player.png',
         professional_teams: { name: 'Radiant' },
       }],
       total: 38,
@@ -272,6 +284,7 @@ describe('mobile API client', () => {
         in_game_name: 'PlayerTag',
         current_price: 9.5,
         team_name: 'Radiant',
+        profile_image_url: 'https://images.example.test/player.png',
       }],
     });
     const [url] = jest.mocked(fetch).mock.calls[0];
@@ -317,6 +330,10 @@ describe('mobile API client', () => {
     expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/players/41');
   });
 
+  it('normalizes player comparison IDs to unique positive IDs and caps the selection at four', () => {
+    expect(normalizePlayerComparisonIds('4,4,2,-1,5,7,8,9,invalid')).toEqual([4, 2, 5, 7]);
+  });
+
   it('loads and filters shared match results for the match center', async () => {
     jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
       matches: [{
@@ -345,6 +362,64 @@ describe('mobile API client', () => {
     expect(String(url)).toContain('status=scheduled');
   });
 
+  it('validates match detail player statistics and fantasy points', async () => {
+    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+      match: {
+        id: 81,
+        status: 'completed',
+        scheduled_at: '2026-10-07T10:00:00.000Z',
+        gameweek_id: 7,
+        match_number: 1,
+        best_of: 3,
+        radiant_team_id: 4,
+        dire_team_id: 5,
+        radiant_team: { name: 'Radiant', tag: 'RAD' },
+        dire_team: { name: 'Dire', tag: 'DIR' },
+        tournaments: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
+      },
+      playerStats: [{
+        id: 501,
+        player_id: 41,
+        team_id: 4,
+        hero_name: 'Crystal Maiden',
+        kills: 3,
+        deaths: 1,
+        assists: 15,
+        gold_per_minute: 321,
+        professional_players: { id: 41, name: 'Player Name', in_game_name: 'PlayerTag' },
+      }],
+      fantasyBreakdown: [{ player_id: 41, total_points: 12.5 }],
+    }));
+
+    await expect(getMatchDetails(81)).resolves.toMatchObject({
+      match: { id: 81, status: 'completed' },
+      playerStats: [{ id: 501, player_id: 41, hero_name: 'Crystal Maiden', kills: 3, assists: 15 }],
+      fantasyBreakdown: [{ player_id: 41, total_points: 12.5 }],
+    });
+  });
+
+  it('rejects malformed match player statistics rather than silently ignoring them', async () => {
+    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+      match: {
+        id: 81,
+        status: 'completed',
+        scheduled_at: '2026-10-07T10:00:00.000Z',
+        gameweek_id: 7,
+        match_number: 1,
+        best_of: 3,
+        radiant_team_id: 4,
+        dire_team_id: 5,
+        radiant_team: null,
+        dire_team: null,
+        tournaments: null,
+      },
+      playerStats: [{ id: 501, player_id: 'invalid', team_id: 4, kills: 2, deaths: 1, assists: 3 }],
+      fantasyBreakdown: [],
+    }));
+
+    await expect(getMatchDetails(81)).rejects.toMatchObject({ name: 'ApiError', status: 502 });
+  });
+
   it('validates the tournament directory response', async () => {
     jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
       tournaments: [{
@@ -368,6 +443,31 @@ describe('mobile API client', () => {
       participating_teams: [{ id: 4, name: 'Radiant' }],
     }]);
     expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/tournaments');
+  });
+
+  it('validates tournament detail data and its enriched schedule', async () => {
+    jest.mocked(fetch).mockResolvedValue(jsonResponse(200, {
+      tournament: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
+      matches: [{
+        id: 81,
+        status: 'scheduled',
+        scheduled_at: '2026-10-07T10:00:00.000Z',
+        gameweek_id: 7,
+        match_number: 1,
+        best_of: 3,
+        radiant_team_id: 4,
+        dire_team_id: 5,
+        radiant_team: { name: 'Radiant', tag: 'RADI' },
+        dire_team: { name: 'Dire', tag: 'DIRE' },
+        tournaments: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
+      }],
+    }));
+
+    await expect(getTournamentDetails(9)).resolves.toMatchObject({
+      tournament: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
+      matches: [{ id: 81, radiant_team: { name: 'Radiant' }, gameweek_id: 7 }],
+    });
+    expect(jest.mocked(fetch).mock.calls[0][0]).toBe('https://api.example.test/api/tournaments/9');
   });
 
   it('loads and validates league standings and head-to-head fixtures', async () => {
@@ -643,6 +743,7 @@ describe('mobile API client', () => {
           email: 'test@example.com',
           email_notifications: true,
           push_notifications: false,
+          theme_preference: 'dark',
           member_since: '2026-01-01T00:00:00.000Z',
         },
       }))
@@ -654,6 +755,7 @@ describe('mobile API client', () => {
           email: 'test@example.com',
           email_notifications: false,
           push_notifications: true,
+          theme_preference: 'light',
           member_since: '2026-01-01T00:00:00.000Z',
         },
       }));
@@ -665,6 +767,7 @@ describe('mobile API client', () => {
       displayName: 'Captain',
       emailNotifications: true,
       pushNotifications: false,
+      themePreference: 'dark',
     });
     await expect(updateManagerProfile({
       username: 'manager',
@@ -676,6 +779,7 @@ describe('mobile API client', () => {
       displayName: 'Manager',
       emailNotifications: false,
       pushNotifications: true,
+      themePreference: 'light',
     });
 
     const [url, init] = jest.mocked(fetch).mock.calls[1];
@@ -687,6 +791,93 @@ describe('mobile API client', () => {
       email_notifications: false,
       push_notifications: true,
     });
+  });
+
+  it('loads and saves the account theme preference through the existing endpoint', async () => {
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(200, { theme: 'dark' }))
+      .mockResolvedValueOnce(jsonResponse(200, { theme: 'light' }));
+
+    await expect(getThemePreference()).resolves.toBe('dark');
+    await expect(updateThemePreference('light')).resolves.toBe('light');
+
+    const [getUrl, getInit] = jest.mocked(fetch).mock.calls[0];
+    const [putUrl, putInit] = jest.mocked(fetch).mock.calls[1];
+    expect(getUrl).toBe('https://api.example.test/api/user/theme');
+    expect(getInit?.method).toBeUndefined();
+    expect(putUrl).toBe('https://api.example.test/api/user/theme');
+    expect(putInit?.method).toBe('PUT');
+    expect(JSON.parse(String(putInit?.body))).toEqual({ theme: 'light' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('updates the push preference and registers or removes the current device token', async () => {
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(200, {
+        profile: {
+          id: 'test-user',
+          username: 'captain',
+          display_name: 'Captain',
+          email: 'test@example.com',
+          email_notifications: true,
+          push_notifications: true,
+          theme_preference: 'dark',
+          member_since: '2026-01-01T00:00:00.000Z',
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse(200, { registered: true }))
+      .mockResolvedValueOnce(jsonResponse(200, { removed: true }));
+
+    await expect(updatePushNotificationPreference(true)).resolves.toMatchObject({
+      id: 'test-user',
+      pushNotifications: true,
+    });
+    await expect(registerPushToken('ExponentPushToken[device-123]', 'ios')).resolves.toBeUndefined();
+    await expect(removePushToken('ExponentPushToken[device-123]')).resolves.toBeUndefined();
+
+    const calls = jest.mocked(fetch).mock.calls;
+    expect(calls.map(([url, init]) => [String(url), init?.method])).toEqual([
+      ['https://api.example.test/api/user/profile', 'PUT'],
+      ['https://api.example.test/api/user/push-token', 'POST'],
+      ['https://api.example.test/api/user/push-token', 'DELETE'],
+    ]);
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ push_notifications: true });
+    expect(JSON.parse(String(calls[1][1]?.body))).toEqual({
+      token: 'ExponentPushToken[device-123]',
+      platform: 'ios',
+    });
+    expect(JSON.parse(String(calls[2][1]?.body))).toEqual({
+      token: 'ExponentPushToken[device-123]',
+    });
+  });
+
+  it('creates a manager account once through the unauthenticated signup endpoint', async () => {
+    jest.mocked(fetch).mockResolvedValue(jsonResponse(201, {
+      message: 'User created successfully. Please check your email to confirm.',
+      user: { id: 'new-user', email: 'new@example.com' },
+    }));
+
+    await expect(createManagerAccount({
+      email: ' NEW@example.com ',
+      username: ' new-manager ',
+      password: 'long-password',
+    })).resolves.toEqual({
+      message: 'User created successfully. Please check your email to confirm.',
+    });
+
+    const [url, init] = jest.mocked(fetch).mock.calls[0];
+    expect(url).toBe('https://api.example.test/api/auth/signup');
+    expect(init?.method).toBe('POST');
+    expect(new Headers(init?.headers).has('Authorization')).toBe(false);
+    expect(JSON.parse(String(init?.body))).toEqual({
+      email: 'new@example.com',
+      username: 'new-manager',
+      password: 'long-password',
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(getSession).not.toHaveBeenCalled();
   });
 
   it('submits a lineup using the existing API contract without replaying the write', async () => {

@@ -1,15 +1,26 @@
 import { useFonts } from 'expo-font';
-import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+import {
+  DarkTheme,
+  DefaultTheme,
+  Redirect,
+  Stack,
+  ThemeProvider as NavigationThemeProvider,
+  usePathname,
+  useSegments,
+} from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { ActivityIndicator, AppState, View, type AppStateStatus } from 'react-native';
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import '../global.css';
 import 'react-native-reanimated';
 
-import { AuthProvider } from '@/src/lib/auth';
+import { AuthProvider, useAuth } from '@/src/lib/auth';
 import { queryClient } from '@/src/lib/query-client';
+import { Screen } from '@/src/components/Screen';
+import { MobileThemeProvider, useMobileTheme } from '@/src/lib/theme';
+import { MobilePushNotificationsProvider } from '@/src/lib/push-notifications';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -60,14 +71,57 @@ function RootLayoutNav() {
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider value={DarkTheme}>
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </ThemeProvider>
+        <MobileThemeProvider>
+          <ThemedApp />
+        </MobileThemeProvider>
       </QueryClientProvider>
     </AuthProvider>
+  );
+}
+
+function ThemedApp() {
+  const { theme } = useMobileTheme();
+  return (
+    <NavigationThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+      <MobilePushNotificationsProvider>
+        <AppRoutes />
+      </MobilePushNotificationsProvider>
+    </NavigationThemeProvider>
+  );
+}
+
+function AppRoutes() {
+  const { ready, session } = useAuth();
+  const segments = useSegments();
+  const pathname = usePathname();
+  const isAuthRoute = segments[0] === '(auth)';
+  const isPasswordRecovery = segments[0] === 'forgot-password';
+
+  if (!ready && !isAuthRoute && !isPasswordRecovery) {
+    return (
+      <Screen>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator accessibilityLabel="Restoring session" color="#fb923c" />
+        </View>
+      </Screen>
+    );
+  }
+  if (ready && !session && !isAuthRoute && !isPasswordRecovery) {
+    return (
+      <Redirect
+        href={{
+          pathname: '/(auth)/sign-in',
+          params: { returnTo: pathname },
+        }}
+      />
+    );
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(tabs)" />
+    </Stack>
   );
 }

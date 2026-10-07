@@ -25,7 +25,10 @@ export type NotificationAction = {
     | '/gameweeks'
     | '/leagues'
     | { pathname: '/league/[id]'; params: { id: string } }
-    | { pathname: '/player/[id]'; params: { id: string } };
+    | { pathname: '/player/[id]'; params: { id: string } }
+    | { pathname: '/match/[id]'; params: { id: string } }
+    | { pathname: '/gameweek/[id]'; params: { id: string } }
+    | { pathname: '/tournament/[id]'; params: { id: string } };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -117,6 +120,17 @@ function metadataId(metadata: Record<string, unknown> | null, key: string): stri
 }
 
 export function notificationActionFor(notification: ManagerNotification): NotificationAction {
+  const matchId = metadataId(notification.metadata, 'match_id');
+  if (matchId) {
+    return { label: 'View match', href: { pathname: '/match/[id]', params: { id: matchId } } };
+  }
+  const tournamentId = metadataId(notification.metadata, 'tournament_id');
+  if (tournamentId) {
+    return {
+      label: 'View tournament',
+      href: { pathname: '/tournament/[id]', params: { id: tournamentId } },
+    };
+  }
   const category = notificationCategoryForType(notification.type);
   if (category === 'deadline') return { label: 'Review my squad', href: '/team' };
   if (category === 'market') {
@@ -125,7 +139,12 @@ export function notificationActionFor(notification: ManagerNotification): Notifi
       ? { label: 'View player', href: { pathname: '/player/[id]', params: { id: playerId } } }
       : { label: 'Open squad planner', href: '/squad-planner' };
   }
-  if (category === 'scoring') return { label: 'View gameweeks', href: '/gameweeks' };
+  if (category === 'scoring') {
+    const gameweekId = metadataId(notification.metadata, 'gameweek_id');
+    return gameweekId
+      ? { label: 'View gameweek', href: { pathname: '/gameweek/[id]', params: { id: gameweekId } } }
+      : { label: 'View gameweeks', href: '/gameweeks' };
+  }
   if (category === 'league') {
     const leagueId = metadataId(notification.metadata, 'league_id');
     return leagueId

@@ -207,7 +207,7 @@ export default function NotificationsScreen() {
                     disabled={busy}
                     onPress={() => openAction(notification.id, notification.is_read, action)}
                   >
-                    <Text className="text-xs font-bold uppercase tracking-wider text-slate-950">{action.label}</Text>
+                    <Text className="text-xs font-bold uppercase tracking-wider text-on-accent">{action.label}</Text>
                   </Pressable>
                 </View>
               );

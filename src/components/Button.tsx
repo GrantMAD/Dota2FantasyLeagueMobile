@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View, type PressableProps } from 'react-native';
+import { useMobileTheme } from '@/src/lib/theme';
 
 interface ButtonProps extends Pick<PressableProps, 'onPress' | 'disabled' | 'accessibilityLabel'> {
   label: string;
@@ -6,6 +7,7 @@ interface ButtonProps extends Pick<PressableProps, 'onPress' | 'disabled' | 'acc
 }
 
 export function Button({ label, loading = false, disabled = false, accessibilityLabel, ...pressableProps }: ButtonProps) {
+  const { colors } = useMobileTheme();
   const unavailable = disabled || loading;
 
   return (
@@ -21,11 +23,11 @@ export function Button({ label, loading = false, disabled = false, accessibility
     >
       {loading ? (
         <View className="flex-row items-center gap-2">
-          <ActivityIndicator color="#ffffff" />
-          <Text className="font-bold text-white">{label}</Text>
+          <ActivityIndicator color={colors.onAccent} />
+          <Text className="font-bold text-on-accent">{label}</Text>
         </View>
       ) : (
-        <Text className="font-bold text-white">{label}</Text>
+        <Text className="font-bold text-on-accent">{label}</Text>
       )}
     </Pressable>
   );

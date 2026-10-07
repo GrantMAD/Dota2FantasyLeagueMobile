@@ -134,3 +134,30 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 
   return (await response.json()) as T;
 }
+
+export async function unauthenticatedApiPost<T>(path: string, body: unknown): Promise<T> {
+  if (!path.startsWith('/')) {
+    throw new Error('API paths must start with /.');
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!response.ok) {
+    throw new ApiError(await readErrorMessage(response), response.status);
+  }
+  return (await response.json()) as T;
+}

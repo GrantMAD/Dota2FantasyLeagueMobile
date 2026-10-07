@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import type { FantasyContext, FantasyLineupEntry, FantasyPlayer } from './api';
 import { saveLineup } from './api';
+import { useMobileTheme } from '@/src/lib/theme';
 
 const STARTER_SLOTS = ['carry', 'mid', 'offlane', 'support', 'hard_support'] as const;
 const BENCH_SLOTS = ['bench_1', 'bench_2', 'bench_3'] as const;
@@ -73,6 +74,7 @@ interface LineupEditorProps {
 
 export function LineupEditor({ context, userId }: LineupEditorProps) {
   const queryClient = useQueryClient();
+  const { colors } = useMobileTheme();
   const [lineup, setLineup] = useState<FantasyLineupEntry[]>(context.lineup);
   const [dirty, setDirty] = useState(false);
   const [activeSlot, setActiveSlot] = useState<LineupSlot | null>(null);
@@ -127,24 +129,22 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
 
   function setCaptain(playerId: number, isViceCaptain: boolean) {
     mutation.reset();
-    setLineup((current) =>
-      current.map((entry) => {
-        if (entry.player_id === playerId) {
-          return {
-            ...entry,
-            is_captain: !isViceCaptain,
-            is_vice_captain: isViceCaptain,
-          };
-        }
-        if (isViceCaptain && entry.is_captain) return { ...entry, is_captain: false, is_vice_captain: true };
-        if (!isViceCaptain && entry.is_vice_captain) return { ...entry, is_captain: true, is_vice_captain: false };
-        return {
-          ...entry,
-          is_captain: isViceCaptain ? entry.is_captain : false,
-          is_vice_captain: isViceCaptain ? false : entry.is_vice_captain,
-        };
-      })
-    );
+    setLineup((current) => {
+      const captainId = current.find((entry) => entry.is_captain)?.player_id;
+      const viceCaptainId = current.find((entry) => entry.is_vice_captain)?.player_id;
+      const nextCaptainId = isViceCaptain
+        ? playerId === captainId ? viceCaptainId : captainId
+        : playerId;
+      const nextViceCaptainId = isViceCaptain
+        ? playerId
+        : playerId === captainId ? viceCaptainId : captainId;
+
+      return current.map((entry) => ({
+        ...entry,
+        is_captain: entry.player_id === nextCaptainId,
+        is_vice_captain: entry.player_id === nextViceCaptainId,
+      }));
+    });
     setDirty(true);
     setSaveError(null);
   }
@@ -257,7 +257,7 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
       >
         {mutation.isPending ? (
           <View className="flex-row items-center gap-2">
-            <ActivityIndicator color="#ffffff" />
+            <ActivityIndicator color={colors.onAccent} />
             <Text className="font-bold text-white">Saving lineup</Text>
           </View>
         ) : (

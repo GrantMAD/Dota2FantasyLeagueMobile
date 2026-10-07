@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
 import type { FantasyContext, FantasyPlayer, MarketPlayer } from './api';
 import { getPlayerMarket, getTransferHistory, processTransfer } from './api';
+import { useMobileTheme } from '@/src/lib/theme';
 
 interface WildcardTransferBuilderProps {
   context: FantasyContext;
@@ -24,6 +25,7 @@ function playerName(player: { in_game_name: string | null; name: string }): stri
 
 export function WildcardTransferBuilder({ context, userId }: WildcardTransferBuilderProps) {
   const queryClient = useQueryClient();
+  const { colors } = useMobileTheme();
   const [search, setSearch] = useState('');
   const [selectedOutId, setSelectedOutId] = useState<number | null>(null);
   const [pairs, setPairs] = useState<TransferPair[]>([]);
@@ -161,7 +163,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
           editable={!context.gameweek?.isLocked && !transferMutation.isPending}
           onChangeText={setSearch}
           placeholder={selectedOut ? `Search ${selectedOut.primary_role ?? 'players'}` : 'Select a player to sell first'}
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.placeholder}
           value={search}
         />
         {marketQuery.isPending ? (

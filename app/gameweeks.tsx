@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { getGameweeks, type GameweekSummary } from '@/src/features/gameweeks/api';
 
@@ -25,7 +25,7 @@ function formatDeadline(value: string | null): string {
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
-      })}`;
+      })} · ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
 }
 
 function isPast(gameweek: GameweekSummary): boolean {
@@ -33,6 +33,7 @@ function isPast(gameweek: GameweekSummary): boolean {
 }
 
 export default function GameweeksScreen() {
+  const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
   const query = useQuery({
     queryKey: ['gameweeks'],
@@ -142,7 +143,11 @@ export default function GameweeksScreen() {
         ) : (
           <View className="gap-3">
             {visibleGameweeks.map((gameweek) => (
-              <GameweekCard key={gameweek.id} gameweek={gameweek} />
+              <GameweekCard
+                key={gameweek.id}
+                gameweek={gameweek}
+                onPress={() => router.push(`/gameweek/${gameweek.id}`)}
+              />
             ))}
           </View>
         )}
@@ -152,20 +157,25 @@ export default function GameweeksScreen() {
   );
 }
 
-function GameweekCard({ gameweek }: { gameweek: GameweekSummary }) {
+function GameweekCard({ gameweek, onPress }: { gameweek: GameweekSummary; onPress: () => void }) {
   const status = gameweek.status.charAt(0).toUpperCase() + gameweek.status.slice(1);
   const doubleTeams = gameweek.flags.filter((flag) => flag.flag === 'double').length;
   const blankTeams = gameweek.flags.filter((flag) => flag.flag === 'blank').length;
   const scorerName = gameweek.top_scorer?.in_game_name || gameweek.top_scorer?.name;
 
   return (
-    <View className={`gap-3 rounded-2xl border p-4 ${
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`View gameweek ${gameweek.gameweek_number} details`}
+      className={`gap-3 rounded-2xl border p-4 ${
       gameweek.status === 'active'
         ? 'border-amber-700/60 bg-amber-950/20'
         : gameweek.status === 'upcoming'
           ? 'border-sky-800/60 bg-sky-950/20'
           : 'border-slate-800 bg-slate-900'
-    }`}>
+      }`}
+      onPress={onPress}
+    >
       <View className="flex-row items-start justify-between gap-3">
         <View>
           <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -208,7 +218,7 @@ function GameweekCard({ gameweek }: { gameweek: GameweekSummary }) {
           ) : null}
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 

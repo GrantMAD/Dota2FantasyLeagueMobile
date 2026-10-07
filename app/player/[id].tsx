@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getPlayerDetail } from '@/src/features/players/api';
 
@@ -55,18 +56,21 @@ export default function PlayerDetailScreen() {
         ) : query.data ? (
           <>
             <View className="gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <View>
-                <Text className="text-sm font-semibold uppercase tracking-wider text-brand-300">
-                  {query.data.primary_role ?? 'Role unavailable'}
-                </Text>
-                <Text className="mt-2 text-3xl font-bold text-white">{displayName(query.data)}</Text>
-                {query.data.in_game_name && query.data.name !== query.data.in_game_name ? (
-                  <Text className="mt-1 text-sm text-slate-400">{query.data.name}</Text>
-                ) : null}
-                <Text className="mt-2 text-sm text-slate-300">
-                  {query.data.team_name ?? 'Free agent'}
-                  {query.data.country ? ` · ${query.data.country}` : ''}
-                </Text>
+              <View className="flex-row items-center gap-4">
+                <PlayerAvatar uri={query.data.profile_image_url} label={displayName(query.data)} size={76} />
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold uppercase tracking-wider text-brand-300">
+                    {query.data.primary_role ?? 'Role unavailable'}
+                  </Text>
+                  <Text className="mt-2 text-2xl font-bold text-white">{displayName(query.data)}</Text>
+                  {query.data.in_game_name && query.data.name !== query.data.in_game_name ? (
+                    <Text className="mt-1 text-sm text-slate-400">{query.data.name}</Text>
+                  ) : null}
+                  <Text className="mt-2 text-sm text-slate-300">
+                    {query.data.team_name ?? 'Free agent'}
+                    {query.data.country ? ` · ${query.data.country}` : ''}
+                  </Text>
+                </View>
               </View>
               <View className="flex-row flex-wrap gap-2">
                 <Metric label="Price" value={`${query.data.current_price?.toFixed(1) ?? '—'}M`} />

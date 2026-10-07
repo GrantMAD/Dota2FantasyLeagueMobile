@@ -10,6 +10,7 @@ export interface DirectoryPlayer {
   gameweek_points: number;
   recent_points: number;
   team_name: string | null;
+  profile_image_url: string | null;
 }
 
 export interface PlayerPage {
@@ -35,6 +36,13 @@ export interface PlayerDetail extends DirectoryPlayer {
   last_gw_points: number;
   availability_reason: string | null;
   performances: PlayerPerformance[];
+}
+
+export function normalizePlayerComparisonIds(value: string): number[] {
+  return [...new Set(value
+    .split(',')
+    .map((item) => Number(item))
+    .filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, 4);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -72,6 +80,7 @@ function parsePlayer(value: unknown): DirectoryPlayer {
     gameweek_points: value.gameweek_points,
     recent_points: value.recent_points,
     team_name: isRecord(team) ? String(team.name) : null,
+    profile_image_url: typeof value.profile_image_url === 'string' ? value.profile_image_url : null,
   };
 }
 

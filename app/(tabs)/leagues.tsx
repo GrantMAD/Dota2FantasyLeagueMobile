@@ -5,6 +5,7 @@ import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { createLeague, getLeagues, joinLeague, type CreateLeagueInput } from '@/src/features/leagues/api';
 import { useAuth } from '@/src/lib/auth';
+import { useMobileTheme } from '@/src/lib/theme';
 
 type FormMode = 'create' | 'join' | null;
 
@@ -33,6 +34,7 @@ function ChoiceButton({
 
 export default function LeaguesScreen() {
   const { session } = useAuth();
+  const { colors } = useMobileTheme();
   const queryClient = useQueryClient();
   const [formMode, setFormMode] = useState<FormMode>(null);
   const [name, setName] = useState('');
@@ -133,7 +135,7 @@ export default function LeaguesScreen() {
             className="min-h-12 flex-1 items-center justify-center rounded-xl bg-brand-500 px-4"
             onPress={() => openForm('create')}
           >
-            <Text className="font-bold text-slate-950">Create league</Text>
+            <Text className="font-bold text-on-accent">Create league</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -160,7 +162,7 @@ export default function LeaguesScreen() {
                   maxLength={80}
                   onChangeText={setName}
                   placeholder="League name"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={colors.placeholder}
                   value={name}
                 />
                 <TextInput
@@ -170,7 +172,7 @@ export default function LeaguesScreen() {
                   multiline
                   onChangeText={setDescription}
                   placeholder="Description (optional)"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={colors.placeholder}
                   value={description}
                 />
                 <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Format</Text>
@@ -189,7 +191,7 @@ export default function LeaguesScreen() {
                   keyboardType="number-pad"
                   onChangeText={setMaxParticipants}
                   placeholder="Maximum participants (4–32)"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={colors.placeholder}
                   value={maxParticipants}
                 />
                 <Pressable
@@ -198,7 +200,7 @@ export default function LeaguesScreen() {
                   disabled={submitting}
                   onPress={submitCreate}
                 >
-                  <Text className="font-bold text-slate-950">{submitting ? 'Creating…' : 'Create league'}</Text>
+                  <Text className="font-bold text-on-accent">{submitting ? 'Creating…' : 'Create league'}</Text>
                 </Pressable>
               </>
             ) : (
@@ -213,7 +215,7 @@ export default function LeaguesScreen() {
                   className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 font-mono text-base text-white"
                   onChangeText={(value) => setInviteCode(value.toUpperCase())}
                   placeholder="ABC-1234"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={colors.placeholder}
                   value={inviteCode}
                 />
                 <Pressable
@@ -222,7 +224,7 @@ export default function LeaguesScreen() {
                   disabled={submitting}
                   onPress={submitJoin}
                 >
-                  <Text className="font-bold text-slate-950">{submitting ? 'Joining…' : 'Join league'}</Text>
+                  <Text className="font-bold text-on-accent">{submitting ? 'Joining…' : 'Join league'}</Text>
                 </Pressable>
               </>
             )}

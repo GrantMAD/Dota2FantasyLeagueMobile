@@ -3,7 +3,9 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInp
 import { useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
+import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { getPlayers } from '@/src/features/players/api';
+import { useMobileTheme } from '@/src/lib/theme';
 
 const PAGE_SIZE = 20;
 const roles = ['', 'Carry', 'Mid', 'Offlane', 'Support', 'Hard Support'];
@@ -14,6 +16,7 @@ function playerName(player: { in_game_name: string | null; name: string }): stri
 
 export default function DiscoverScreen() {
   const router = useRouter();
+  const { colors } = useMobileTheme();
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
   const [availableOnly, setAvailableOnly] = useState(true);
@@ -58,7 +61,7 @@ export default function DiscoverScreen() {
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Player directory</Text>
           <Text className="mt-2 text-3xl font-bold text-white">Discover</Text>
           <Text className="mt-1 text-sm leading-5 text-slate-400">
-              Search professional players by name and role, view their season form, or compare up to three players.
+              Search professional players by name and role, view their season form, or compare up to four players.
           </Text>
         </View>
 
@@ -85,7 +88,7 @@ export default function DiscoverScreen() {
             setOffset(0);
           }}
           placeholder="Search player or in-game name"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.placeholder}
           value={search}
         />
 
@@ -166,6 +169,7 @@ export default function DiscoverScreen() {
                   onPress={() => router.push(`/player/${player.id}`)}
                 >
                 <View className="flex-row items-start justify-between gap-3">
+                  <PlayerAvatar uri={player.profile_image_url} label={playerName(player)} size={48} />
                   <View className="flex-1">
                     <Text className="font-semibold text-white">{playerName(player)}</Text>
                     {player.in_game_name && player.name !== player.in_game_name ? (
@@ -196,11 +200,11 @@ export default function DiscoverScreen() {
                 <Pressable
                   accessibilityRole="checkbox"
                   accessibilityLabel={`${selectedForCompare ? 'Remove' : 'Add'} ${playerName(player)} ${selectedForCompare ? 'from' : 'to'} comparison`}
-                  accessibilityState={{ checked: selectedForCompare, disabled: !selectedForCompare && compareIds.length >= 3 }}
+                  accessibilityState={{ checked: selectedForCompare, disabled: !selectedForCompare && compareIds.length >= 4 }}
                   className={`min-h-10 items-center justify-center rounded-lg border ${
                     selectedForCompare ? 'border-cyan-500/60 bg-cyan-500/10' : 'border-slate-700'
                   }`}
-                  disabled={!selectedForCompare && compareIds.length >= 3}
+                  disabled={!selectedForCompare && compareIds.length >= 4}
                   onPress={() => setCompareIds((current) => selectedForCompare
                     ? current.filter((id) => id !== player.id)
                     : [...current, player.id])}

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { getTournaments } from '@/src/features/competition/api';
+import { useMobileTheme } from '@/src/lib/theme';
 
 type TournamentFilter = 'all' | 'eligible' | 'archived';
 
@@ -15,6 +17,8 @@ function formatDate(value: string | null): string {
 }
 
 export default function TournamentsScreen() {
+  const router = useRouter();
+  const { colors } = useMobileTheme();
   const [filter, setFilter] = useState<TournamentFilter>('all');
   const [search, setSearch] = useState('');
   const query = useQuery({
@@ -51,7 +55,7 @@ export default function TournamentsScreen() {
           className="min-h-12 rounded-xl border border-slate-700 bg-slate-900 px-4 text-base text-white"
           onChangeText={setSearch}
           placeholder="Search name or tier"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.placeholder}
           value={search}
         />
         <View className="flex-row gap-2">
@@ -90,7 +94,13 @@ export default function TournamentsScreen() {
         ) : tournaments.length ? (
           <View className="gap-3">
             {tournaments.map((tournament) => (
-              <View key={tournament.id} className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <Pressable
+                key={tournament.id}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${tournament.name} tournament details`}
+                className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4"
+                onPress={() => router.push(`/tournament/${tournament.id}`)}
+              >
                 <View className="flex-row items-start justify-between gap-3">
                   <View className="flex-1">
                     <Text className="font-bold text-white">{tournament.name}</Text>
@@ -117,7 +127,7 @@ export default function TournamentsScreen() {
                     {tournament.participating_teams.map((team) => team.name).join(' · ')}
                   </Text>
                 ) : null}
-              </View>
+              </Pressable>
             ))}
           </View>
         ) : (

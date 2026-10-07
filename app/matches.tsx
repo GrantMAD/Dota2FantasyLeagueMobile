@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { getMatches } from '@/src/features/competition/api';
 
@@ -21,6 +22,7 @@ function formatDate(value: string): string {
 }
 
 export default function MatchesScreen() {
+  const router = useRouter();
   const [filter, setFilter] = useState<MatchFilter>('all');
   const query = useQuery({
     queryKey: ['matches', filter],
@@ -76,7 +78,13 @@ export default function MatchesScreen() {
         ) : query.data.length ? (
           <View className="gap-3">
             {query.data.map((match) => (
-              <View key={match.id} className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <Pressable
+                key={match.id}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${match.radiant_team?.name ?? 'team'} versus ${match.dire_team?.name ?? 'team'} match details`}
+                className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4"
+                onPress={() => router.push(`/match/${match.id}`)}
+              >
                 <View className="flex-row items-center justify-between gap-2">
                   <Text className={`text-xs font-semibold uppercase tracking-wider ${
                     match.status === 'live' ? 'text-red-300' : 'text-slate-400'
@@ -103,7 +111,7 @@ export default function MatchesScreen() {
                   </Text>
                   <Text className="text-xs text-slate-500">Best of {match.best_of}</Text>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
         ) : (

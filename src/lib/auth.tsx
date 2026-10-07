@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { queryClient } from './query-client';
 import { getSupabaseClient } from './supabase';
+import { unregisterDevicePushToken } from './push-token-registration';
 
 interface AuthContextValue {
   session: Session | null;
@@ -86,6 +87,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (error) throw new Error(error.message);
       },
       signOut: async () => {
+        if (session?.user.id) {
+          await unregisterDevicePushToken(session.user.id);
+        }
         const { error } = await getSupabaseClient().auth.signOut();
         if (error) throw new Error(error.message);
       },

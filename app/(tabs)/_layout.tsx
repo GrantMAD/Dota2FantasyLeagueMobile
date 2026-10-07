@@ -2,12 +2,13 @@ import { SymbolView } from 'expo-symbols';
 import { Redirect, Tabs } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
 
-import Colors from '@/constants/Colors';
 import { Screen } from '@/src/components/Screen';
 import { useAuth } from '@/src/lib/auth';
+import { useMobileTheme } from '@/src/lib/theme';
 
 export default function TabLayout() {
   const { ready, session } = useAuth();
+  const { colors } = useMobileTheme();
 
   if (!ready) {
     return (
@@ -22,10 +23,10 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.dark.tint,
+        tabBarActiveTintColor: colors.tabBarActive,
         headerShown: false,
-        tabBarStyle: { backgroundColor: '#020617', borderTopColor: '#1e293b' },
-        tabBarInactiveTintColor: '#94a3b8',
+        tabBarStyle: { backgroundColor: colors.tabBarBackground, borderTopColor: colors.tabBarBorder },
+        tabBarInactiveTintColor: colors.tabBarInactive,
       }}>
       <Tabs.Screen
         name="index"
