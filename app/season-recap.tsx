@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Share, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/src/components/Screen';
 import { getSeasonRecaps, type SeasonRecap } from '@/src/features/season-recap/api';
@@ -63,7 +64,7 @@ export default function SeasonRecapScreen() {
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#fb923c" />
+          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#14b8a6" />
         }
       >
         <View>
@@ -76,7 +77,7 @@ export default function SeasonRecapScreen() {
 
         {query.isPending ? (
           <View accessibilityLabel="Loading season recaps" className="items-center py-12">
-            <ActivityIndicator color="#fb923c" />
+            <ActivityIndicator color="#14b8a6" />
           </View>
         ) : query.isError ? (
           <View accessibilityRole="alert" className="gap-3 rounded-2xl border border-red-900 bg-red-950 p-5">

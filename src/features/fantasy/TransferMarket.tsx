@@ -154,7 +154,7 @@ export function TransferMarket({ context, userId }: TransferMarketProps) {
           value={search}
         />
         {marketQuery.isPending ? (
-          <ActivityIndicator accessibilityLabel="Loading players" color="#fb923c" />
+          <ActivityIndicator accessibilityLabel="Loading players" color="#14b8a6" />
         ) : marketQuery.isError ? (
           <Text accessibilityRole="alert" className="text-sm text-red-300">
             {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
@@ -206,7 +206,7 @@ export function TransferMarket({ context, userId }: TransferMarketProps) {
       ) : null}
       {transferMutation.isPending ? (
         <View className="flex-row items-center justify-center gap-2 py-2">
-          <ActivityIndicator color="#fb923c" />
+          <ActivityIndicator color="#14b8a6" />
           <Text className="text-sm text-slate-300">Processing transfer</Text>
         </View>
       ) : (
@@ -226,7 +226,7 @@ export function TransferMarket({ context, userId }: TransferMarketProps) {
       <View className="border-t border-slate-800 pt-4">
         <Text className="text-base font-semibold text-white">Recent transfers</Text>
         {historyQuery.isPending ? (
-          <ActivityIndicator accessibilityLabel="Loading transfer history" className="mt-3" color="#fb923c" />
+          <ActivityIndicator accessibilityLabel="Loading transfer history" className="mt-3" color="#14b8a6" />
         ) : historyQuery.isError ? (
           <Text accessibilityRole="alert" className="mt-2 text-sm text-red-300">
             {historyQuery.error instanceof Error ? historyQuery.error.message : 'Transfer history unavailable.'}

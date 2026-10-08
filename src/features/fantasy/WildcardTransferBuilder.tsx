@@ -167,7 +167,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
           value={search}
         />
         {marketQuery.isPending ? (
-          <ActivityIndicator accessibilityLabel="Loading replacement players" color="#fb923c" />
+          <ActivityIndicator accessibilityLabel="Loading replacement players" color="#14b8a6" />
         ) : marketQuery.isError ? (
           <Text accessibilityRole="alert" className="text-sm text-red-300">
             {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
@@ -242,7 +242,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
       <View className="border-t border-slate-800 pt-4">
         <Text className="text-base font-semibold text-white">Recent transfers</Text>
         {historyQuery.isPending ? (
-          <ActivityIndicator accessibilityLabel="Loading transfer history" className="mt-3" color="#fb923c" />
+          <ActivityIndicator accessibilityLabel="Loading transfer history" className="mt-3" color="#14b8a6" />
         ) : historyQuery.isError ? (
           <Text accessibilityRole="alert" className="mt-2 text-sm text-red-300">
             {historyQuery.error instanceof Error ? historyQuery.error.message : 'Transfer history unavailable.'}

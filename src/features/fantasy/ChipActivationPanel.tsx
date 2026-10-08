@@ -96,7 +96,7 @@ function ChipRow({
         </Text>
       </View>
       {busy ? (
-        <ActivityIndicator accessibilityLabel={`Activating ${label}`} color="#fb923c" />
+        <ActivityIndicator accessibilityLabel={`Activating ${label}`} color="#14b8a6" />
       ) : (
         <Pressable
           accessibilityRole="button"

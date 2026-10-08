@@ -2,7 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { getGameweeks } from '../src/features/gameweeks/api';
-import { getPlayerDetail, getPlayers, normalizePlayerComparisonIds } from '../src/features/players/api';
+import { getPlayerDetail, getPlayers, getProfessionalTeams, normalizePlayerComparisonIds } from '../src/features/players/api';
 import {
   getMatchDetails,
   getMatches,
@@ -12,6 +12,7 @@ import {
 import { createLeague, getLeagues, joinLeague } from '../src/features/leagues/api';
 import { getLeaderboard } from '../src/features/leaderboard/api';
 import { getAnalytics } from '../src/features/analytics/api';
+import { getDashboardWhatsNew } from '../src/features/dashboard/api';
 import { getSeasonRecaps } from '../src/features/season-recap/api';
 import {
   createManagerAccount,
@@ -112,6 +113,72 @@ describe('mobile data access', () => {
     });
 
     await expect(getFantasyContext()).rejects.toThrow('Unable to load fantasy context: Authentication is required.');
+  });
+
+  it('loads dashboard announcements through the authenticated Supabase RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
+        events: [{
+          kind: 'tournament',
+          id: 10,
+          title: 'Autumn Cup',
+          startedAt: '2026-10-08T00:00:00.000Z',
+          href: '/tournaments/10',
+          tier: 'S',
+          seriesCount: 3,
+          matchCount: 6,
+          bestOfFormats: [3],
+        }],
+        gameweek: {
+          id: 7,
+          number: 3,
+          status: 'active',
+          startsAt: '2026-10-08T00:00:00.000Z',
+          isCurrent: true,
+          endsSoon: false,
+          deadline: '2026-10-10T12:00:00.000Z',
+          matchCount: 6,
+          matchStatuses: { scheduled: 6 },
+        },
+        updates: [{
+          id: 22,
+          kind: 'price_change',
+          title: 'Price update',
+          message: 'Player price changed.',
+          createdAt: '2026-10-08T12:00:00.000Z',
+          href: '/players/41',
+        }],
+      }, error: null });
+
+    await expect(getDashboardWhatsNew()).resolves.toMatchObject({
+      events: [{ id: 10, title: 'Autumn Cup', matchCount: 6 }],
+      gameweek: { id: 7, number: 3, matchStatuses: { scheduled: 6 } },
+      updates: [{ id: 22, playerId: 41, kind: 'price_change' }],
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_dashboard_whats_new');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('surfaces dashboard announcement RPC errors', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'Authentication is required.' },
+    });
+
+    await expect(getDashboardWhatsNew()).rejects.toThrow(
+      'Unable to load dashboard updates: Authentication is required.',
+    );
+  });
+
+  it('rejects malformed dashboard announcement RPC data', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: { events: [{}], gameweek: null, updates: [] },
+      error: null,
+    });
+
+    await expect(getDashboardWhatsNew()).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 502,
+    });
   });
 
   it('rejects unexpected fantasy context shapes instead of assuming defaults', async () => {
@@ -245,6 +312,7 @@ describe('mobile data access', () => {
     await expect(getPlayers({
       search: 'Tag',
       role: 'Carry',
+      teamId: 4,
       availableOnly: true,
       offset: 0,
       limit: 20,
@@ -261,10 +329,24 @@ describe('mobile data access', () => {
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_players', {
       p_search: 'Tag',
       p_role: 'Carry',
+      p_team_id: 4,
       p_available_only: true,
       p_offset: 0,
       p_limit: 20,
     });
+  });
+
+  it('loads and validates professional team filter options', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
+      teams: [{ id: 4, name: 'Radiant', logo_url: 'https://images.example.test/radiant.png' }],
+    }, error: null });
+
+    await expect(getProfessionalTeams()).resolves.toEqual([{
+      id: 4,
+      name: 'Radiant',
+      logo_url: 'https://images.example.test/radiant.png',
+    }]);
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_professional_teams');
   });
 
   it('validates player detail and recent performance from the authenticated RPC', async () => {
@@ -763,6 +845,11 @@ describe('mobile data access', () => {
           id: 'test-user',
           username: 'manager',
           display_name: 'Manager',
+          bio: 'League champion',
+          country_code: 'GB',
+          timezone: 'Europe/London',
+          avatar_url: null,
+          role: 'user',
           email: 'test@example.com',
           email_notifications: false,
           push_notifications: true,
@@ -784,11 +871,17 @@ describe('mobile data access', () => {
     await expect(updateManagerProfile({
       username: 'manager',
       displayName: 'Manager',
+      bio: 'League champion',
+      countryCode: 'gb',
+      timezone: 'Europe/London',
       emailNotifications: false,
       pushNotifications: true,
     })).resolves.toMatchObject({
       username: 'manager',
       displayName: 'Manager',
+      bio: 'League champion',
+      countryCode: 'GB',
+      timezone: 'Europe/London',
       emailNotifications: false,
       pushNotifications: true,
       themePreference: 'light',
@@ -797,10 +890,13 @@ describe('mobile data access', () => {
     expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(1, 'mobile_get_profile');
     expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(2, 'mobile_update_profile', {
       p_updates: {
-      username: 'manager',
-      display_name: 'Manager',
-      email_notifications: false,
-      push_notifications: true,
+        username: 'manager',
+        display_name: 'Manager',
+        bio: 'League champion',
+        country_code: 'gb',
+        timezone: 'Europe/London',
+        email_notifications: false,
+        push_notifications: true,
       },
     });
     expect(fetch).not.toHaveBeenCalled();

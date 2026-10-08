@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Screen } from '@/src/components/Screen';
 import { getMatchesByFilters } from '@/src/features/competition/api';
 import { getGameweeks } from '@/src/features/gameweeks/api';
@@ -46,7 +47,7 @@ export default function GameweekDetailScreen() {
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#fb923c" />
+          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#14b8a6" />
         }
       >
         <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => router.back()}>
@@ -55,7 +56,7 @@ export default function GameweekDetailScreen() {
         {!validId ? (
           <Text accessibilityRole="alert" className="text-red-300">This gameweek link is invalid.</Text>
         ) : query.isPending ? (
-          <ActivityIndicator accessibilityLabel="Loading gameweek details" color="#fb923c" />
+          <ActivityIndicator accessibilityLabel="Loading gameweek details" color="#14b8a6" />
         ) : query.isError ? (
           <View accessibilityRole="alert" className="gap-3 rounded-2xl border border-red-900 bg-red-950 p-5">
             <Text className="font-semibold text-red-200">Gameweek unavailable</Text>

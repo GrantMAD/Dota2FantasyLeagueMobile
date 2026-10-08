@@ -1,4 +1,5 @@
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 

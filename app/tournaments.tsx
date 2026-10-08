@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
@@ -40,9 +41,16 @@ export default function TournamentsScreen() {
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#fb923c" />
+          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#14b8a6" />
         }
       >
+        <Pressable
+          accessibilityRole="button"
+          className="min-h-10 justify-center self-start"
+          onPress={() => router.replace('/(tabs)/discover')}
+        >
+          <Text className="font-semibold text-brand-300">‹ Back to Discover</Text>
+        </Pressable>
         <View>
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Pro circuit</Text>
           <Text className="mt-2 text-3xl font-bold text-white">Tournaments</Text>
@@ -135,7 +143,7 @@ export default function TournamentsScreen() {
             <Text className="text-center text-sm text-slate-300">No tournaments match these filters.</Text>
           </View>
         )}
-        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing tournaments" color="#fb923c" /> : null}
+        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing tournaments" color="#14b8a6" /> : null}
       </ScrollView>
     </Screen>
   );

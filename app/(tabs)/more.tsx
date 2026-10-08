@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Link } from 'expo-router';
 import { Button } from '@/src/components/Button';
 import { Screen } from '@/src/components/Screen';

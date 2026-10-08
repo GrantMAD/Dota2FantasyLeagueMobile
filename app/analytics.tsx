@@ -1,5 +1,8 @@
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { getAnalytics } from '@/src/features/analytics/api';
 
@@ -13,6 +16,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 export default function AnalyticsScreen() {
+  const [tab, setTab] = useState<'my' | 'market' | 'dream'>('my');
   const query = useQuery({
     queryKey: ['analytics'],
     queryFn: getAnalytics,
@@ -26,7 +30,7 @@ export default function AnalyticsScreen() {
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#fb923c" />
+          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#14b8a6" />
         }
       >
         <View>
@@ -36,10 +40,15 @@ export default function AnalyticsScreen() {
             Review your fantasy results, role contributions, captaincy, and player value.
           </Text>
         </View>
+        <Link href="/premium" asChild>
+          <Pressable accessibilityRole="button" className="min-h-10 self-start justify-center rounded-lg border border-amber-500/30 bg-amber-500/10 px-3">
+            <Text className="text-sm font-semibold text-amber-300">Explore Premium Tools →</Text>
+          </Pressable>
+        </Link>
 
         {query.isPending ? (
           <View accessibilityLabel="Loading analytics" className="items-center py-12">
-            <ActivityIndicator color="#fb923c" />
+            <ActivityIndicator color="#14b8a6" />
           </View>
         ) : query.isError ? (
           <View accessibilityRole="alert" className="gap-3 rounded-2xl border border-red-900 bg-red-950 p-5">
@@ -63,7 +72,29 @@ export default function AnalyticsScreen() {
               <Metric label="Free transfers" value={String(query.data.user.freeTransfers)} />
             </View>
 
-            <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <View className="flex-row flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-2">
+              {([
+                ['my', 'My Performance'],
+                ['market', 'Market'],
+                ['dream', 'Dream Team'],
+              ] as const).map(([key, label]) => (
+                <Pressable
+                  key={key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: tab === key }}
+                  className={`min-h-10 flex-1 items-center justify-center rounded-xl px-3 ${
+                    tab === key ? 'bg-brand-500' : ''
+                  }`}
+                  onPress={() => setTab(key)}
+                >
+                  <Text className={`text-xs font-semibold ${tab === key ? 'text-on-accent' : 'text-slate-300'}`}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {tab === 'my' ? (
+              <>
+              <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <Text className="text-lg font-bold text-white">Gameweek trend</Text>
               {query.data.trend.length ? query.data.trend.map((trend) => (
                 <View key={trend.gameweekId} className="gap-1">
@@ -107,7 +138,12 @@ export default function AnalyticsScreen() {
               )) : <Text className="text-sm text-slate-400">Role scoring will appear as lineups are completed.</Text>}
             </View>
 
-            <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              </>
+            ) : null}
+
+            {tab === 'dream' ? (
+              <>
+              <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <Text className="text-lg font-bold text-white">Dream team</Text>
               {query.data.dreamTeam.length ? query.data.dreamTeam.map((player, index) => (
                 <View key={`${player.playerName}-${index}`} className="flex-row items-center justify-between gap-3">
@@ -132,6 +168,41 @@ export default function AnalyticsScreen() {
                 </View>
               )) : <Text className="text-sm text-slate-400">Value rankings will appear when match data is available.</Text>}
             </View>
+              </>
+            ) : null}
+
+            {tab === 'market' ? (
+              <>
+                <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <Text className="text-lg font-bold text-white">Market & metagame intelligence</Text>
+                  <Text className="text-sm leading-5 text-slate-400">Ownership, value, and return-on-investment signals from the current player market.</Text>
+                  {query.data.market.length ? query.data.market.map((player, index) => (
+                    <View key={`${player.playerName}-${index}`} className="flex-row items-center justify-between gap-3 border-t border-slate-800 pt-3">
+                      <View className="flex-1">
+                        <Text className="font-semibold text-white">{player.playerName}</Text>
+                        <Text className="mt-1 text-xs text-slate-500">{player.team} · {player.role} · {player.price.toFixed(1)}M</Text>
+                      </View>
+                      <View className="items-end">
+                        <Text className="font-bold text-brand-300">{player.roi.toFixed(2)} ROI</Text>
+                        <Text className="text-xs text-slate-400">{player.ownership.toFixed(1)}% owned</Text>
+                      </View>
+                    </View>
+                  )) : <Text className="text-sm text-slate-400">Market insights will appear when player data is available.</Text>}
+                </View>
+                <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                  <Text className="text-lg font-bold text-white">Best value</Text>
+                  {query.data.valueForMoney.length ? query.data.valueForMoney.map((player, index) => (
+                    <View key={`${player.playerName}-${index}`} className="flex-row items-center justify-between gap-3">
+                      <View className="flex-1">
+                        <Text className="font-semibold text-white">{player.playerName}</Text>
+                        <Text className="text-xs text-slate-500">{player.team} · {player.role} · {player.price.toFixed(1)}M</Text>
+                      </View>
+                      <Text className="font-bold text-emerald-300">{player.roi.toFixed(2)} ROI</Text>
+                    </View>
+                  )) : <Text className="text-sm text-slate-400">Value rankings will appear when match data is available.</Text>}
+                </View>
+              </>
+            ) : null}
           </>
         )}
       </ScrollView>

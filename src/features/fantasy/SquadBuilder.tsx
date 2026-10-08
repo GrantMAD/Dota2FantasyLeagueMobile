@@ -120,7 +120,7 @@ export function SquadBuilder({ context, userId }: SquadBuilderProps) {
       </View>
 
       {marketQuery.isPending ? (
-        <ActivityIndicator accessibilityLabel="Loading available players" color="#fb923c" />
+        <ActivityIndicator accessibilityLabel="Loading available players" color="#14b8a6" />
       ) : marketQuery.isError ? (
         <View accessibilityRole="alert" className="gap-2">
           <Text className="text-sm text-red-300">

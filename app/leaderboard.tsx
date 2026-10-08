@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/src/components/Screen';
 import { getGameweeks } from '@/src/features/gameweeks/api';
@@ -42,7 +43,7 @@ export default function LeaderboardScreen() {
               void leaderboard.refetch();
               void gameweeks.refetch();
             }}
-            tintColor="#fb923c"
+            tintColor="#14b8a6"
           />
         }
       >
@@ -70,24 +71,36 @@ export default function LeaderboardScreen() {
               Overall
             </Text>
           </Pressable>
-          {(gameweeks.data ?? []).map((gameweek) => (
-            <Pressable
-              key={gameweek.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected: gameweekId === gameweek.id }}
-              className={`min-h-10 justify-center rounded-full border px-4 ${
-                gameweekId === gameweek.id ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-900'
-              }`}
-              onPress={() => {
-                setGameweekId(gameweek.id);
-                setPage(1);
-              }}
-            >
-              <Text className={`text-sm font-semibold ${gameweekId === gameweek.id ? 'text-brand-300' : 'text-slate-300'}`}>
-                GW {gameweek.gameweek_number}
-              </Text>
-            </Pressable>
-          ))}
+          {(gameweeks.data ?? []).map((gameweek) => {
+            const isUpcoming = gameweek.status === 'upcoming';
+            const isSelected = gameweekId === gameweek.id;
+            return (
+              <Pressable
+                key={gameweek.id}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: isUpcoming, selected: isSelected }}
+                accessibilityHint={isUpcoming ? 'Available when this gameweek begins.' : undefined}
+                className={`min-h-10 justify-center rounded-full border px-4 ${
+                  isSelected
+                    ? 'border-brand-500 bg-brand-500/15'
+                    : isUpcoming
+                      ? 'border-slate-800 bg-slate-950 opacity-40'
+                      : 'border-slate-700 bg-slate-900'
+                }`}
+                disabled={isUpcoming}
+                onPress={() => {
+                  setGameweekId(gameweek.id);
+                  setPage(1);
+                }}
+              >
+                <Text className={`text-sm font-semibold ${
+                  isSelected ? 'text-brand-300' : isUpcoming ? 'text-slate-500' : 'text-slate-300'
+                }`}>
+                  GW {gameweek.gameweek_number}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
         {gameweeks.isError ? (
@@ -98,7 +111,7 @@ export default function LeaderboardScreen() {
 
         {leaderboard.isPending ? (
           <View accessibilityLabel="Loading leaderboard" className="items-center py-12">
-            <ActivityIndicator color="#fb923c" />
+            <ActivityIndicator color="#14b8a6" />
           </View>
         ) : leaderboard.isError ? (
           <View accessibilityRole="alert" className="gap-3 rounded-2xl border border-red-900 bg-red-950 p-5">

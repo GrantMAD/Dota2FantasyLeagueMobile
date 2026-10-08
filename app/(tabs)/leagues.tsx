@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
@@ -118,7 +119,7 @@ export default function LeaguesScreen() {
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#fb923c" />
+          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#14b8a6" />
         }
       >
         <View>
@@ -239,7 +240,7 @@ export default function LeaguesScreen() {
 
         {query.isPending ? (
           <View accessibilityLabel="Loading leagues" className="items-center py-10">
-            <ActivityIndicator color="#fb923c" />
+            <ActivityIndicator color="#14b8a6" />
           </View>
         ) : query.isError ? (
           <View accessibilityRole="alert" className="gap-3 rounded-2xl border border-red-900 bg-red-950 p-5">

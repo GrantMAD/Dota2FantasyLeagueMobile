@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
@@ -64,7 +65,7 @@ export default function GameweeksScreen() {
           <RefreshControl
             refreshing={query.isRefetching}
             onRefresh={() => void query.refetch()}
-            tintColor="#fb923c"
+            tintColor="#14b8a6"
           />
         }
       >
@@ -151,7 +152,7 @@ export default function GameweeksScreen() {
             ))}
           </View>
         )}
-        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing gameweeks" color="#fb923c" /> : null}
+        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing gameweeks" color="#14b8a6" /> : null}
       </ScrollView>
     </Screen>
   );

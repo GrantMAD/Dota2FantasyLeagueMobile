@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import {
   clearReadNotifications,
@@ -49,6 +50,11 @@ export default function NotificationsScreen() {
   });
   const notifications = query.data?.notifications ?? [];
   const unreadCount = query.data?.unreadCount ?? 0;
+  const countFor = (key: NotificationCategory) => {
+    if (key === 'all') return notifications.length;
+    if (key === 'unread') return unreadCount;
+    return notifications.filter((item) => notificationCategoryForType(item.type) === key).length;
+  };
   const visibleNotifications = notifications
     .filter((notification) => matchesNotificationCategory(notification, category));
   const invalidateNotifications = () => queryClient.invalidateQueries({ queryKey: ['notifications'] });
@@ -86,13 +92,18 @@ export default function NotificationsScreen() {
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#fb923c" />
+          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#14b8a6" />
         }
       >
         <View>
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Updates</Text>
           <Text className="mt-2 text-3xl font-bold text-white">Notifications</Text>
           <Text className="mt-1 text-sm leading-5 text-slate-400">Deadlines, scoring, market changes, and league activity.</Text>
+          <Link href="/profile" asChild>
+            <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start">
+              <Text className="font-semibold text-brand-300">Notification preferences →</Text>
+            </Pressable>
+          </Link>
         </View>
 
         <View className="flex-row flex-wrap gap-2">
@@ -110,7 +121,7 @@ export default function NotificationsScreen() {
               }}
             >
               <Text className={`text-sm font-semibold ${category === item.key ? 'text-brand-300' : 'text-slate-300'}`}>
-                {item.label}{item.key === 'unread' && unreadCount ? ` (${unreadCount})` : ''}
+                {item.label} ({countFor(item.key)})
               </Text>
             </Pressable>
           ))}
@@ -153,7 +164,7 @@ export default function NotificationsScreen() {
 
         {query.isPending ? (
           <View accessibilityLabel="Loading notifications" className="items-center py-12">
-            <ActivityIndicator color="#fb923c" />
+            <ActivityIndicator color="#14b8a6" />
           </View>
         ) : query.isError ? (
           <View accessibilityRole="alert" className="gap-3 rounded-2xl border border-red-900 bg-red-950 p-5">

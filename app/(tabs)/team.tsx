@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Screen } from '@/src/components/Screen';
 import { ChipActivationPanel } from '@/src/features/fantasy/ChipActivationPanel';
 import { LineupEditor } from '@/src/features/fantasy/LineupEditor';
@@ -25,10 +26,10 @@ export default function TeamScreen() {
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
           <RefreshControl
-            colors={['#fb923c']}
+            colors={['#14b8a6']}
             onRefresh={() => void query.refetch()}
             refreshing={query.isRefetching}
-            tintColor="#fb923c"
+            tintColor="#14b8a6"
           />
         }
       >
@@ -145,7 +146,7 @@ export default function TeamScreen() {
           )
         )}
 
-        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Updating squad" color="#fb923c" /> : null}
+        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Updating squad" color="#14b8a6" /> : null}
       </ScrollView>
     </Screen>
   );

@@ -1,11 +1,13 @@
 import { useDeferredValue, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
-import { getPlayers } from '@/src/features/players/api';
+import { getPlayers, getProfessionalTeams } from '@/src/features/players/api';
 import { useMobileTheme } from '@/src/lib/theme';
+import { useFantasyContext } from '@/src/features/fantasy/hooks';
 
 const PAGE_SIZE = 20;
 const roles = ['', 'Carry', 'Mid', 'Offlane', 'Support', 'Hard Support'];
@@ -17,17 +19,26 @@ function playerName(player: { in_game_name: string | null; name: string }): stri
 export default function DiscoverScreen() {
   const router = useRouter();
   const { colors } = useMobileTheme();
+  const fantasyContext = useFantasyContext();
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
+  const [teamId, setTeamId] = useState<number | null>(null);
   const [availableOnly, setAvailableOnly] = useState(true);
+  const [pinOwnedFirst, setPinOwnedFirst] = useState(false);
   const [offset, setOffset] = useState(0);
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const deferredSearch = useDeferredValue(search);
+  const teamsQuery = useQuery({
+    queryKey: ['professional-teams'],
+    queryFn: getProfessionalTeams,
+    staleTime: 30 * 60_000,
+  });
   const query = useQuery({
-    queryKey: ['player-directory', deferredSearch, role, availableOnly, offset],
+    queryKey: ['player-directory', deferredSearch, role, teamId, availableOnly, offset],
     queryFn: () => getPlayers({
       search: deferredSearch,
       role,
+      teamId,
       availableOnly,
       offset,
       limit: PAGE_SIZE,
@@ -39,9 +50,13 @@ export default function DiscoverScreen() {
     query.data.total !== null &&
     query.data.offset + query.data.players.length < query.data.total
   );
+  const ownedPlayerIds = new Set((fantasyContext.data?.ownedPlayers ?? []).map((player) => player.id));
   const displayedPlayers = (query.data?.players ?? []).filter((player) =>
     !availableOnly || player.availability_status === 'available'
   );
+  if (pinOwnedFirst) {
+    displayedPlayers.sort((a, b) => Number(ownedPlayerIds.has(b.id)) - Number(ownedPlayerIds.has(a.id)));
+  }
 
   return (
     <Screen>
@@ -53,7 +68,7 @@ export default function DiscoverScreen() {
           <RefreshControl
             refreshing={query.isRefetching}
             onRefresh={() => void query.refetch()}
-            tintColor="#fb923c"
+            tintColor="#14b8a6"
           />
         }
       >
@@ -112,6 +127,55 @@ export default function DiscoverScreen() {
             </Pressable>
           ))}
         </ScrollView>
+
+        {teamsQuery.isError ? (
+          <View accessibilityRole="alert" className="gap-2 rounded-xl border border-amber-900 bg-amber-950/60 p-3">
+            <Text className="text-sm text-amber-200">
+              Team filters are unavailable: {teamsQuery.error instanceof Error
+                ? teamsQuery.error.message
+                : 'Unable to load teams.'}
+            </Text>
+            <Pressable accessibilityRole="button" onPress={() => void teamsQuery.refetch()}>
+              <Text className="font-semibold text-white">Retry team list</Text>
+            </Pressable>
+          </View>
+        ) : teamsQuery.data?.length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+            {[{ id: null, name: 'All teams' }, ...teamsQuery.data].map((team) => (
+              <Pressable
+                key={team.id ?? 'all-teams'}
+                accessibilityRole="button"
+                accessibilityState={{ selected: teamId === team.id }}
+                className={`min-h-10 justify-center rounded-full border px-4 ${
+                  teamId === team.id ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-900'
+                }`}
+                onPress={() => {
+                  setTeamId(team.id);
+                  setOffset(0);
+                }}
+              >
+                <Text className={`text-sm font-semibold ${teamId === team.id ? 'text-brand-300' : 'text-slate-300'}`}>
+                  {team.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {ownedPlayerIds.size ? (
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: pinOwnedFirst }}
+            className={`min-h-10 self-start justify-center rounded-full border px-4 ${
+              pinOwnedFirst ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-slate-700 bg-slate-900'
+            }`}
+            onPress={() => setPinOwnedFirst((current) => !current)}
+          >
+            <Text className={`text-sm font-semibold ${pinOwnedFirst ? 'text-emerald-300' : 'text-slate-300'}`}>
+              {pinOwnedFirst ? 'My squad players pinned first' : 'Pin my squad players first'}
+            </Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           accessibilityRole="checkbox"
@@ -252,7 +316,7 @@ export default function DiscoverScreen() {
             ) : null}
           </View>
         ) : null}
-        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing players" color="#fb923c" /> : null}
+        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing players" color="#14b8a6" /> : null}
       </ScrollView>
     </Screen>
   );

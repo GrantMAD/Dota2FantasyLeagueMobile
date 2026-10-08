@@ -123,7 +123,7 @@ export function MobilePushNotificationsProvider({ children }: PropsWithChildren)
       name: 'Fantasy updates',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#fb923c',
+      lightColor: '#14b8a6',
     }).catch((error: unknown) => {
       setSyncError(error instanceof Error ? error.message : 'Android notification channel setup failed.');
     });

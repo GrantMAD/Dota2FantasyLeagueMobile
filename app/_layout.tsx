@@ -108,7 +108,7 @@ function AppRoutes() {
     return (
       <Screen>
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator accessibilityLabel="Restoring session" color="#fb923c" />
+          <ActivityIndicator accessibilityLabel="Restoring session" color="#14b8a6" />
         </View>
       </Screen>
     );

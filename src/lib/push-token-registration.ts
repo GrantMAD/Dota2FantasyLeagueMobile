@@ -29,7 +29,7 @@ async function prepareAndroidChannel(): Promise<void> {
     name: 'Fantasy updates',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
-    lightColor: '#fb923c',
+    lightColor: '#14b8a6',
   });
 }
 

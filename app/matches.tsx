@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
@@ -36,7 +37,7 @@ export default function MatchesScreen() {
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#fb923c" />
+          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#14b8a6" />
         }
       >
         <View>
@@ -119,7 +120,7 @@ export default function MatchesScreen() {
             <Text className="text-center text-sm text-slate-300">No {filter === 'all' ? '' : `${filter} `}matches found.</Text>
           </View>
         )}
-        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing matches" color="#fb923c" /> : null}
+        {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing matches" color="#14b8a6" /> : null}
       </ScrollView>
     </Screen>
   );

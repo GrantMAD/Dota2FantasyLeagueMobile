@@ -10,7 +10,7 @@ export default function TabLayout() {
   if (!ready) {
     return (
       <Screen>
-        <ActivityIndicator accessibilityLabel="Restoring session" className="flex-1" color="#fb923c" />
+        <ActivityIndicator accessibilityLabel="Restoring session" className="flex-1" color="#14b8a6" />
       </Screen>
     );
   }

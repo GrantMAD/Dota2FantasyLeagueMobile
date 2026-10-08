@@ -8,6 +8,11 @@ export interface ManagerProfile {
   email: string | null;
   username: string;
   displayName: string | null;
+  avatarUrl: string | null;
+  bio: string | null;
+  countryCode: string | null;
+  timezone: string | null;
+  role: string;
   emailNotifications: boolean;
   pushNotifications: boolean;
   memberSince: string;
@@ -17,6 +22,9 @@ export interface ManagerProfile {
 export interface ManagerProfileUpdate {
   username: string;
   displayName: string;
+  bio?: string;
+  countryCode?: string;
+  timezone?: string;
   emailNotifications: boolean;
   pushNotifications: boolean;
 }
@@ -36,6 +44,11 @@ function parseProfile(value: unknown): ManagerProfile | null {
     typeof value.id !== 'string' ||
     typeof value.username !== 'string' ||
     !(value.display_name === null || typeof value.display_name === 'string') ||
+    (value.avatar_url !== undefined && !(value.avatar_url === null || typeof value.avatar_url === 'string')) ||
+    (value.bio !== undefined && !(value.bio === null || typeof value.bio === 'string')) ||
+    (value.country_code !== undefined && !(value.country_code === null || typeof value.country_code === 'string')) ||
+    (value.timezone !== undefined && !(value.timezone === null || typeof value.timezone === 'string')) ||
+    (value.role !== undefined && typeof value.role !== 'string') ||
     !(value.email === null || typeof value.email === 'string') ||
     typeof value.email_notifications !== 'boolean' ||
     typeof value.push_notifications !== 'boolean' ||
@@ -49,6 +62,11 @@ function parseProfile(value: unknown): ManagerProfile | null {
     email: value.email,
     username: value.username,
     displayName: value.display_name,
+    avatarUrl: typeof value.avatar_url === 'string' ? value.avatar_url : null,
+    bio: typeof value.bio === 'string' ? value.bio : null,
+    countryCode: typeof value.country_code === 'string' ? value.country_code : null,
+    timezone: typeof value.timezone === 'string' ? value.timezone : null,
+    role: typeof value.role === 'string' ? value.role : 'user',
     emailNotifications: value.email_notifications,
     pushNotifications: value.push_notifications,
     memberSince: value.member_since,
@@ -108,12 +126,24 @@ export async function updateThemePreference(theme: ThemePreference): Promise<The
 }
 
 export async function updateManagerProfile(update: ManagerProfileUpdate): Promise<ManagerProfile> {
-  return updateProfile({
+  const updates: Record<string, unknown> = {
     username: update.username,
     display_name: update.displayName,
     email_notifications: update.emailNotifications,
     push_notifications: update.pushNotifications,
-  });
+  };
+  if (update.bio !== undefined) updates.bio = update.bio;
+  if (update.countryCode !== undefined) updates.country_code = update.countryCode;
+  if (update.timezone !== undefined) updates.timezone = update.timezone;
+  const profile = await updateProfile(updates);
+  if (
+    (update.bio !== undefined && profile.bio !== (update.bio.trim() || null)) ||
+    (update.countryCode !== undefined && profile.countryCode !== (update.countryCode.trim().toUpperCase() || null)) ||
+    (update.timezone !== undefined && profile.timezone !== (update.timezone.trim() || null))
+  ) {
+    throw new ApiError('Profile details were not saved. Apply mobile migration 025 and try again.', 502);
+  }
+  return profile;
 }
 
 export async function updatePushNotificationPreference(enabled: boolean): Promise<ManagerProfile> {

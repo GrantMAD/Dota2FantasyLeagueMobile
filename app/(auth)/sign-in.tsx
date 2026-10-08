@@ -45,7 +45,7 @@ export default function SignInScreen() {
         </View>
 
         {!ready ? (
-          <ActivityIndicator accessibilityLabel="Restoring session" color="#fb923c" />
+          <ActivityIndicator accessibilityLabel="Restoring session" color="#14b8a6" />
         ) : configurationError ? (
           <View accessibilityRole="alert" className="rounded-xl border border-amber-700 bg-amber-950 p-4">
             <Text className="font-semibold text-amber-200">Setup required</Text>

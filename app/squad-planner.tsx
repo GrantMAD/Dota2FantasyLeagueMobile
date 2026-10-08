@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Link } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/src/components/Screen';
@@ -88,7 +89,7 @@ export default function SquadPlannerScreen() {
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor="#fb923c" />
+          <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor="#14b8a6" />
         }
       >
         <View>
@@ -197,7 +198,7 @@ export default function SquadPlannerScreen() {
                 <Text className="mt-1 text-sm text-slate-400">Scheduled matches for teams represented in your squad.</Text>
               </View>
               {fixtureQuery.isPending ? (
-                <ActivityIndicator accessibilityLabel="Loading squad fixtures" color="#fb923c" />
+                <ActivityIndicator accessibilityLabel="Loading squad fixtures" color="#14b8a6" />
               ) : fixtureQuery.isError ? (
                 <View accessibilityRole="alert" className="gap-2 rounded-xl border border-red-900 bg-red-950 p-4">
                   <Text className="text-sm leading-5 text-red-200">

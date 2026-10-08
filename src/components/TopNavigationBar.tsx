@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { ComponentProps } from 'react';
 import { SymbolView } from 'expo-symbols';
 import { useRouter, type Href } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,11 +10,13 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getManagerAvatarUrl, getManagerProfile } from '@/src/features/account/api';
+import { getPlayers } from '@/src/features/players/api';
 import {
   getNotifications,
   markNotificationRead,
@@ -24,17 +27,41 @@ import {
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
 
-type OpenDropdown = 'notifications' | 'profile' | null;
+type OpenDropdown = 'notifications' | 'profile' | 'search' | null;
 
-const profileMenuItems: { label: string; href: Href }[] = [
-  { label: 'Gameweeks', href: '/gameweeks' },
-  { label: 'Squad Planner', href: '/squad-planner' },
-  { label: 'Global Leaderboard', href: '/leaderboard' },
-  { label: 'Analytics', href: '/analytics' },
-  { label: 'Season Recap', href: '/season-recap' },
-  { label: 'Notifications', href: '/notifications' },
-  { label: 'Learn & Rules', href: '/learn' },
-  { label: 'Profile & Settings', href: '/profile' },
+const searchDestinations: { label: string; description: string; href: Href }[] = [
+  { label: 'Dashboard', description: 'Points, rank, and season overview', href: '/' },
+  { label: 'My Team', description: 'Squad, lineup, and transfers', href: '/team' },
+  { label: 'Players', description: 'Search professional players', href: '/discover' },
+  { label: 'Matches', description: 'Match Center and results', href: '/matches' },
+  { label: 'Tournaments', description: 'Tournament schedule and results', href: '/tournaments' },
+  { label: 'Gameweeks', description: 'Deadlines and fixtures', href: '/gameweeks' },
+  { label: 'Squad Planner', description: 'Availability and upcoming fixtures', href: '/squad-planner' },
+  { label: 'Leagues', description: 'Your leagues and standings', href: '/leagues' },
+  { label: 'Leaderboard', description: 'Global manager rankings', href: '/leaderboard' },
+  { label: 'Analytics', description: 'Performance and market insights', href: '/analytics' },
+  { label: 'Season Recap', description: 'Review your season', href: '/season-recap' },
+  { label: 'Notifications', description: 'Deadlines, scoring, and league updates', href: '/notifications' },
+  { label: 'Learn', description: 'Fantasy learning center', href: '/learn' },
+  { label: 'Rules', description: 'Official rules and scoring', href: '/rules' },
+  { label: 'Help', description: 'Frequently asked questions', href: '/help' },
+  { label: 'Profile', description: 'Manager identity and account settings', href: '/profile' },
+  { label: 'Premium Tools', description: 'Planned advanced fantasy tools', href: '/premium' },
+];
+
+const profileMenuItems: {
+  label: string;
+  href: Href;
+  icon: ComponentProps<typeof SymbolView>['name'];
+}[] = [
+  { label: 'Gameweeks', href: '/gameweeks', icon: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' } },
+  { label: 'Squad Planner', href: '/squad-planner', icon: { ios: 'calendar.badge.clock', android: 'event_note', web: 'event_note' } },
+  { label: 'Global Leaderboard', href: '/leaderboard', icon: { ios: 'list.number', android: 'leaderboard', web: 'leaderboard' } },
+  { label: 'Analytics', href: '/analytics', icon: { ios: 'chart.xyaxis.line', android: 'query_stats', web: 'query_stats' } },
+  { label: 'Season Recap', href: '/season-recap', icon: { ios: 'clock.arrow.circlepath', android: 'history', web: 'history' } },
+  { label: 'Notifications', href: '/notifications', icon: { ios: 'bell', android: 'notifications', web: 'notifications' } },
+  { label: 'Learn & Rules', href: '/learn', icon: { ios: 'book.closed', android: 'menu_book', web: 'menu_book' } },
+  { label: 'Profile & Settings', href: '/profile', icon: { ios: 'person.crop.circle', android: 'manage_accounts', web: 'manage_accounts' } },
 ];
 
 function getAvatarUrl(value: unknown): string | null {
@@ -75,6 +102,8 @@ export function TopNavigationBar() {
   const [avatarFailed, setAvatarFailed] = useState<string | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [notificationActionError, setNotificationActionError] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [debouncedSearchText, setDebouncedSearchText] = useState('');
   const user = session?.user;
   const profileQuery = useQuery({
     queryKey: ['manager-profile'],
@@ -104,9 +133,27 @@ export function TopNavigationBar() {
       error instanceof Error ? error.message : 'Unable to open this notification.'
     ),
   });
+  const playerSearchQuery = useQuery({
+    queryKey: ['global-player-search', debouncedSearchText],
+    queryFn: () => getPlayers({
+      search: debouncedSearchText,
+      role: '',
+      teamId: null,
+      availableOnly: false,
+      offset: 0,
+      limit: 5,
+    }),
+    enabled: openDropdown === 'search' && debouncedSearchText.length > 0,
+    staleTime: 30_000,
+  });
 
   const metadata = user?.user_metadata;
   const avatarUrl = getAvatarUrl(avatarQuery.data ?? metadata?.avatar_url ?? metadata?.picture);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchText(searchText.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [searchText]);
 
   if (!user) return null;
 
@@ -127,7 +174,7 @@ export function TopNavigationBar() {
         text: '#f8fafc',
         secondaryText: '#cbd5e1',
         mutedText: '#94a3b8',
-        accent: '#fdba74',
+        accent: '#5eead4',
         error: '#fca5a5',
       }
     : {
@@ -137,7 +184,7 @@ export function TopNavigationBar() {
         text: '#0f172a',
         secondaryText: '#334155',
         mutedText: '#64748b',
-        accent: '#c2410c',
+        accent: '#0f766e',
         error: '#b91c1c',
       };
 
@@ -175,6 +222,21 @@ export function TopNavigationBar() {
         <View className="h-14 flex-row items-center justify-between px-4">
           <Text className="text-sm font-bold uppercase tracking-[2px] text-brand-400">Fantasy Dota</Text>
           <View className="flex-row items-center gap-3">
+            <Pressable
+              accessibilityLabel="Search players and pages"
+              accessibilityRole="button"
+              className="h-11 w-11 items-center justify-center rounded-full"
+              onPress={() => {
+                setSearchText('');
+                setOpenDropdown('search');
+              }}
+            >
+              <SymbolView
+                name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
+                size={22}
+                tintColor={colors.tabBarInactive}
+              />
+            </Pressable>
             <Pressable
               accessibilityLabel={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
               accessibilityRole="button"
@@ -263,13 +325,14 @@ export function TopNavigationBar() {
                     <Pressable
                       key={item.label}
                       accessibilityRole="button"
-                      style={{ minHeight: 44, justifyContent: 'center', borderRadius: 8, paddingHorizontal: 12 }}
+                      style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingHorizontal: 12 }}
                       onPress={() => {
                         closeDropdown();
                         router.push(item.href);
                       }}
                     >
-                      <Text style={{ color: palette.secondaryText, fontSize: 14, fontWeight: '500' }}>{item.label}</Text>
+                      <SymbolView name={item.icon} size={18} tintColor={palette.mutedText} />
+                      <Text style={{ marginLeft: 12, color: palette.secondaryText, fontSize: 14, fontWeight: '500' }}>{item.label}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -282,7 +345,8 @@ export function TopNavigationBar() {
                   accessibilityRole="button"
                   style={{
                     minHeight: 44,
-                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    alignItems: 'center',
                     marginTop: 8,
                     borderTopWidth: 1,
                     borderTopColor: palette.border,
@@ -291,7 +355,12 @@ export function TopNavigationBar() {
                   }}
                   onPress={() => void handleSignOut()}
                 >
-                  <Text style={{ color: palette.error, fontSize: 14, fontWeight: '600' }}>Sign out</Text>
+                  <SymbolView
+                    name={{ ios: 'rectangle.portrait.and.arrow.right', android: 'logout', web: 'logout' }}
+                    size={18}
+                    tintColor={palette.error}
+                  />
+                  <Text style={{ marginLeft: 12, color: palette.error, fontSize: 14, fontWeight: '600' }}>Sign out</Text>
                 </Pressable>
               </ScrollView>
             ) : openDropdown === 'notifications' ? (
@@ -302,7 +371,7 @@ export function TopNavigationBar() {
                 </View>
                 {notificationsQuery.isPending ? (
                   <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
-                    <ActivityIndicator accessibilityLabel="Loading notifications" color="#fb923c" />
+                    <ActivityIndicator accessibilityLabel="Loading notifications" color="#14b8a6" />
                   </View>
                 ) : notificationsQuery.isError ? (
                   <View accessibilityRole="alert" style={{ paddingHorizontal: 16, paddingVertical: 20 }}>
@@ -376,6 +445,105 @@ export function TopNavigationBar() {
                 >
                   <Text style={{ color: palette.accent, fontWeight: '600' }}>View all notifications</Text>
                 </Pressable>
+              </View>
+            ) : openDropdown === 'search' ? (
+              <View style={{ padding: 14 }}>
+                <Text style={{ color: palette.text, fontSize: 16, fontWeight: '700', marginBottom: 10 }}>
+                  Search players and pages
+                </Text>
+                <TextInput
+                  accessibilityLabel="Search players and pages"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onChangeText={setSearchText}
+                  placeholder="Find a pro player, page, or feature"
+                  placeholderTextColor={palette.mutedText}
+                  returnKeyType="search"
+                  style={{
+                    minHeight: 44,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: palette.border,
+                    backgroundColor: palette.elevated,
+                    color: palette.text,
+                    paddingHorizontal: 12,
+                    marginBottom: 8,
+                  }}
+                  value={searchText}
+                />
+                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                  {searchText.trim().length > 0 && debouncedSearchText !== searchText.trim() ? (
+                    <View style={{ minHeight: 48, justifyContent: 'center' }}>
+                      <ActivityIndicator accessibilityLabel="Searching players" color="#14b8a6" />
+                    </View>
+                  ) : null}
+                  {playerSearchQuery.isFetching ? (
+                    <View style={{ minHeight: 48, justifyContent: 'center' }}>
+                      <ActivityIndicator accessibilityLabel="Searching players" color="#14b8a6" />
+                    </View>
+                  ) : null}
+                  {playerSearchQuery.isError ? (
+                    <View accessibilityRole="alert" style={{ paddingVertical: 8 }}>
+                      <Text style={{ color: palette.error, fontSize: 12, lineHeight: 18 }}>
+                        {playerSearchQuery.error instanceof Error
+                          ? playerSearchQuery.error.message
+                          : 'Unable to search players.'}
+                      </Text>
+                      <Pressable accessibilityRole="button" onPress={() => void playerSearchQuery.refetch()}>
+                        <Text style={{ color: palette.accent, fontSize: 13, fontWeight: '600', marginTop: 6 }}>
+                          Retry player search
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  {debouncedSearchText === searchText.trim()
+                    ? playerSearchQuery.data?.players.map((player) => (
+                    <Pressable
+                      key={`player-${player.id}`}
+                      accessibilityRole="button"
+                      style={{ minHeight: 52, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: palette.border, paddingHorizontal: 4 }}
+                      onPress={() => {
+                        closeDropdown();
+                        router.push(`/player/${player.id}`);
+                      }}
+                    >
+                      <Text style={{ color: palette.text, fontSize: 14, fontWeight: '600' }}>
+                        {player.in_game_name || player.name}
+                      </Text>
+                      <Text style={{ marginTop: 3, color: palette.mutedText, fontSize: 12 }}>
+                        {player.team_name || 'Free Agent'} · {player.primary_role || 'Player'}
+                        {player.current_price === null ? '' : ` · ${player.current_price.toFixed(1)}M`}
+                      </Text>
+                    </Pressable>
+                    ))
+                    : null}
+                  {searchDestinations
+                    .filter((item) => `${item.label} ${item.description}`.toLowerCase().includes(searchText.trim().toLowerCase()))
+                    .slice(0, 8)
+                    .map((item) => (
+                      <Pressable
+                        key={item.label}
+                        accessibilityRole="button"
+                        style={{ minHeight: 52, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: palette.border, paddingHorizontal: 4 }}
+                        onPress={() => {
+                          closeDropdown();
+                          router.push(item.href);
+                        }}
+                      >
+                        <Text style={{ color: palette.text, fontSize: 14, fontWeight: '600' }}>{item.label}</Text>
+                        <Text style={{ marginTop: 3, color: palette.mutedText, fontSize: 12 }}>{item.description}</Text>
+                      </Pressable>
+                    ))}
+                  {searchText.trim().length > 0 &&
+                  !playerSearchQuery.isPending &&
+                  !playerSearchQuery.isError &&
+                  !playerSearchQuery.data?.players.length &&
+                  !searchDestinations.some((item) => `${item.label} ${item.description}`.toLowerCase().includes(searchText.trim().toLowerCase())) ? (
+                    <Text style={{ paddingVertical: 16, textAlign: 'center', color: palette.mutedText, fontSize: 13 }}>
+                      No players or pages found.
+                    </Text>
+                  ) : null}
+                </ScrollView>
               </View>
             ) : null}
           </View>

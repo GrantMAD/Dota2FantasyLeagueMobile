@@ -21,6 +21,12 @@ export interface PlayerPage {
   offset: number;
 }
 
+export interface ProfessionalTeam {
+  id: number;
+  name: string;
+  logo_url: string | null;
+}
+
 export interface PlayerPerformance {
   id: number;
   gameweek_id: number;
@@ -88,6 +94,7 @@ function parsePlayer(value: unknown): DirectoryPlayer {
 export async function getPlayers(params: {
   search: string;
   role: string;
+  teamId: number | null;
   availableOnly: boolean;
   offset: number;
   limit: number;
@@ -95,6 +102,7 @@ export async function getPlayers(params: {
   const { data: result, error } = await getSupabaseClient().rpc('mobile_get_players', {
     p_search: params.search.trim(),
     p_role: params.role,
+    p_team_id: params.teamId,
     p_available_only: params.availableOnly,
     p_offset: params.offset,
     p_limit: params.limit,
@@ -119,6 +127,30 @@ export async function getPlayers(params: {
     limit: result.limit,
     offset: result.offset,
   };
+}
+
+export async function getProfessionalTeams(): Promise<ProfessionalTeam[]> {
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_professional_teams');
+  if (error) throw new ApiError(`Unable to load professional teams: ${error.message}`, 500);
+  if (!isRecord(result) || !Array.isArray(result.teams)) {
+    throw new ApiError('Professional team data was returned in an unexpected format.', 502);
+  }
+
+  return result.teams.map((team): ProfessionalTeam => {
+    if (
+      !isRecord(team) ||
+      !Number.isInteger(team.id) ||
+      typeof team.name !== 'string' ||
+      !(team.logo_url === null || typeof team.logo_url === 'string')
+    ) {
+      throw new ApiError('Professional team data was returned in an unexpected format.', 502);
+    }
+    return {
+      id: Number(team.id),
+      name: team.name,
+      logo_url: typeof team.logo_url === 'string' ? team.logo_url : null,
+    };
+  });
 }
 
 export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {

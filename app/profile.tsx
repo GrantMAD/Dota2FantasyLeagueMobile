@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, Text, View } from 'react-native';
+import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'expo-router';
 import { Button } from '@/src/components/Button';
 import { Screen } from '@/src/components/Screen';
 import { TextField } from '@/src/components/TextField';
@@ -17,6 +19,7 @@ import {
 } from '@/src/lib/push-token-registration';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
+import { useFantasyContext } from '@/src/features/fantasy/hooks';
 
 function PreferenceToggle({
   label,
@@ -61,13 +64,13 @@ export default function ProfileScreen() {
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Your account</Text>
           <Text className="mt-2 text-3xl font-bold text-white">Profile & Settings</Text>
           <Text className="mt-1 text-sm leading-5 text-slate-400">
-            Manage your public manager name and notification preferences.
+            Your competitive identity, fantasy career snapshot, account details, and notification preferences.
           </Text>
         </View>
 
         {query.isPending ? (
           <View accessibilityLabel="Loading profile" className="items-center py-12">
-            <ActivityIndicator color="#fb923c" />
+            <ActivityIndicator color="#14b8a6" />
           </View>
         ) : query.isError ? (
           <View accessibilityRole="alert" className="gap-3 rounded-2xl border border-red-900 bg-red-950 p-5">
@@ -78,7 +81,10 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
         ) : query.data ? (
-          <ProfileEditor key={query.data.id} profile={query.data} />
+          <>
+            <ProfileOverview profile={query.data} />
+            <ProfileEditor key={query.data.id} profile={query.data} />
+          </>
         ) : (
           <View accessibilityRole="alert" className="rounded-2xl border border-amber-800 bg-amber-950 p-5">
             <Text className="font-semibold text-amber-200">Profile not set up</Text>
@@ -92,6 +98,83 @@ export default function ProfileScreen() {
   );
 }
 
+function ProfileOverview({ profile }: { profile: ManagerProfile }) {
+  const fantasyQuery = useFantasyContext();
+  const label = profile.displayName?.trim() || profile.username;
+  const initials = label.trim().slice(0, 1).toUpperCase() || 'U';
+  const avatarUrl = profile.avatarUrl && /^https?:\/\//i.test(profile.avatarUrl) ? profile.avatarUrl : null;
+  const hasSquad = Boolean(fantasyQuery.data?.ownedPlayers.length);
+  const hasBio = Boolean(profile.bio?.trim());
+
+  return (
+    <View className="gap-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+      <View className="h-20 bg-brand-500/15" />
+      <View className="-mt-12 flex-row items-end gap-4 px-4">
+        <View className="h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-slate-900 bg-slate-800">
+          {avatarUrl ? (
+            <Image accessibilityLabel={`${label} profile image`} className="h-full w-full" source={{ uri: avatarUrl }} />
+          ) : (
+            <Text className="text-3xl font-bold text-brand-300">{initials}</Text>
+          )}
+        </View>
+        <View className="flex-1 pb-1">
+          <Text className="text-xl font-bold text-white">{label}</Text>
+          <Text className="text-sm text-slate-400">@{profile.username}</Text>
+        </View>
+      </View>
+      <View className="gap-3 px-4 pb-4">
+        <View className="flex-row gap-2">
+          <ProfileMetric label="Fantasy squad" value={hasSquad ? `${fantasyQuery.data?.ownedPlayers.length} players` : 'No squad yet'} />
+          <ProfileMetric label="Total points" value={String(fantasyQuery.data?.totalPoints ?? 0)} />
+          <ProfileMetric label="Global rank" value={fantasyQuery.data?.globalRank ? `#${fantasyQuery.data.globalRank}` : '—'} />
+        </View>
+        <View className="gap-2 border-t border-slate-800 pt-3">
+          <Text className="font-semibold text-white">About this manager</Text>
+          <Text className="text-sm leading-5 text-slate-300">
+            {hasBio ? profile.bio : 'Add a short bio to introduce yourself to your league rivals.'}
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            <ProfileTag value={profile.countryCode || 'Country not set'} />
+            <ProfileTag value={profile.timezone || 'Timezone not set'} />
+            <ProfileTag value={profile.role === 'admin' ? 'Admin access' : 'Manager account'} />
+          </View>
+        </View>
+        <View className="gap-2 border-t border-slate-800 pt-3">
+          <Text className="font-semibold text-white">Account health</Text>
+          <HealthRow label="Profile identity" complete={Boolean(profile.displayName?.trim() || profile.username)} />
+          <HealthRow label="Fantasy squad" complete={hasSquad} />
+          <HealthRow label="Bio added" complete={hasBio} />
+          <HealthRow label="Preferences set" complete={Boolean(profile.timezone)} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ProfileMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="min-w-0 flex-1 rounded-xl bg-slate-950/70 p-3">
+      <Text className="text-[10px] uppercase tracking-wider text-slate-500">{label}</Text>
+      <Text className="mt-1 font-bold text-white" numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+function ProfileTag({ value }: { value: string }) {
+  return <Text className="rounded-full border border-slate-700 bg-slate-950/60 px-3 py-1.5 text-xs text-slate-400">{value}</Text>;
+}
+
+function HealthRow({ label, complete }: { label: string; complete: boolean }) {
+  return (
+    <View className="flex-row items-center justify-between rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
+      <Text className="text-sm text-slate-300">{label}</Text>
+      <Text className={`text-xs font-semibold ${complete ? 'text-emerald-300' : 'text-amber-300'}`}>
+        {complete ? 'Ready' : 'Review'}
+      </Text>
+    </View>
+  );
+}
+
 function ProfileEditor({ profile }: { profile: ManagerProfile }) {
   const queryClient = useQueryClient();
   const themePreference = useMobileTheme();
@@ -99,6 +182,9 @@ function ProfileEditor({ profile }: { profile: ManagerProfile }) {
   const pushStatus = usePushNotificationStatus();
   const [username, setUsername] = useState(profile.username);
   const [displayName, setDisplayName] = useState(profile.displayName ?? '');
+  const [bio, setBio] = useState(profile.bio ?? '');
+  const [countryCode, setCountryCode] = useState(profile.countryCode ?? '');
+  const [timezone, setTimezone] = useState(profile.timezone ?? 'UTC');
   const [emailNotifications, setEmailNotifications] = useState(profile.emailNotifications);
   const [pushNotifications, setPushNotifications] = useState(profile.pushNotifications);
   const [notice, setNotice] = useState<string | null>(null);
@@ -130,6 +216,9 @@ function ProfileEditor({ profile }: { profile: ManagerProfile }) {
     save.mutate({
       username: username.trim(),
       displayName: displayName.trim(),
+      bio: bio.trim(),
+      countryCode: countryCode.trim().toUpperCase(),
+      timezone: timezone.trim(),
       emailNotifications,
       pushNotifications,
     });
@@ -193,6 +282,37 @@ function ProfileEditor({ profile }: { profile: ManagerProfile }) {
           placeholder="Name shown to other managers"
           value={displayName}
         />
+        <TextField
+          label="Bio"
+          maxLength={500}
+          multiline
+          onChangeText={setBio}
+          placeholder="A short introduction for your league rivals"
+          style={{ minHeight: 96 }}
+          textAlignVertical="top"
+          value={bio}
+        />
+        <View className="flex-row gap-3">
+          <View className="flex-1">
+            <TextField
+              autoCapitalize="characters"
+              label="Country code"
+              maxLength={2}
+              onChangeText={setCountryCode}
+              placeholder="US"
+              value={countryCode}
+            />
+          </View>
+          <View className="flex-1">
+            <TextField
+              autoCapitalize="none"
+              label="Timezone"
+              onChangeText={setTimezone}
+              placeholder="UTC"
+              value={timezone}
+            />
+          </View>
+        </View>
       </View>
 
       <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
@@ -232,7 +352,7 @@ function ProfileEditor({ profile }: { profile: ManagerProfile }) {
             </Pressable>
           ))}
         </View>
-        {themePreference.isLoading ? <ActivityIndicator accessibilityLabel="Loading theme preference" color="#fb923c" /> : null}
+        {themePreference.isLoading ? <ActivityIndicator accessibilityLabel="Loading theme preference" color="#14b8a6" /> : null}
         {themePreference.error ? (
           <Text accessibilityRole="alert" className="text-sm text-red-300">
             Theme preference could not be synchronized: {themePreference.error}
@@ -273,6 +393,18 @@ function ProfileEditor({ profile }: { profile: ManagerProfile }) {
             </Text>
           ) : null}
         </View>
+      </View>
+
+      <View className="gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+        <Text className="text-lg font-bold text-white">Account security</Text>
+        <Text className="text-sm leading-5 text-slate-400">
+          Change a forgotten password through the secure account recovery flow.
+        </Text>
+        <Link href="/forgot-password" asChild>
+          <Pressable accessibilityRole="button" className="min-h-11 justify-center">
+            <Text className="font-semibold text-brand-300">Reset password</Text>
+          </Pressable>
+        </Link>
       </View>
 
       {notice ? (
