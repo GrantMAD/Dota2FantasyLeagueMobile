@@ -643,6 +643,22 @@ describe('mobile data access', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('supports a bounded notification preview', async () => {
+    mobileFantasyContextRpc.mockResolvedValueOnce({
+      data: { notifications: [], unreadCount: 0 },
+      error: null,
+    });
+
+    await expect(getNotifications('all', 5)).resolves.toEqual({
+      notifications: [],
+      unreadCount: 0,
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_notifications', {
+      p_category: 'all',
+      p_limit: 5,
+    });
+  });
+
   it('filters league invitations into the League category on mobile', () => {
     const invitation = {
       id: 92,

@@ -18,10 +18,12 @@ import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/src/lib/auth';
 import { queryClient } from '@/src/lib/query-client';
-import { Screen } from '@/src/components/Screen';
+import { GlobalHeaderContext, Screen } from '@/src/components/Screen';
 import { MobileThemeProvider, useMobileTheme } from '@/src/lib/theme';
 import { MobilePushNotificationsProvider } from '@/src/lib/push-notifications';
 import { ConnectivityProvider } from '@/src/lib/connectivity';
+import { TopNavigationBar } from '@/src/components/TopNavigationBar';
+import { BottomNavigationBar } from '@/src/components/BottomNavigationBar';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -100,6 +102,7 @@ function AppRoutes() {
   const pathname = usePathname();
   const isAuthRoute = segments[0] === '(auth)';
   const isPasswordRecovery = segments[0] === 'forgot-password';
+  const showTopNavigation = Boolean(session) && !isAuthRoute && !isPasswordRecovery;
 
   if (!ready && !isAuthRoute && !isPasswordRecovery) {
     return (
@@ -122,9 +125,17 @@ function AppRoutes() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <View className="flex-1 bg-slate-950">
+      {showTopNavigation ? <TopNavigationBar /> : null}
+      <GlobalHeaderContext.Provider value={showTopNavigation}>
+        <View className="flex-1">
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+          </Stack>
+        </View>
+      </GlobalHeaderContext.Provider>
+      {showTopNavigation ? <BottomNavigationBar /> : null}
+    </View>
   );
 }

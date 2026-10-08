@@ -97,6 +97,8 @@ export async function syncExistingPushRegistration(userId: string): Promise<bool
 }
 
 export async function unregisterDevicePushToken(userId: string): Promise<void> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
+
   const key = secureTokenKey(userId);
   const token = await SecureStore.getItemAsync(key);
   if (!token) return;

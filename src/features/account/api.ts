@@ -69,6 +69,20 @@ export async function getManagerProfile(): Promise<ManagerProfile | null> {
   return parseProfileResponse(data);
 }
 
+export async function getManagerAvatarUrl(userId: string): Promise<string | null> {
+  const { data, error } = await getSupabaseClient()
+    .from('users')
+    .select('avatar_url')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw new ApiError(`Unable to load profile image: ${error.message}`, 500);
+  if (data === null) return null;
+  if (typeof data.avatar_url !== 'string' && data.avatar_url !== null) {
+    throw new ApiError('Profile image data was returned in an unexpected format.', 502);
+  }
+  return data.avatar_url;
+}
+
 export async function getThemePreference(): Promise<ThemePreference> {
   const profile = await getManagerProfile();
   if (!profile) throw new ApiError('Profile data was returned in an unexpected format.', 502);

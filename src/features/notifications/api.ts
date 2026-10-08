@@ -60,10 +60,14 @@ function parseNotification(value: unknown): ManagerNotification {
   };
 }
 
-export async function getNotifications(category: NotificationCategory): Promise<NotificationPage> {
+export async function getNotifications(category: NotificationCategory, limit = 100): Promise<NotificationPage> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    throw new ApiError('Notification limit must be between 1 and 100.', 400);
+  }
+
   const { data: result, error } = await getSupabaseClient().rpc('mobile_get_notifications', {
     p_category: category,
-    p_limit: 100,
+    p_limit: limit,
   });
   if (error) throw new ApiError(`Unable to load notifications: ${error.message}`, 500);
   if (
