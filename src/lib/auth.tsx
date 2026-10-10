@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { AppState, Platform } from 'react-native';
 import { queryClient } from './query-client';
 import { getSupabaseClient } from './supabase';
 import { unregisterDevicePushToken } from './push-token-registration';
@@ -38,6 +39,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setReady(true);
         }
       });
+      const appStateSubscription = Platform.OS === 'web'
+        ? null
+        : AppState.addEventListener('change', (state) => {
+            if (state === 'active') {
+              supabase.auth.startAutoRefresh();
+            } else {
+              supabase.auth.stopAutoRefresh();
+            }
+          });
+
+      if (Platform.OS !== 'web') {
+        if (AppState.currentState === 'background' || AppState.currentState === 'inactive') {
+          supabase.auth.stopAutoRefresh();
+        } else {
+          supabase.auth.startAutoRefresh();
+        }
+      }
 
       void supabase.auth.getSession().then(({ data, error }) => {
         if (!active) return;
@@ -61,6 +79,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return () => {
         active = false;
         subscription.unsubscribe();
+        appStateSubscription?.remove();
+        if (Platform.OS !== 'web') supabase.auth.stopAutoRefresh();
       };
     } catch (error) {
       void Promise.resolve().then(() => {

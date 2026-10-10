@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
-import { Pressable, Text, View } from 'react-native';
+import { AppState, Pressable, Text, View, type AppStateStatus } from 'react-native';
 import { AuthProvider, useAuth } from '../src/lib/auth';
 import { queryClient } from '../src/lib/query-client';
 import { getSupabaseClient } from '../src/lib/supabase';
@@ -63,11 +63,20 @@ describe('mobile authentication provider', () => {
   const getSession = jest.fn();
   const signInWithPassword = jest.fn();
   const signOut = jest.fn();
+  const startAutoRefresh = jest.fn();
+  const stopAutoRefresh = jest.fn();
+  const appStateRemove = jest.fn();
   let authListener: AuthListener | null = null;
+  let appStateListener: ((state: AppStateStatus) => void) | null = null;
 
   beforeEach(() => {
     jest.clearAllMocks();
     authListener = null;
+    appStateListener = null;
+    jest.mocked(AppState.addEventListener).mockImplementation((_eventType, listener) => {
+      appStateListener = listener;
+      return { remove: appStateRemove };
+    });
     getSession.mockResolvedValue({ data: { session: initialSession }, error: null });
     signInWithPassword.mockResolvedValue({ error: null });
     signOut.mockResolvedValue({ error: null });
@@ -81,11 +90,13 @@ describe('mobile authentication provider', () => {
         getSession,
         signInWithPassword,
         signOut,
+        startAutoRefresh,
+        stopAutoRefresh,
       },
     } as unknown as ReturnType<typeof getSupabaseClient>);
   });
 
-  it('restores the stored session and unsubscribes when the provider unmounts', async () => {
+  it('restores the session and starts and stops token refresh with app lifecycle', async () => {
     const view = render(
       <AuthProvider>
         <AuthProbe />
@@ -94,8 +105,19 @@ describe('mobile authentication provider', () => {
 
     await waitFor(() => expect(view.getByText('user-1')).toBeTruthy());
     expect(view.getByText('ready')).toBeTruthy();
+    expect(startAutoRefresh).toHaveBeenCalledTimes(1);
+    expect(appStateListener).not.toBeNull();
+
+    act(() => appStateListener?.('background'));
+    expect(stopAutoRefresh).toHaveBeenCalledTimes(1);
+
+    act(() => appStateListener?.('active'));
+    expect(startAutoRefresh).toHaveBeenCalledTimes(2);
+
     view.unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(appStateRemove).toHaveBeenCalledTimes(1);
+    expect(stopAutoRefresh).toHaveBeenCalledTimes(2);
   });
 
   it('clears user-scoped query data when the authenticated account changes', async () => {
