@@ -13,6 +13,8 @@ export interface ManagerProfile {
   countryCode: string | null;
   timezone: string | null;
   role: string;
+  isPremium?: boolean;
+  subscriptionTier?: string | null;
   emailNotifications: boolean;
   pushNotifications: boolean;
   memberSince: string;
@@ -67,6 +69,12 @@ function parseProfile(value: unknown): ManagerProfile | null {
     countryCode: typeof value.country_code === 'string' ? value.country_code : null,
     timezone: typeof value.timezone === 'string' ? value.timezone : null,
     role: typeof value.role === 'string' ? value.role : 'user',
+    isPremium: value.is_premium === true || value.isPremium === true,
+    subscriptionTier: typeof value.subscription_tier === 'string'
+      ? value.subscription_tier
+      : typeof value.subscriptionTier === 'string'
+        ? value.subscriptionTier
+        : null,
     emailNotifications: value.email_notifications,
     pushNotifications: value.push_notifications,
     memberSince: value.member_since,

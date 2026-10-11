@@ -1,5 +1,6 @@
 import { ApiError } from '@/src/lib/errors';
 import { getSupabaseClient } from '@/src/lib/supabase';
+import { buildPlayerAnalytics, PlayerAnalytics } from '@/src/lib/player-analytics';
 
 export interface DirectoryPlayer {
   id: number;
@@ -43,6 +44,7 @@ export interface PlayerDetail extends DirectoryPlayer {
   last_gw_points: number;
   availability_reason: string | null;
   performances: PlayerPerformance[];
+  analytics?: PlayerAnalytics;
 }
 
 export function normalizePlayerComparisonIds(value: string): number[] {
@@ -212,5 +214,14 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
     last_gw_points: raw.last_gw_points,
     availability_reason: typeof raw.availability_reason === 'string' ? raw.availability_reason : null,
     performances,
+    analytics: buildPlayerAnalytics(
+      [...performances]
+        .sort((a, b) => a.gameweek_id - b.gameweek_id)
+        .map((perf) => ({
+          gameweekId: perf.gameweek_id,
+          points: perf.total_points,
+          price: directory.current_price ?? 0,
+        }))
+    ),
   };
 }

@@ -5,6 +5,8 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getPlayerDetail } from '@/src/features/players/api';
+import { getManagerProfile } from '@/src/features/account/api';
+import { isPremiumUser } from '@/src/lib/premium';
 
 function displayName(player: { in_game_name: string | null; name: string }): string {
   return player.in_game_name || player.name;
@@ -21,6 +23,13 @@ export default function PlayerDetailScreen() {
     enabled: validId,
     staleTime: 60_000,
   });
+
+  const profileQuery = useQuery({
+    queryKey: ['manager-profile'],
+    queryFn: getManagerProfile,
+    staleTime: 60_000,
+  });
+  const hasPremium = isPremiumUser(profileQuery.data);
 
   return (
     <Screen>
@@ -99,6 +108,53 @@ export default function PlayerDetailScreen() {
                 <Text className="font-semibold text-cyan-200">Compare this player</Text>
               </Pressable>
             </View>
+
+            {hasPremium && query.data.analytics ? (
+              <View className="gap-3 rounded-2xl border border-amber-500/30 bg-slate-900 p-5">
+                <View className="flex-row items-center justify-between">
+                  <View>
+                    <Text className="text-xs font-semibold uppercase tracking-wider text-amber-300">Premium intelligence</Text>
+                    <Text className="mt-1 text-xl font-bold text-white">Form & Projections</Text>
+                  </View>
+                  <View className="rounded-full bg-amber-500/20 px-2.5 py-1">
+                    <Text className="text-xs font-bold text-amber-300">PRO</Text>
+                  </View>
+                </View>
+                <View className="flex-row flex-wrap gap-2 pt-1">
+                  <Metric label="Projected" value={`${query.data.analytics.projectedPoints.toFixed(1)} pts`} />
+                  <Metric label="Avg Points" value={`${query.data.analytics.averagePoints.toFixed(1)} pts`} />
+                  <Metric label="Price Delta" value={`${query.data.analytics.priceChange >= 0 ? '+' : ''}${query.data.analytics.priceChange.toFixed(2)}M`} />
+                  <Metric label="Best Score" value={`${query.data.analytics.bestPoints.toFixed(1)} pts`} />
+                </View>
+                {query.data.analytics.form.length > 0 ? (
+                  <View className="mt-2 rounded-xl bg-slate-950 p-3">
+                    <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Recent 5 Form Trend</Text>
+                    <View className="mt-2 flex-row items-center gap-2">
+                      {query.data.analytics.form.map((pts, idx) => (
+                        <View key={idx} className="flex-1 items-center rounded-lg bg-slate-800/80 py-1.5">
+                          <Text className="text-xs font-bold text-cyan-300">{pts.toFixed(1)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ) : !hasPremium ? (
+              <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Advanced Analytics</Text>
+                  <Text className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">Premium</Text>
+                </View>
+                <Text className="text-xs text-slate-400">Unlock projected points, price movement deltas, and 5-game form trends.</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  className="self-start rounded-lg border border-amber-500/30 bg-amber-500/15 px-3 py-1.5"
+                  onPress={() => router.push('/premium')}
+                >
+                  <Text className="text-xs font-bold text-amber-300">Explore Premium Features →</Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             <View className="gap-3">
               <View>

@@ -382,6 +382,14 @@ describe('mobile data access', () => {
       team_name: 'Radiant',
       total_season_points: 104.5,
       performances: [{ gameweek_id: 7, kills: 8, deaths: 2, assists: 11, total_points: 12 }],
+      analytics: {
+        matches: 1,
+        averagePoints: 12,
+        latestPoints: 12,
+        form: [12],
+        projectedPoints: 12,
+        bestPoints: 12,
+      },
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_player_detail', {
       p_player_id: 41,
@@ -836,6 +844,8 @@ describe('mobile data access', () => {
           email_notifications: true,
           push_notifications: false,
           theme_preference: 'dark',
+          is_premium: true,
+          subscription_tier: 'pro',
           member_since: '2026-01-01T00:00:00.000Z',
         } },
         error: null,
@@ -854,6 +864,8 @@ describe('mobile data access', () => {
           email_notifications: false,
           push_notifications: true,
           theme_preference: 'light',
+          is_premium: true,
+          subscription_tier: 'pro',
           member_since: '2026-01-01T00:00:00.000Z',
         } },
         error: null,
@@ -867,6 +879,8 @@ describe('mobile data access', () => {
       emailNotifications: true,
       pushNotifications: false,
       themePreference: 'dark',
+      isPremium: true,
+      subscriptionTier: 'pro',
     });
     await expect(updateManagerProfile({
       username: 'manager',

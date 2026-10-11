@@ -5,6 +5,8 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getPlayerDetail, normalizePlayerComparisonIds } from '@/src/features/players/api';
+import { getManagerProfile } from '@/src/features/account/api';
+import { isPremiumUser } from '@/src/lib/premium';
 
 function displayName(player: { in_game_name: string | null; name: string }): string {
   return player.in_game_name || player.name;
@@ -20,6 +22,13 @@ export default function ComparePlayersScreen() {
     enabled: ids.length >= 2,
     staleTime: 60_000,
   });
+
+  const profileQuery = useQuery({
+    queryKey: ['manager-profile'],
+    queryFn: getManagerProfile,
+    staleTime: 60_000,
+  });
+  const hasPremium = isPremiumUser(profileQuery.data);
 
   return (
     <Screen>
@@ -89,12 +98,52 @@ export default function ComparePlayersScreen() {
                   <ComparisonRow label="Latest gameweek" values={query.data.map((player) => `${player.last_gw_points.toFixed(1)}`)} />
                   <ComparisonRow label="Recent average" values={query.data.map((player) => `${player.recent_points.toFixed(1)}`)} />
                   <ComparisonRow label="Ownership" values={query.data.map((player) => `${player.ownership_percentage.toFixed(1)}%`)} />
+                  {hasPremium ? (
+                    <>
+                      <ComparisonRow
+                        label="Projected pts"
+                        values={query.data.map((player) => `${player.analytics?.projectedPoints?.toFixed(1) ?? '—'}`)}
+                        highlight
+                      />
+                      <ComparisonRow
+                        label="5-GW Form"
+                        values={query.data.map((player) => player.analytics?.form?.length ? player.analytics.form.map(f => f.toFixed(0)).join(', ') : '—')}
+                        highlight
+                      />
+                      <ComparisonRow
+                        label="Price movement"
+                        values={query.data.map((player) => player.analytics ? `${player.analytics.priceChange >= 0 ? '+' : ''}${player.analytics.priceChange.toFixed(2)}M` : '—')}
+                        highlight
+                      />
+                    </>
+                  ) : null}
                 </View>
               </ScrollView>
             </View>
-            <Text className="text-xs leading-5 text-slate-500">
-              Values are read from authenticated Supabase player and scoring RPCs. Advanced premium analytics are not included here.
-            </Text>
+            {hasPremium ? (
+              <View className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                <Text className="text-xs font-semibold text-amber-300">
+                  ★ Advanced Intelligence Active: Side-by-side projected points, form trends, and price deltas unlocked.
+                </Text>
+              </View>
+            ) : (
+              <View className="gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3.5">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs font-semibold text-slate-300">Advanced Comparison Intelligence</Text>
+                  <Text className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">Premium</Text>
+                </View>
+                <Text className="text-xs leading-4 text-slate-400">
+                  Upgrade to unlock projected points, 5-game form sparklines, and price movement deltas.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  className="self-start rounded-lg border border-amber-500/30 bg-amber-500/15 px-3 py-1.5"
+                  onPress={() => router.push('/premium')}
+                >
+                  <Text className="text-xs font-bold text-amber-300">Explore Premium Features →</Text>
+                </Pressable>
+              </View>
+            )}
           </>
         ) : null}
       </ScrollView>
@@ -102,12 +151,12 @@ export default function ComparePlayersScreen() {
   );
 }
 
-function ComparisonRow({ label, values }: { label: string; values: string[] }) {
+function ComparisonRow({ label, values, highlight }: { label: string; values: string[]; highlight?: boolean }) {
   return (
-    <View className="flex-row border-b border-slate-800 px-3 py-3">
-      <Text className="w-28 text-xs font-medium text-slate-400">{label}</Text>
+    <View className={`flex-row border-b border-slate-800 px-3 py-3 ${highlight ? 'bg-amber-500/5' : ''}`}>
+      <Text className={`w-28 text-xs font-medium ${highlight ? 'text-amber-300' : 'text-slate-400'}`}>{label}</Text>
       {values.map((value, index) => (
-        <Text key={`${label}-${index}`} className="w-[120px] text-center text-xs font-semibold text-slate-200">
+        <Text key={`${label}-${index}`} className={`w-[120px] text-center text-xs font-semibold ${highlight ? 'text-amber-200' : 'text-slate-200'}`}>
           {value}
         </Text>
       ))}
