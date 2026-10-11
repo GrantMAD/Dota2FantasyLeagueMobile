@@ -35,6 +35,7 @@ export interface PlayerPerformance {
   deaths: number | null;
   assists: number | null;
   total_points: number;
+  price: number | null;
 }
 
 export interface PlayerDetail extends DirectoryPlayer {
@@ -196,6 +197,9 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
       : 0;
     const optionalStat = (value: unknown): number | null =>
       typeof value === 'number' && Number.isFinite(value) ? value : null;
+    if (performance.price !== undefined && performance.price !== null && optionalStat(performance.price) === null) {
+      throw new ApiError('Player performance price data was returned in an unexpected format.', 502);
+    }
     return {
       id: Number(performance.id),
       gameweek_id: Number(performance.gameweek_id),
@@ -203,6 +207,7 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
       deaths: optionalStat(performance.deaths),
       assists: optionalStat(performance.assists),
       total_points: totalPoints,
+      price: optionalStat(performance.price),
     };
   });
 
@@ -220,7 +225,7 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
         .map((perf) => ({
           gameweekId: perf.gameweek_id,
           points: perf.total_points,
-          price: directory.current_price ?? 0,
+          price: perf.price,
         }))
     ),
   };

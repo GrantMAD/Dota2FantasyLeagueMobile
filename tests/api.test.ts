@@ -372,7 +372,16 @@ describe('mobile data access', () => {
           kills: 8,
           deaths: 2,
           assists: 11,
+          price: 9.5,
           fantasy_points_breakdown: { total_points: 12 },
+        }, {
+          id: 500,
+          gameweek_id: 6,
+          kills: 5,
+          deaths: 3,
+          assists: 8,
+          price: 8.5,
+          fantasy_points_breakdown: { total_points: 7 },
         }],
       },
     }, error: null });
@@ -381,18 +390,66 @@ describe('mobile data access', () => {
       id: 41,
       team_name: 'Radiant',
       total_season_points: 104.5,
-      performances: [{ gameweek_id: 7, kills: 8, deaths: 2, assists: 11, total_points: 12 }],
+      performances: [
+        { gameweek_id: 7, kills: 8, deaths: 2, assists: 11, total_points: 12, price: 9.5 },
+        { gameweek_id: 6, kills: 5, deaths: 3, assists: 8, total_points: 7, price: 8.5 },
+      ],
       analytics: {
-        matches: 1,
-        averagePoints: 12,
+        matches: 2,
+        averagePoints: 9.5,
         latestPoints: 12,
-        form: [12],
-        projectedPoints: 12,
+        latestPrice: 9.5,
+        priceChange: 1,
+        form: [7, 12],
+        projectedPoints: 9.5,
         bestPoints: 12,
       },
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_player_detail', {
       p_player_id: 41,
+    });
+  });
+
+  it('does not substitute the current price when a performance gameweek has no price snapshot', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
+      player: {
+        id: 42,
+        name: 'Price Gap Player',
+        in_game_name: 'PriceGap',
+        primary_role: 'Mid',
+        current_price: 10,
+        gameweek_points: 15,
+        recent_points: 15,
+        professional_teams: null,
+        ownership_percentage: 5,
+        total_season_points: 22,
+        last_gw_points: 15,
+        performances: [{
+          id: 502,
+          gameweek_id: 8,
+          kills: 3,
+          deaths: 4,
+          assists: 10,
+          price: null,
+          fantasy_points_breakdown: { total_points: 15 },
+        }, {
+          id: 501,
+          gameweek_id: 7,
+          kills: 2,
+          deaths: 1,
+          assists: 5,
+          price: 8.5,
+          fantasy_points_breakdown: { total_points: 7 },
+        }],
+      },
+    }, error: null });
+
+    await expect(getPlayerDetail(42)).resolves.toMatchObject({
+      analytics: {
+        latestPrice: 8.5,
+        priceChange: 0,
+        form: [7, 15],
+      },
     });
   });
 
