@@ -96,22 +96,47 @@ export default function AnalyticsScreen() {
               <>
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <Text className="text-lg font-bold text-white">Gameweek trend</Text>
-              {query.data.trend.length ? query.data.trend.map((trend) => (
-                <View key={trend.gameweekId} className="gap-1">
-                  <View className="flex-row justify-between">
-                    <Text className="text-sm text-slate-300">Gameweek {trend.gameweekId}</Text>
-                    <Text className="text-xs text-slate-500">
-                      {trend.userScore.toFixed(1)} pts · {trend.globalAverage.toFixed(1)} average
-                    </Text>
+              {query.data.trend.length ? (
+                <>
+                  <View
+                    accessible
+                    accessibilityRole="header"
+                    accessibilityLabel="Columns: Gameweek, Your score, Global average"
+                    className="flex-row border-b border-slate-700 pb-2"
+                  >
+                    <Text className="flex-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Gameweek</Text>
+                    <Text className="w-20 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Your score</Text>
+                    <Text className="w-24 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Global average</Text>
                   </View>
-                  <View className="h-2 overflow-hidden rounded-full bg-slate-800">
-                    <View
-                      className="h-full rounded-full bg-cyan-400"
-                      style={{ width: `${Math.min(100, Math.max(2, (trend.userScore / maxTrend) * 100))}%` }}
-                    />
-                  </View>
-                </View>
-              )) : <Text className="text-sm text-slate-400">No gameweek scores are available yet.</Text>}
+                  {query.data.trend.map((trend) => (
+                    <View key={trend.gameweekId} className="gap-2 border-b border-slate-800 py-3">
+                      <View
+                        accessible
+                        accessibilityLabel={`Gameweek ${trend.gameweekId}. Your score ${trend.userScore.toFixed(1)} points. Global average ${trend.globalAverage.toFixed(1)} points.`}
+                        className="flex-row items-center"
+                      >
+                        <Text className="flex-1 text-sm text-slate-300">Gameweek {trend.gameweekId}</Text>
+                        <Text className="w-20 text-right text-sm font-semibold tabular-nums text-white">
+                          {trend.userScore.toFixed(1)}
+                        </Text>
+                        <Text className="w-24 text-right text-sm tabular-nums text-slate-400">
+                          {trend.globalAverage.toFixed(1)}
+                        </Text>
+                      </View>
+                      <View
+                        accessibilityElementsHidden
+                        importantForAccessibility="no-hide-descendants"
+                        className="h-2 overflow-hidden rounded-full bg-slate-800"
+                      >
+                        <View
+                          className="h-full rounded-full bg-cyan-400"
+                          style={{ width: `${Math.min(100, Math.max(2, (trend.userScore / maxTrend) * 100))}%` }}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </>
+              ) : <Text className="text-sm text-slate-400">No gameweek scores are available yet.</Text>}
             </View>
 
             <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
