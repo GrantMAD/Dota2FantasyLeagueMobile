@@ -72,7 +72,11 @@ export default function AnalyticsScreen() {
               <Metric label="Free transfers" value={String(query.data.user.freeTransfers)} />
             </View>
 
-            <View className="flex-row flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-2">
+            <View
+              accessibilityRole="tablist"
+              accessibilityLabel="Analytics views"
+              className="flex-row flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-2"
+            >
               {([
                 ['my', 'My Performance'],
                 ['market', 'Market'],
@@ -80,7 +84,9 @@ export default function AnalyticsScreen() {
               ] as const).map(([key, label]) => (
                 <Pressable
                   key={key}
+                  nativeID={`analytics-tab-${key}`}
                   accessibilityRole="tab"
+                  accessibilityLabel={label}
                   accessibilityState={{ selected: tab === key }}
                   className={`min-h-10 flex-1 items-center justify-center rounded-xl px-3 ${
                     tab === key ? 'bg-brand-500' : ''
@@ -93,7 +99,12 @@ export default function AnalyticsScreen() {
             </View>
 
             {tab === 'my' ? (
-              <>
+              <View
+                role="tabpanel"
+                accessibilityLabel="My Performance"
+                accessibilityLabelledBy="analytics-tab-my"
+                className="gap-5"
+              >
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <Text className="text-lg font-bold text-white">Gameweek trend</Text>
               {query.data.trend.length ? (
@@ -163,11 +174,16 @@ export default function AnalyticsScreen() {
               )) : <Text className="text-sm text-slate-400">Role scoring will appear as lineups are completed.</Text>}
             </View>
 
-              </>
+              </View>
             ) : null}
 
             {tab === 'dream' ? (
-              <>
+              <View
+                role="tabpanel"
+                accessibilityLabel="Dream Team"
+                accessibilityLabelledBy="analytics-tab-dream"
+                className="gap-5"
+              >
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <Text className="text-lg font-bold text-white">Dream team</Text>
               {query.data.dreamTeam.length ? query.data.dreamTeam.map((player, index) => (
@@ -193,11 +209,16 @@ export default function AnalyticsScreen() {
                 </View>
               )) : <Text className="text-sm text-slate-400">Value rankings will appear when match data is available.</Text>}
             </View>
-              </>
+              </View>
             ) : null}
 
             {tab === 'market' ? (
-              <>
+              <View
+                role="tabpanel"
+                accessibilityLabel="Market"
+                accessibilityLabelledBy="analytics-tab-market"
+                className="gap-5"
+              >
                 <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
                   <Text className="text-lg font-bold text-white">Market & metagame intelligence</Text>
                   <Text className="text-sm leading-5 text-slate-400">Ownership, value, and return-on-investment signals from the current player market.</Text>
@@ -226,7 +247,7 @@ export default function AnalyticsScreen() {
                     </View>
                   )) : <Text className="text-sm text-slate-400">Value rankings will appear when match data is available.</Text>}
                 </View>
-              </>
+              </View>
             ) : null}
           </>
         )}
