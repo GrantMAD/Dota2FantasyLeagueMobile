@@ -6,6 +6,7 @@ import { getPlayerDetail, getPlayers, getProfessionalTeams, normalizePlayerCompa
 import {
   getMatchDetails,
   getMatches,
+  getMatchesPage,
   getTournamentDetails,
   getTournaments,
 } from '../src/features/competition/api';
@@ -472,6 +473,10 @@ describe('mobile data access', () => {
         dire_team: { name: 'Dire', tag: 'DIR' },
         tournaments: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
       }],
+      total: 1,
+      page: 1,
+      limit: 24,
+      counts: { all: 1, live: 0, upcoming: 1, completed: 0 },
     }, error: null });
 
     await expect(getMatches('upcoming')).resolves.toMatchObject([{
@@ -485,7 +490,57 @@ describe('mobile data access', () => {
       p_gameweek_id: null,
       p_team_id: null,
       p_tournament_id: null,
+      p_search: null,
+      p_page: 1,
       p_limit: 100,
+    });
+  });
+
+  it('filters match pages remotely and normalizes status and team tags', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
+      matches: [{
+        id: 82,
+        status: 'live',
+        scheduled_at: '2026-10-07T10:00:00.000Z',
+        gameweek_id: 7,
+        match_number: 1,
+        best_of: 3,
+        radiant_team_id: 4,
+        dire_team_id: 5,
+        radiant_team: { name: 'Team Liquid', tag: 'TEAM' },
+        dire_team: { name: 'T1', tag: 'wrong' },
+        tournaments: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
+      }],
+      total: 23,
+      page: 2,
+      limit: 12,
+      counts: { all: 23, live: 2, upcoming: 9, completed: 12 },
+    }, error: null });
+
+    await expect(getMatchesPage({
+      status: 'live',
+      search: '  liquid  ',
+      tournamentId: 9,
+      page: 2,
+      limit: 12,
+    })).resolves.toMatchObject({
+      total: 23,
+      page: 2,
+      counts: { all: 23, live: 2, upcoming: 9, completed: 12 },
+      matches: [{
+        status: 'live',
+        radiant_team: { name: 'Team Liquid', tag: 'TL' },
+        dire_team: { name: 'T1', tag: 'T1' },
+      }],
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_matches', {
+      p_status: 'in_progress',
+      p_gameweek_id: null,
+      p_team_id: null,
+      p_tournament_id: 9,
+      p_search: 'liquid',
+      p_page: 2,
+      p_limit: 12,
     });
   });
 

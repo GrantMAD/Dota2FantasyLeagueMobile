@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Screen } from '@/src/components/Screen';
 import { getMatchesByFilters } from '@/src/features/competition/api';
+import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
 import { getGameweeks } from '@/src/features/gameweeks/api';
 
 function formatDate(value: string | null): string {
@@ -100,15 +101,7 @@ export default function GameweekDetailScreen() {
                   className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4"
                   onPress={() => router.push(`/match/${match.id}`)}
                 >
-                  <View className="flex-row items-center justify-between gap-3">
-                    <Text className="flex-1 font-semibold text-white">
-                      {match.radiant_team?.name ?? 'Team TBA'}
-                    </Text>
-                    <Text className="text-xs text-slate-500">VS</Text>
-                    <Text className="flex-1 text-right font-semibold text-white">
-                      {match.dire_team?.name ?? 'Team TBA'}
-                    </Text>
-                  </View>
+                  <TeamMatchup radiantTeam={match.radiant_team} direTeam={match.dire_team} />
                   <Text className="text-sm text-cyan-200">{formatDate(match.scheduled_at)}</Text>
                   <Text className="text-xs uppercase text-slate-500">{match.status} · Best of {match.best_of}</Text>
                   {match.tournament ? <Text className="text-xs text-slate-400">{match.tournament.name}</Text> : null}

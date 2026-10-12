@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Screen } from '@/src/components/Screen';
 import { getMatchDetails } from '@/src/features/competition/api';
+import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -63,15 +64,10 @@ export default function MatchDetailScreen() {
               <Text className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
                 {query.data.match.status} · Match {query.data.match.match_number}
               </Text>
-              <View className="flex-row items-center justify-between gap-3">
-                <Text className="flex-1 text-lg font-bold text-white">
-                  {query.data.match.radiant_team?.name ?? 'Team TBA'}
-                </Text>
-                <Text className="text-xs text-slate-500">VS</Text>
-                <Text className="flex-1 text-right text-lg font-bold text-white">
-                  {query.data.match.dire_team?.name ?? 'Team TBA'}
-                </Text>
-              </View>
+              <TeamMatchup
+                radiantTeam={query.data.match.radiant_team}
+                direTeam={query.data.match.dire_team}
+              />
               <Text className="text-sm text-slate-300">{formatDate(query.data.match.scheduled_at)}</Text>
               <Text className="text-sm text-slate-400">
                 Best of {query.data.match.best_of}

@@ -15,6 +15,31 @@ export interface MatchSummary {
   tournament: { id: number; name: string; tier: string | null } | null;
 }
 
+export interface MatchCounts {
+  all: number;
+  live: number;
+  upcoming: number;
+  completed: number;
+}
+
+export interface MatchPage {
+  matches: MatchSummary[];
+  total: number;
+  page: number;
+  limit: number;
+  counts: MatchCounts;
+}
+
+export interface MatchFilters {
+  status?: string;
+  gameweekId?: number;
+  teamId?: number;
+  tournamentId?: number;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
 export interface TournamentSummary {
   id: number;
   name: string;
@@ -93,8 +118,21 @@ function parseTeam(value: unknown): MatchSummary['radiant_team'] {
   }
   return {
     name: value.name,
-    tag: typeof value.tag === 'string' ? value.tag : value.name.slice(0, 4).toUpperCase(),
+    tag: getTeamTag(value.name),
   };
+}
+
+function getTeamTag(name: string): string {
+  const normalized = name.trim();
+  if (/^\d+$/.test(normalized)) return `T${normalized.slice(-2)}`;
+  if (normalized.length <= 3) return normalized.toUpperCase();
+  const tokens = normalized
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .slice(0, 3);
+  return tokens.length > 1
+    ? tokens.map((part) => part[0].toUpperCase()).join('')
+    : normalized.slice(0, 3).toUpperCase();
 }
 
 function parseMatch(value: unknown): MatchSummary {
@@ -124,7 +162,7 @@ function parseMatch(value: unknown): MatchSummary {
   }
   return {
     id: Number(value.id),
-    status: value.status,
+    status: value.status === 'in_progress' ? 'live' : value.status,
     scheduled_at: value.scheduled_at,
     gameweek_id: value.gameweek_id,
     match_number: value.match_number,
@@ -147,24 +185,51 @@ export async function getMatches(status: string): Promise<MatchSummary[]> {
   return getMatchesByFilters({ status });
 }
 
-export async function getMatchesByFilters(filters: { status?: string; gameweekId?: number }): Promise<MatchSummary[]> {
+export async function getMatchesPage(filters: MatchFilters = {}): Promise<MatchPage> {
   const status = filters.status ?? 'all';
+  const page = filters.page ?? 1;
+  const limit = filters.limit ?? 24;
   const { data: result, error } = await getSupabaseClient().rpc('mobile_get_matches', {
-    p_status: status === 'all' ? null : status === 'upcoming' ? 'scheduled' : status,
+    p_status: status === 'all' ? null : status === 'upcoming' ? 'scheduled' : status === 'live' ? 'in_progress' : status,
     p_gameweek_id: filters.gameweekId ?? null,
-    p_team_id: null,
-    p_tournament_id: null,
-    p_limit: 100,
+    p_team_id: filters.teamId ?? null,
+    p_tournament_id: filters.tournamentId ?? null,
+    p_search: filters.search?.trim() || null,
+    p_page: page,
+    p_limit: limit,
   });
   if (error) throw new ApiError(`Unable to load matches: ${error.message}`, 500);
-  if (!isRecord(result) || !Array.isArray(result.matches)) {
+  if (
+    !isRecord(result) ||
+    !Array.isArray(result.matches) ||
+    !Number.isInteger(result.total) ||
+    !Number.isInteger(result.page) ||
+    !Number.isInteger(result.limit) ||
+    !isRecord(result.counts) ||
+    !Number.isInteger(result.counts.all) ||
+    !Number.isInteger(result.counts.live) ||
+    !Number.isInteger(result.counts.upcoming) ||
+    !Number.isInteger(result.counts.completed)
+  ) {
     throw new ApiError('Match data was returned in an unexpected format.', 502);
   }
-  const now = Date.now();
-  return result.matches
-    .map(parseMatch)
-    .filter((match) => status !== 'upcoming' || new Date(match.scheduled_at).getTime() >= now)
-    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+  return {
+    matches: result.matches.map(parseMatch),
+    total: Number(result.total),
+    page: Number(result.page),
+    limit: Number(result.limit),
+    counts: {
+      all: Number(result.counts.all),
+      live: Number(result.counts.live),
+      upcoming: Number(result.counts.upcoming),
+      completed: Number(result.counts.completed),
+    },
+  };
+}
+
+export async function getMatchesByFilters(filters: MatchFilters): Promise<MatchSummary[]> {
+  const result = await getMatchesPage({ ...filters, page: 1, limit: 100 });
+  return result.matches;
 }
 
 export async function getMatchDetails(id: number): Promise<MatchDetails> {
