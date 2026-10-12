@@ -89,6 +89,14 @@ function createContext(overrides: Partial<FantasyContext> = {}): FantasyContext 
       isLocked: false,
       hasUpcoming: true,
     },
+    defaultGameweekId: 24,
+    availableGameweeks: [{
+      id: 24,
+      gameweekNumber: 7,
+      deadline: null,
+      status: 'upcoming',
+      isLocked: false,
+    }],
     chips: {
       tripleCaptainUsed: false,
       tripleCaptainGameweekId: null,

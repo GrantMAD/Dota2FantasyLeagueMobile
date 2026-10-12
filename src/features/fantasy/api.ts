@@ -42,6 +42,14 @@ export interface FantasyContext {
     isLocked: boolean;
     hasUpcoming: boolean;
   } | null;
+  defaultGameweekId: number | null;
+  availableGameweeks: {
+    id: number;
+    gameweekNumber: number;
+    deadline: string | null;
+    status: string;
+    isLocked: boolean;
+  }[];
   chips: {
     tripleCaptainUsed: boolean;
     tripleCaptainGameweekId: number | null;
@@ -192,8 +200,10 @@ function parseLineupEntry(value: unknown): FantasyLineupEntry {
   };
 }
 
-export async function getFantasyContext(): Promise<FantasyContext> {
-  const { data: value, error } = await getSupabaseClient().rpc('mobile_get_fantasy_context');
+export async function getFantasyContext(gameweekId?: number): Promise<FantasyContext> {
+  const { data: value, error } = await getSupabaseClient().rpc('mobile_get_fantasy_lineup_context', {
+    p_gameweek_id: gameweekId ?? null,
+  });
   if (error) {
     throw new ApiError(`Unable to load fantasy context: ${error.message}`, 500);
   }
@@ -206,6 +216,8 @@ export async function getFantasyContext(): Promise<FantasyContext> {
     typeof value.freeTransfers !== 'number' ||
     typeof value.totalPoints !== 'number' ||
     !isNullableNumber(value.globalRank) ||
+    !isNullableNumber(value.defaultGameweekId) ||
+    !Array.isArray(value.availableGameweeks) ||
     !Array.isArray(value.lineup) ||
     !Array.isArray(value.ownedPlayers) ||
     !isRecord(chips) ||
@@ -218,6 +230,26 @@ export async function getFantasyContext(): Promise<FantasyContext> {
   ) {
     throw new ApiError('Fantasy data was returned in an unexpected format.', 502);
   }
+
+  const availableGameweeks = value.availableGameweeks.map((rawGameweek) => {
+    if (
+      !isRecord(rawGameweek) ||
+      !Number.isInteger(rawGameweek.id) ||
+      !Number.isInteger(rawGameweek.gameweekNumber) ||
+      (rawGameweek.deadline !== null && typeof rawGameweek.deadline !== 'string') ||
+      typeof rawGameweek.status !== 'string' ||
+      typeof rawGameweek.isLocked !== 'boolean'
+    ) {
+      throw new ApiError('Fantasy data was returned in an unexpected format.', 502);
+    }
+    return {
+      id: Number(rawGameweek.id),
+      gameweekNumber: Number(rawGameweek.gameweekNumber),
+      deadline: rawGameweek.deadline,
+      status: rawGameweek.status,
+      isLocked: rawGameweek.isLocked,
+    };
+  });
 
   let gameweek: FantasyContext['gameweek'] = null;
   if (value.gameweek !== null) {
@@ -251,6 +283,8 @@ export async function getFantasyContext(): Promise<FantasyContext> {
     totalPoints: value.totalPoints,
     globalRank: value.globalRank,
     gameweek,
+    defaultGameweekId: value.defaultGameweekId,
+    availableGameweeks,
     chips: {
       tripleCaptainUsed: chips.tripleCaptainUsed,
       tripleCaptainGameweekId: chips.tripleCaptainGameweekId,

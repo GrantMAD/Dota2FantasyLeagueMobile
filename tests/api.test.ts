@@ -86,6 +86,8 @@ describe('mobile data access', () => {
         totalPoints: 0,
         globalRank: null,
         gameweek: null,
+        defaultGameweekId: null,
+        availableGameweeks: [],
         chips: {
           tripleCaptainUsed: false,
           tripleCaptainGameweekId: null,
@@ -103,8 +105,53 @@ describe('mobile data access', () => {
       freeTransfers: 2,
       ownedPlayers: [],
     });
-    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_fantasy_context');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_fantasy_lineup_context', {
+      p_gameweek_id: null,
+    });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('requests a selected gameweek lineup and validates available planning weeks', async () => {
+    mockFantasyContextRpc({
+      fantasySeasonId: 12,
+      seasonId: 3,
+      budget: 100,
+      freeTransfers: 1,
+      totalPoints: 0,
+      globalRank: null,
+      gameweek: {
+        id: 25,
+        gameweekNumber: 8,
+        deadline: '2026-10-20T12:00:00.000Z',
+        status: 'upcoming',
+        isLocked: false,
+        hasUpcoming: true,
+      },
+      defaultGameweekId: 24,
+      availableGameweeks: [
+        { id: 24, gameweekNumber: 7, deadline: '2026-10-13T12:00:00.000Z', status: 'active', isLocked: false },
+        { id: 25, gameweekNumber: 8, deadline: '2026-10-20T12:00:00.000Z', status: 'upcoming', isLocked: false },
+      ],
+      chips: {
+        tripleCaptainUsed: false,
+        tripleCaptainGameweekId: null,
+        benchBoostUsed: false,
+        benchBoostGameweekId: null,
+        wildcardUsed: false,
+        wildcardUsedGameweekId: null,
+      },
+      lineup: [],
+      ownedPlayers: [],
+    });
+
+    await expect(getFantasyContext(25)).resolves.toMatchObject({
+      gameweek: { id: 25, gameweekNumber: 8 },
+      defaultGameweekId: 24,
+      availableGameweeks: [{ id: 24 }, { id: 25 }],
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_fantasy_lineup_context', {
+      p_gameweek_id: 25,
+    });
   });
 
   it('surfaces errors returned by the direct fantasy-context RPC', async () => {
@@ -200,6 +247,8 @@ describe('mobile data access', () => {
       totalPoints: 0,
       globalRank: null,
       gameweek: null,
+      defaultGameweekId: null,
+      availableGameweeks: [],
       chips: {
         tripleCaptainUsed: false,
         tripleCaptainGameweekId: null,

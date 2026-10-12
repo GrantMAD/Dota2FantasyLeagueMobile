@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Screen } from '@/src/components/Screen';
@@ -13,7 +13,11 @@ import { useAuth } from '@/src/lib/auth';
 
 export default function TeamScreen() {
   const query = useFantasyContext();
+  const [selectedGameweekId, setSelectedGameweekId] = useState<number | undefined>();
+  const lineupQuery = useFantasyContext(selectedGameweekId);
   const { session } = useAuth();
+  const lineupContext = selectedGameweekId === undefined ? query.data : lineupQuery.data;
+  const defaultGameweekId = query.data?.defaultGameweekId ?? query.data?.gameweek?.id ?? null;
   const lineupByPlayer = useMemo(
     () => new Map((query.data?.lineup ?? []).map((entry) => [entry.player_id, entry])),
     [query.data?.lineup]
@@ -27,7 +31,10 @@ export default function TeamScreen() {
         refreshControl={
           <RefreshControl
             colors={['#14b8a6']}
-            onRefresh={() => void query.refetch()}
+            onRefresh={() => {
+              void query.refetch();
+              if (selectedGameweekId !== undefined) void lineupQuery.refetch();
+            }}
             refreshing={query.isRefetching}
             tintColor="#14b8a6"
           />
@@ -68,12 +75,62 @@ export default function TeamScreen() {
             {session?.user.id && query.data.ownedPlayers.length < 8 ? (
               <SquadBuilder context={query.data} userId={session.user.id} />
             ) : null}
+            {query.data.availableGameweeks.length > 1 ? (
+              <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                <View>
+                  <Text className="text-base font-semibold text-white">Plan a lineup</Text>
+                  <Text className="mt-1 text-sm text-slate-400">
+                    Choose the active or an upcoming gameweek. Each lineup is saved separately.
+                  </Text>
+                </View>
+                <View className="flex-row flex-wrap gap-2">
+                  {query.data.availableGameweeks.map((gameweek) => {
+                    const isSelected = (selectedGameweekId ?? defaultGameweekId) === gameweek.id;
+                    return (
+                      <Pressable
+                        key={gameweek.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        className={`min-h-11 justify-center rounded-full border px-4 ${
+                          isSelected ? 'border-brand-500 bg-brand-500/20' : 'border-slate-700 bg-slate-950'
+                        }`}
+                        onPress={() => setSelectedGameweekId(
+                          gameweek.id === defaultGameweekId ? undefined : gameweek.id
+                        )}
+                      >
+                        <Text className={`text-sm font-semibold ${isSelected ? 'text-brand-400' : 'text-slate-200'}`}>
+                          Gameweek {gameweek.gameweekNumber}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
             {session?.user.id ? (
-              <LineupEditor
-                key={`${query.data.gameweek?.id ?? 'none'}:${query.data.lineup.map((entry) => `${entry.slot}-${entry.player_id}-${entry.is_captain}-${entry.is_vice_captain}`).join(',')}`}
-                context={query.data}
-                userId={session.user.id}
-              />
+              selectedGameweekId !== undefined && lineupQuery.isPending ? (
+                <ActivityIndicator accessibilityLabel="Loading selected gameweek lineup" color="#14b8a6" />
+              ) : selectedGameweekId !== undefined && lineupQuery.isError ? (
+                <View accessibilityRole="alert" className="rounded-2xl border border-red-900 bg-red-950 p-4">
+                  <Text className="font-semibold text-red-200">Lineup unavailable</Text>
+                  <Text className="mt-2 text-sm text-red-100">
+                    {lineupQuery.error instanceof Error ? lineupQuery.error.message : 'Please try again.'}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    className="mt-3 min-h-11 justify-center"
+                    onPress={() => void lineupQuery.refetch()}
+                  >
+                    <Text className="font-semibold text-white">Try again</Text>
+                  </Pressable>
+                </View>
+              ) : lineupContext ? (
+                <LineupEditor
+                  key={`${lineupContext.gameweek?.id ?? 'none'}:${lineupContext.lineup.map((entry) => `${entry.slot}-${entry.player_id}-${entry.is_captain}-${entry.is_vice_captain}`).join(',')}`}
+                  context={lineupContext}
+                  userId={session.user.id}
+                />
+              ) : null
             ) : null}
             {session?.user.id ? <ChipActivationPanel context={query.data} userId={session.user.id} /> : null}
             {session?.user.id ? <WildcardPanel context={query.data} userId={session.user.id} /> : null}
