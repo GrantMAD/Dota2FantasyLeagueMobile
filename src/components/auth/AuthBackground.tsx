@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 
 /**
@@ -8,9 +8,9 @@ import { Animated, StyleSheet, View } from 'react-native';
  * without requiring canvas.
  */
 export function AuthBackground({ children }: { children: React.ReactNode }) {
-  const orb1 = useRef(new Animated.Value(0)).current;
-  const orb2 = useRef(new Animated.Value(0)).current;
-  const orb3 = useRef(new Animated.Value(0)).current;
+  const [orb1] = useState(() => new Animated.Value(0));
+  const [orb2] = useState(() => new Animated.Value(0));
+  const [orb3] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     const loop = (anim: Animated.Value, duration: number, delay: number) =>

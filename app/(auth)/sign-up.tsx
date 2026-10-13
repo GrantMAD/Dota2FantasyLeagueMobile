@@ -1,5 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -102,7 +102,7 @@ const preview = StyleSheet.create({
 
 /** Animated success overlay shown after account creation */
 function SuccessOverlay({ message, onBack }: { message: string; onBack: () => void }) {
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     Animated.timing(progress, {
@@ -355,7 +355,7 @@ export default function SignUpScreen() {
                           <Text style={styles.createButtonText}>Creating account…</Text>
                         </View>
                       ) : (
-                        <Text style={styles.createButtonText}>Create account — it's free</Text>
+                        <Text style={styles.createButtonText}>Create account — it&apos;s free</Text>
                       )}
                     </Pressable>
                   </View>
