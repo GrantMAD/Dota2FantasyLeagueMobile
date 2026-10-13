@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
-import { getPlayerDetail } from '@/src/features/players/api';
+import { aggregateLatestGameweekScoreBreakdown, getPlayerDetail } from '@/src/features/players/api';
 import { getManagerProfile } from '@/src/features/account/api';
 import { isPremiumUser } from '@/src/lib/premium';
 
@@ -30,6 +30,12 @@ export default function PlayerDetailScreen() {
     staleTime: 60_000,
   });
   const hasPremium = isPremiumUser(profileQuery.data);
+  const latestScore = query.data
+    ? aggregateLatestGameweekScoreBreakdown(query.data.performances)
+    : null;
+  const hasScoreBreakdownData = query.data?.performances.some(
+    (performance) => performance.score_breakdown !== undefined,
+  ) ?? false;
 
   return (
     <Screen>
@@ -107,6 +113,51 @@ export default function PlayerDetailScreen() {
               >
                 <Text className="font-semibold text-cyan-200">Compare this player</Text>
               </Pressable>
+            </View>
+
+            <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <View className="flex-row items-center justify-between gap-3">
+                <View>
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Score breakdown
+                  </Text>
+                  <Text className="mt-1 text-sm text-slate-300">
+                    {latestScore ? `Gameweek ${latestScore.gameweekId}` : 'Most recent gameweek'}
+                  </Text>
+                </View>
+                {latestScore ? (
+                  <Text className="text-lg font-bold text-brand-300">
+                    {latestScore.breakdown.total.toFixed(2)} pts
+                  </Text>
+                ) : null}
+              </View>
+              {latestScore ? (
+                <View className="flex-row flex-wrap gap-2">
+                  {([
+                    ['Combat', latestScore.breakdown.combat],
+                    ['Economy', latestScore.breakdown.economy],
+                    ['Objective', latestScore.breakdown.objective],
+                    ['Teamfight', latestScore.breakdown.teamfight],
+                    ['Win', latestScore.breakdown.win],
+                    ['Series', latestScore.breakdown.series],
+                    ['Performance', latestScore.breakdown.performance],
+                    ['Consistency', latestScore.breakdown.consistency],
+                    ['Penalty', latestScore.breakdown.penalty],
+                  ] as const).map(([label, value]) => (
+                    <Metric
+                      key={label}
+                      label={label}
+                      value={`${value >= 0 ? '+' : ''}${value.toFixed(2)}`}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <Text className="text-sm leading-5 text-slate-400">
+                  {hasScoreBreakdownData
+                    ? 'No score breakdown has been recorded for this player yet.'
+                    : 'Detailed score categories will appear after the mobile score-breakdown database migration is applied.'}
+                </Text>
+              )}
             </View>
 
             {hasPremium && query.data.analytics ? (

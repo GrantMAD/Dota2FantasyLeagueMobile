@@ -2,7 +2,13 @@ import type { Session } from '@supabase/supabase-js';
 import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { getGameweeks } from '../src/features/gameweeks/api';
-import { getPlayerDetail, getPlayers, getProfessionalTeams, normalizePlayerComparisonIds } from '../src/features/players/api';
+import {
+  aggregateLatestGameweekScoreBreakdown,
+  getPlayerDetail,
+  getPlayers,
+  getProfessionalTeams,
+  normalizePlayerComparisonIds,
+} from '../src/features/players/api';
 import {
   getMatchDetails,
   getMatches,
@@ -511,6 +517,18 @@ describe('mobile data access', () => {
           assists: 11,
           price: 9.5,
           fantasy_points_breakdown: { total_points: 12 },
+          score_breakdown: {
+            combat: 3,
+            economy: 2,
+            objective: 1,
+            teamfight: 2,
+            win: 1,
+            series: 1,
+            performance: 1,
+            consistency: 1,
+            penalty: 0,
+            total: 12,
+          },
         }, {
           id: 500,
           gameweek_id: 6,
@@ -528,7 +546,26 @@ describe('mobile data access', () => {
       team_name: 'Radiant',
       total_season_points: 104.5,
       performances: [
-        { gameweek_id: 7, kills: 8, deaths: 2, assists: 11, total_points: 12, price: 9.5 },
+        {
+          gameweek_id: 7,
+          kills: 8,
+          deaths: 2,
+          assists: 11,
+          total_points: 12,
+          price: 9.5,
+          score_breakdown: {
+            combat: 3,
+            economy: 2,
+            objective: 1,
+            teamfight: 2,
+            win: 1,
+            series: 1,
+            performance: 1,
+            consistency: 1,
+            penalty: 0,
+            total: 12,
+          },
+        },
         { gameweek_id: 6, kills: 5, deaths: 3, assists: 8, total_points: 7, price: 8.5 },
       ],
       analytics: {
@@ -586,6 +623,62 @@ describe('mobile data access', () => {
         latestPrice: 8.5,
         priceChange: 0,
         form: [7, 15],
+      },
+    });
+  });
+
+  it('aggregates every score category across performances in the latest gameweek', () => {
+    const categoryBreakdown = {
+      combat: 2,
+      economy: 1,
+      objective: 0,
+      teamfight: 1,
+      win: 0,
+      series: 0,
+      performance: 0.5,
+      consistency: 0,
+      penalty: -1,
+      total: 3.5,
+    };
+    const secondBreakdown = {
+      combat: 1,
+      economy: 0,
+      objective: 2,
+      teamfight: 0,
+      win: 1,
+      series: 0,
+      performance: 0,
+      consistency: 0,
+      penalty: 0,
+      total: 4,
+    };
+
+    expect(aggregateLatestGameweekScoreBreakdown([
+      {
+        id: 1, gameweek_id: 8, kills: 1, deaths: 2, assists: 3, total_points: 3.5, price: null,
+        score_breakdown: categoryBreakdown,
+      },
+      {
+        id: 2, gameweek_id: 8, kills: 2, deaths: 1, assists: 4, total_points: 4, price: null,
+        score_breakdown: secondBreakdown,
+      },
+      {
+        id: 3, gameweek_id: 7, kills: 2, deaths: 1, assists: 4, total_points: 4, price: null,
+        score_breakdown: secondBreakdown,
+      },
+    ])).toEqual({
+      gameweekId: 8,
+      breakdown: {
+        combat: 3,
+        economy: 1,
+        objective: 2,
+        teamfight: 1,
+        win: 1,
+        series: 0,
+        performance: 0.5,
+        consistency: 0,
+        penalty: -1,
+        total: 7.5,
       },
     });
   });

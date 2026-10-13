@@ -36,6 +36,20 @@ export interface PlayerPerformance {
   assists: number | null;
   total_points: number;
   price: number | null;
+  score_breakdown?: PlayerScoreBreakdown | null;
+}
+
+export interface PlayerScoreBreakdown {
+  combat: number;
+  economy: number;
+  objective: number;
+  teamfight: number;
+  win: number;
+  series: number;
+  performance: number;
+  consistency: number;
+  penalty: number;
+  total: number;
 }
 
 export interface PlayerDetail extends DirectoryPlayer {
@@ -57,6 +71,68 @@ export function normalizePlayerComparisonIds(value: string): number[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const SCORE_BREAKDOWN_FIELDS = [
+  'combat',
+  'economy',
+  'objective',
+  'teamfight',
+  'win',
+  'series',
+  'performance',
+  'consistency',
+  'penalty',
+  'total',
+] as const;
+
+function parseScoreBreakdown(value: unknown): PlayerScoreBreakdown | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (
+    !isRecord(value) ||
+    !SCORE_BREAKDOWN_FIELDS.every((field) =>
+      typeof value[field] === 'number' && Number.isFinite(value[field])
+    )
+  ) {
+    throw new ApiError('Player score breakdown data was returned in an unexpected format.', 502);
+  }
+  return {
+    combat: Number(value.combat),
+    economy: Number(value.economy),
+    objective: Number(value.objective),
+    teamfight: Number(value.teamfight),
+    win: Number(value.win),
+    series: Number(value.series),
+    performance: Number(value.performance),
+    consistency: Number(value.consistency),
+    penalty: Number(value.penalty),
+    total: Number(value.total),
+  };
+}
+
+export function aggregateLatestGameweekScoreBreakdown(
+  performances: PlayerPerformance[],
+): { gameweekId: number; breakdown: PlayerScoreBreakdown } | null {
+  const latestGameweekId = performances.reduce<number | null>(
+    (latest, performance) => latest === null ? performance.gameweek_id : Math.max(latest, performance.gameweek_id),
+    null,
+  );
+  if (latestGameweekId === null) return null;
+
+  const latestGameweekPerformances = performances.filter(
+    (performance) => performance.gameweek_id === latestGameweekId,
+  );
+  const scoreBreakdowns = latestGameweekPerformances.flatMap((performance) =>
+    performance.score_breakdown ? [performance.score_breakdown] : []
+  );
+  if (scoreBreakdowns.length !== latestGameweekPerformances.length) return null;
+
+  const breakdown = SCORE_BREAKDOWN_FIELDS.reduce((totals, field) => {
+    totals[field] = scoreBreakdowns.reduce((total, score) => total + score[field], 0);
+    return totals;
+  }, {} as PlayerScoreBreakdown);
+  return { gameweekId: latestGameweekId, breakdown };
 }
 
 function parsePlayer(value: unknown): DirectoryPlayer {
@@ -208,6 +284,7 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
       assists: optionalStat(performance.assists),
       total_points: totalPoints,
       price: optionalStat(performance.price),
+      score_breakdown: parseScoreBreakdown(performance.score_breakdown),
     };
   });
 

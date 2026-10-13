@@ -1,10 +1,12 @@
-import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
-import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ScreenScrollView } from '@/src/components/ScreenScrollView';
 import { SymbolView } from 'expo-symbols';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { MetricCard } from '@/src/components/MetricCard';
+import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
+import { getManagerProfile } from '@/src/features/account/api';
 import { getDashboardWhatsNew } from '@/src/features/dashboard/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { getLeagues } from '@/src/features/leagues/api';
@@ -14,9 +16,17 @@ function formatMetric(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—';
 }
 
+const STARTER_SLOT_ORDER = ['carry', 'mid', 'offlane', 'support', 'hard_support'];
+
 export default function HomeScreen() {
   const query = useFantasyContext();
   const { session } = useAuth();
+  const profileQuery = useQuery({
+    queryKey: ['manager-profile'],
+    queryFn: getManagerProfile,
+    enabled: Boolean(session),
+    staleTime: 60_000,
+  });
   const leaguesQuery = useQuery({
     queryKey: ['leagues'],
     queryFn: getLeagues,
@@ -32,10 +42,58 @@ export default function HomeScreen() {
   const myLeagues = (leaguesQuery.data ?? [])
     .filter((league) => league.standings.some((standing) => standing.userId === session?.user.id))
     .slice(0, 3);
+  const starters = (query.data?.lineup ?? [])
+    .filter((entry) => entry.is_starter)
+    .sort((a, b) => STARTER_SLOT_ORDER.indexOf(a.slot) - STARTER_SLOT_ORDER.indexOf(b.slot));
+  const squadSize = query.data?.ownedPlayers.length ?? 0;
+  const hasSquad = squadSize > 0;
+  const displayName = profileQuery.data?.displayName?.trim() || profileQuery.data?.username;
+  const quickActions = !query.data
+    ? []
+    : !hasSquad
+      ? [{
+          title: 'Build your squad',
+          description: `Choose players with your ${query.data.budget.toFixed(1)}M budget.`,
+          href: '/team' as const,
+        }]
+      : [
+          {
+            title: starters.length < 5 ? 'Complete your starting lineup' : 'Review your lineup',
+            description: starters.length < 5
+              ? `Choose all five starters${query.data.gameweek?.deadline ? ` before ${new Date(query.data.gameweek.deadline).toLocaleString()}` : ''}.`
+              : query.data.gameweek?.isLocked
+                ? 'The deadline has passed. Review your saved lineup.'
+                : 'Check your starters and captain before the deadline.',
+            href: '/team' as const,
+          },
+          ...(query.data.freeTransfers > 0
+            ? [{
+                title: `Use ${query.data.freeTransfers} free transfer${query.data.freeTransfers === 1 ? '' : 's'}`,
+                description: 'Improve your squad without a transfer penalty.',
+                href: '/team' as const,
+              }]
+            : []),
+          {
+            title: myLeagues.length ? 'Check your league standings' : 'Join a league',
+            description: myLeagues.length
+              ? 'See how you compare with your rivals.'
+              : 'Compete with friends or join a public league.',
+            href: '/leagues' as const,
+          },
+          ...(query.data.gameweek
+            ? [{
+                title: 'View gameweek schedule',
+                description: query.data.gameweek.deadline
+                  ? `Deadline: ${new Date(query.data.gameweek.deadline).toLocaleString()}.`
+                  : `Review Gameweek ${query.data.gameweek.gameweekNumber} fixtures.`,
+                href: '/gameweeks' as const,
+              }]
+            : []),
+        ];
 
   return (
     <Screen>
-      <ScrollView
+      <ScreenScrollView
         className="flex-1"
         contentContainerClassName="gap-6 px-5 pb-8 pt-5"
         refreshControl={
@@ -55,7 +113,9 @@ export default function HomeScreen() {
       >
         <View>
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Fantasy Dota 2</Text>
-          <Text className="mt-2 text-3xl font-bold text-white">Your dashboard</Text>
+          <Text className="mt-2 text-3xl font-bold text-white">
+            {displayName ? `Welcome back, ${displayName}` : 'Your dashboard'}
+          </Text>
           <Text className="mt-1 text-sm text-slate-400">Your fantasy team, at a glance.</Text>
         </View>
 
@@ -234,27 +294,97 @@ export default function HomeScreen() {
                 </Text>
               </View>
             ) : null}
+            {hasSquad ? (
+              <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                <View className="flex-row items-center justify-between">
+                  <View>
+                    <Text className="text-lg font-bold text-white">Starting Five</Text>
+                    <Text className="mt-1 text-xs text-slate-400">
+                      {starters.length} of 5 starters · Tap a player for score details
+                    </Text>
+                  </View>
+                  <Link href="/team" asChild>
+                    <Pressable accessibilityRole="button" className="min-h-10 justify-center px-2">
+                      <Text className="text-sm font-semibold text-brand-300">My Team ›</Text>
+                    </Pressable>
+                  </Link>
+                </View>
+                {starters.length ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3 pb-1">
+                    {starters.map((entry) => {
+                      const player = entry.professional_players;
+                      if (!player) return null;
+                      const playerName = player.in_game_name || player.name;
+                      return (
+                        <Link key={`${entry.slot}-${entry.player_id}`} href={`/player/${entry.player_id}`} asChild>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`View ${playerName}${entry.is_captain ? ', captain' : entry.is_vice_captain ? ', vice-captain' : ''} details and score breakdown`}
+                            className="w-40 gap-2 rounded-xl border border-slate-700 bg-slate-950/70 p-3"
+                          >
+                            <View className="flex-row items-center gap-2">
+                              <PlayerAvatar uri={player.profile_image_url} label={playerName} size={38} />
+                              <View className="flex-1">
+                                <Text numberOfLines={1} className="text-sm font-bold text-white">{playerName}</Text>
+                                <Text numberOfLines={1} className="text-[10px] text-slate-400">
+                                  {player.professional_teams?.name ?? 'Free agent'}
+                                </Text>
+                              </View>
+                            </View>
+                            <View className="flex-row items-center justify-between">
+                              <Text className="text-[10px] font-semibold uppercase text-brand-300">{entry.slot.replace('_', ' ')}</Text>
+                              <Text className="text-[10px] font-bold text-amber-300">
+                                {entry.is_captain ? 'Captain' : entry.is_vice_captain ? 'Vice' : ''}
+                              </Text>
+                            </View>
+                            <Text className="text-xs font-semibold text-emerald-300">
+                              Last GW · {player.last_gw_points.toFixed(1)} pts
+                            </Text>
+                          </Pressable>
+                        </Link>
+                      );
+                    })}
+                  </ScrollView>
+                ) : (
+                  <Text className="rounded-xl border border-dashed border-slate-700 p-4 text-sm leading-5 text-slate-400">
+                    Your starting lineup is not set yet. Complete it on My Team.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <View className="gap-3 rounded-2xl border border-dashed border-brand-500/50 bg-brand-950/30 p-5">
+                <Text className="text-lg font-bold text-white">Build your first fantasy squad</Text>
+                <Text className="text-sm leading-5 text-slate-300">
+                  Draft your players, set a captain, and start competing for gameweek points.
+                </Text>
+                <Link href="/team" asChild>
+                  <Pressable accessibilityRole="button" className="min-h-11 items-center justify-center rounded-xl bg-brand-500 px-4">
+                    <Text className="font-bold text-white">Build your squad</Text>
+                  </Pressable>
+                </Link>
+              </View>
+            )}
           </>
         ) : (
-          <View className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <Text className="font-semibold text-white">No fantasy season yet</Text>
-            <Text className="mt-2 text-sm leading-5 text-slate-400">
-              Your season details will appear here when they are available.
+          <View className="gap-3 rounded-2xl border border-dashed border-brand-500/50 bg-brand-950/30 p-5">
+            <Text className="font-semibold text-white">Start your fantasy season</Text>
+            <Text className="text-sm leading-5 text-slate-300">
+              Create your squad to get started. Your season details will appear here once available.
             </Text>
+            <Link href="/team" asChild>
+              <Pressable accessibilityRole="button" className="min-h-11 items-center justify-center rounded-xl bg-brand-500 px-4">
+                <Text className="font-bold text-white">Build your squad</Text>
+              </Pressable>
+            </Link>
           </View>
         )}
 
         <View className="gap-3">
-          <Text className="text-xl font-bold text-white">Quick Actions</Text>
+          <Text className="text-xl font-bold text-white">Your Next Moves</Text>
           <View className="gap-2">
-            {[
-              { title: 'Build your squad', description: 'Choose players within your season budget.', href: '/team' as const },
-              { title: 'Set your lineup', description: 'Select starters and captaincy for the deadline.', href: '/team' as const },
-              { title: 'Check the next deadline', description: 'Review gameweek dates and fixtures.', href: '/gameweeks' as const },
-              { title: 'Explore the player market', description: 'Scout form, availability, and value.', href: '/discover' as const },
-            ].map((action) => (
+            {quickActions.map((action) => (
               <Link key={action.title} href={action.href} asChild>
-                <Pressable className="min-h-16 flex-row items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3">
+                <Pressable accessibilityRole="button" className="min-h-16 flex-row items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3">
                   <View className="flex-1">
                     <Text className="font-semibold text-white">{action.title}</Text>
                     <Text className="mt-1 text-xs leading-4 text-slate-400">{action.description}</Text>
@@ -320,7 +450,7 @@ export default function HomeScreen() {
         </View>
 
         {query.isRefetching ? <ActivityIndicator accessibilityLabel="Updating dashboard" color="#14b8a6" /> : null}
-      </ScrollView>
+      </ScreenScrollView>
     </Screen>
   );
 }

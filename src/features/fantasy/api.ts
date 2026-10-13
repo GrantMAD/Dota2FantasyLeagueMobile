@@ -6,6 +6,7 @@ export interface FantasyPlayer {
   name: string;
   in_game_name: string | null;
   primary_role: string | null;
+  profile_image_url: string | null;
   professional_teams: {
     id: number;
     name: string;
@@ -105,6 +106,7 @@ function parsePlayer(value: unknown): FantasyPlayer {
     name: value.name,
     in_game_name: typeof value.in_game_name === 'string' ? value.in_game_name : null,
     primary_role: typeof value.primary_role === 'string' ? value.primary_role : null,
+    profile_image_url: typeof value.profile_image_url === 'string' ? value.profile_image_url : null,
     professional_teams: professionalTeam,
     availability_status: typeof value.availability_status === 'string' ? value.availability_status : null,
     availability_reason: typeof value.availability_reason === 'string' ? value.availability_reason : null,

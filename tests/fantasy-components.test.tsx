@@ -33,6 +33,7 @@ function createPlayer(id: number, role: string): FantasyPlayer {
     name: `Player ${id}`,
     in_game_name: null,
     primary_role: role,
+    profile_image_url: null,
     professional_teams: null,
     availability_status: 'available',
     availability_reason: null,
