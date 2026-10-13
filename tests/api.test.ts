@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
+import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { getGameweeks } from '../src/features/gameweeks/api';
 import { getPlayerDetail, getPlayers, getProfessionalTeams, normalizePlayerComparisonIds } from '../src/features/players/api';
@@ -338,6 +338,29 @@ describe('mobile data access', () => {
       p_tournament_id: null,
       p_limit: 100,
     });
+  });
+
+  it('keeps successful squad fixtures and identifies teams whose fixture request failed', async () => {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({ data: {
+        matches: [{
+          id: 31,
+          status: 'scheduled',
+          scheduled_time: new Date(Date.now() + 60_000).toISOString(),
+          team_a_id: 4,
+          team_b_id: 5,
+          radiant_team: { name: 'Radiant' },
+          dire_team: { name: 'Dire' },
+          tournaments: { name: 'Autumn Cup' },
+        }],
+      }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'Fixture service unavailable.' } });
+
+    await expect(getUpcomingFixturesForTeams([4, 5])).resolves.toMatchObject({
+      fixtures: [{ id: 31, team_a_id: 4, team_b_id: 5 }],
+      failedTeamIds: [5],
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledTimes(2);
   });
 
   it('queries and validates the authenticated player directory RPC contract', async () => {

@@ -177,6 +177,35 @@ export async function getUpcomingTeamFixtures(teamId: number): Promise<TeamFixtu
     .sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime());
 }
 
+export async function getUpcomingFixturesForTeams(
+  teamIds: number[],
+): Promise<{ fixtures: TeamFixture[]; failedTeamIds: number[] }> {
+  const uniqueTeamIds = [...new Set(teamIds)];
+  const results = await Promise.allSettled(
+    uniqueTeamIds.map(async (teamId) => ({
+      teamId,
+      fixtures: await getUpcomingTeamFixtures(teamId),
+    })),
+  );
+  const byMatchId = new Map<number, TeamFixture>();
+  const failedTeamIds: number[] = [];
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      failedTeamIds.push(uniqueTeamIds[index]);
+      return;
+    }
+    result.value.fixtures.forEach((fixture) => byMatchId.set(fixture.id, fixture));
+  });
+
+  return {
+    fixtures: [...byMatchId.values()].sort(
+      (a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime(),
+    ),
+    failedTeamIds,
+  };
+}
+
 function parseLineupEntry(value: unknown): FantasyLineupEntry {
   if (
     !isRecord(value) ||

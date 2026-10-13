@@ -4,7 +4,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { Link } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/src/components/Screen';
-import { getUpcomingTeamFixtures } from '@/src/features/fantasy/api';
+import { getUpcomingFixturesForTeams } from '@/src/features/fantasy/api';
 import type { FantasyPlayer, TeamFixture } from '@/src/features/fantasy/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { useAuth } from '@/src/lib/auth';
@@ -46,17 +46,7 @@ export default function SquadPlannerScreen() {
   );
   const fixtureQuery = useQuery({
     queryKey: ['squad-fixtures', session?.user.id, teamIds],
-    queryFn: async () => {
-      const results = await Promise.all(teamIds.map(async (teamId) => ({
-        teamId,
-        fixtures: await getUpcomingTeamFixtures(teamId),
-      })));
-      const byMatchId = new Map<number, TeamFixture>();
-      results.forEach(({ fixtures }) => fixtures.forEach((fixture) => byMatchId.set(fixture.id, fixture)));
-      return [...byMatchId.values()].sort(
-        (a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
-      );
-    },
+    queryFn: () => getUpcomingFixturesForTeams(teamIds),
     enabled: Boolean(session?.user.id && contextQuery.data && teamIds.length > 0),
     staleTime: 60_000,
   });
@@ -66,7 +56,7 @@ export default function SquadPlannerScreen() {
   );
   const fixturesByTeam = useMemo(() => {
     const result = new Map<number, TeamFixture[]>();
-    for (const fixture of fixtureQuery.data ?? []) {
+    for (const fixture of fixtureQuery.data?.fixtures ?? []) {
       for (const teamId of [fixture.team_a_id, fixture.team_b_id]) {
         if (teamId === null) continue;
         const fixtures = result.get(teamId) ?? [];
@@ -160,6 +150,8 @@ export default function SquadPlannerScreen() {
                 const fixtures = player.professional_teams?.id
                   ? fixturesByTeam.get(player.professional_teams.id) ?? []
                   : [];
+                const fixturesUnavailable = player.professional_teams?.id != null
+                  && fixtureQuery.data?.failedTeamIds.includes(player.professional_teams.id);
                 const isAvailable = player.availability_status === 'available';
                 return (
                   <View key={player.id} className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
@@ -184,7 +176,9 @@ export default function SquadPlannerScreen() {
                       {lineupEntry?.is_captain ? <Text className="text-xs font-medium text-amber-300">Captain</Text> : null}
                       {lineupEntry?.is_vice_captain ? <Text className="text-xs font-medium text-amber-200">Vice-captain</Text> : null}
                       <Text className="text-xs text-slate-400">
-                        {fixtures.length} upcoming fixture{fixtures.length === 1 ? '' : 's'}
+                        {fixturesUnavailable
+                          ? 'Fixtures unavailable'
+                          : `${fixtures.length} upcoming fixture${fixtures.length === 1 ? '' : 's'}`}
                       </Text>
                     </View>
                   </View>
@@ -197,6 +191,24 @@ export default function SquadPlannerScreen() {
                 <Text className="text-lg font-bold text-white">Upcoming squad fixtures</Text>
                 <Text className="mt-1 text-sm text-slate-400">Scheduled matches for teams represented in your squad.</Text>
               </View>
+              {fixtureQuery.data?.failedTeamIds.length ? (
+                <View accessibilityRole="alert" className="gap-3 rounded-xl border border-amber-800 bg-amber-950/70 p-4">
+                  <Text className="text-sm leading-5 text-amber-100">
+                    Unable to load fixtures for {fixtureQuery.data.failedTeamIds
+                      .map((teamId) => players.find((player) => player.professional_teams?.id === teamId)?.professional_teams?.name ?? `team ${teamId}`)
+                      .join(', ')}. Other available fixtures are still shown.
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={fixtureQuery.isFetching}
+                    onPress={() => void fixtureQuery.refetch()}
+                  >
+                    <Text className="font-semibold text-white">
+                      {fixtureQuery.isFetching ? 'Retrying fixtures…' : 'Retry fixtures'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {fixtureQuery.isPending ? (
                 <ActivityIndicator accessibilityLabel="Loading squad fixtures" color="#14b8a6" />
               ) : fixtureQuery.isError ? (
@@ -208,8 +220,8 @@ export default function SquadPlannerScreen() {
                     <Text className="font-semibold text-white">Retry fixtures</Text>
                   </Pressable>
                 </View>
-              ) : fixtureQuery.data?.length ? (
-                fixtureQuery.data.map((fixture) => {
+              ) : fixtureQuery.data?.fixtures.length ? (
+                fixtureQuery.data.fixtures.map((fixture) => {
                   const involvedPlayers = players.filter((player) =>
                     player.professional_teams?.id === fixture.team_a_id ||
                     player.professional_teams?.id === fixture.team_b_id
@@ -234,6 +246,10 @@ export default function SquadPlannerScreen() {
               ) : teamIds.length === 0 ? (
                 <View className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                   <Text className="text-sm leading-5 text-slate-400">No team schedule is available for your current squad.</Text>
+                </View>
+              ) : fixtureQuery.data?.failedTeamIds.length ? (
+                <View className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                  <Text className="text-sm leading-5 text-slate-400">No fixtures are available for the teams that loaded successfully.</Text>
                 </View>
               ) : (
                 <View className="rounded-xl border border-slate-800 bg-slate-900 p-4">
