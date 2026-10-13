@@ -1,6 +1,6 @@
 import { Link, Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { Button } from '@/src/components/Button';
 import { Screen } from '@/src/components/Screen';
 import { TextField } from '@/src/components/TextField';
@@ -37,9 +37,12 @@ export default function SignInScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View className="mb-8">
-          <View className="mb-5 h-14 w-14 items-center justify-center rounded-2xl bg-brand-500">
-            <Text className="text-lg font-black text-white">D2</Text>
-          </View>
+          <Image
+            accessibilityLabel="Fantasy Dota 2 logo"
+            className="mb-5 h-16 w-16"
+            resizeMode="contain"
+            source={require('../../assets/images/brand-logo.png')}
+          />
           <Text className="text-3xl font-bold text-white">Fantasy Dota 2</Text>
           <Text className="mt-2 text-base text-slate-400">Sign in to manage your fantasy team.</Text>
         </View>
