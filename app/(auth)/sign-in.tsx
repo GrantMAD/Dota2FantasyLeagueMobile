@@ -1,11 +1,23 @@
 import { Link, Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
-import { Button } from '@/src/components/Button';
-import { Screen } from '@/src/components/Screen';
-import { TextField } from '@/src/components/TextField';
+import {
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AuthBackground } from '@/src/components/auth/AuthBackground';
+import { AuthCard } from '@/src/components/auth/AuthCard';
+import { AuthInput } from '@/src/components/auth/AuthInput';
 import { useAuth } from '@/src/lib/auth';
 import { managerReturnRoute } from '@/src/lib/deep-links';
+import { NetworkStatusBanner } from '@/src/lib/connectivity';
 
 export default function SignInScreen() {
   const params = useLocalSearchParams<{ returnTo?: string | string[] }>();
@@ -31,78 +43,311 @@ export default function SignInScreen() {
   }
 
   return (
-    <Screen>
-      <KeyboardAvoidingView
-        className="flex-1 justify-center px-6"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View className="mb-8">
-          <Image
-            accessibilityLabel="Fantasy Dota 2 logo"
-            className="mb-5 h-16 w-16"
-            resizeMode="contain"
-            source={require('../../assets/images/brand-logo.png')}
-          />
-          <Text className="text-3xl font-bold text-white">Fantasy Dota 2</Text>
-          <Text className="mt-2 text-base text-slate-400">Sign in to manage your fantasy team.</Text>
-        </View>
+    <AuthBackground>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <NetworkStatusBanner />
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Brand header */}
+            <View style={styles.header}>
+              <Image
+                accessibilityLabel="Fantasy Dota 2 logo"
+                style={styles.logo}
+                resizeMode="contain"
+                source={require('../../assets/images/brand-logo.png')}
+              />
+              <Text style={styles.appName}>Fantasy Dota 2</Text>
+              <Text style={styles.tagline}>Your arena awaits</Text>
+            </View>
 
-        {!ready ? (
-          <ActivityIndicator accessibilityLabel="Restoring session" color="#14b8a6" />
-        ) : configurationError ? (
-          <View accessibilityRole="alert" className="rounded-xl border border-amber-700 bg-amber-950 p-4">
-            <Text className="font-semibold text-amber-200">Setup required</Text>
-            <Text className="mt-2 text-sm text-amber-100">{configurationError}</Text>
-          </View>
-        ) : (
-          <View className="gap-4">
-            <TextField
-              autoCapitalize="none"
-              autoComplete="email"
-              autoCorrect={false}
-              keyboardType="email-address"
-              label="Email"
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              returnKeyType="next"
-              textContentType="emailAddress"
-              value={email}
-            />
-            <TextField
-              autoCapitalize="none"
-              autoComplete="current-password"
-              label="Password"
-              onChangeText={setPassword}
-              onSubmitEditing={() => void handleSignIn()}
-              placeholder="Enter your password"
-              returnKeyType="done"
-              secureTextEntry
-              textContentType="password"
-              value={password}
-            />
+            {/* Auth card */}
+            <AuthCard style={styles.card}>
+              <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>Welcome back</Text>
+                <Text style={styles.cardSubtitle}>Sign in to manage your fantasy team</Text>
 
-            {errorMessage ? (
-              <Text accessibilityRole="alert" className="text-sm text-red-300">{errorMessage}</Text>
-            ) : null}
+                {!ready ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator accessibilityLabel="Restoring session" color="#14b8a6" />
+                    <Text style={styles.loadingText}>Restoring session…</Text>
+                  </View>
+                ) : configurationError ? (
+                  <View style={styles.configError} accessibilityRole="alert">
+                    <Text style={styles.configErrorTitle}>Setup required</Text>
+                    <Text style={styles.configErrorBody}>{configurationError}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.form}>
+                    <AuthInput
+                      label="Email"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      onChangeText={setEmail}
+                      placeholder="you@example.com"
+                      returnKeyType="next"
+                      textContentType="emailAddress"
+                      value={email}
+                    />
 
-            <Button
-              disabled={submitting || !email.trim() || !password}
-              label="Sign in"
-              loading={submitting}
-              onPress={() => void handleSignIn()}
-            />
-            <Link href="/forgot-password" className="text-center text-sm font-semibold text-brand-300">
-              Forgot password?
-            </Link>
-            <Link href="/(auth)/sign-up" className="text-center text-sm font-semibold text-slate-300">
-              Create an account
-            </Link>
-            <Text className="text-center text-xs leading-5 text-slate-500">
-              Use the same account as the Fantasy Dota 2 web app.
-            </Text>
-          </View>
-        )}
-      </KeyboardAvoidingView>
-    </Screen>
+                    <AuthInput
+                      label="Password"
+                      autoCapitalize="none"
+                      autoComplete="current-password"
+                      onChangeText={setPassword}
+                      onSubmitEditing={() => void handleSignIn()}
+                      placeholder="Enter your password"
+                      returnKeyType="done"
+                      secureTextEntry
+                      textContentType="password"
+                      value={password}
+                      error={errorMessage}
+                    />
+
+                    <Link href="/forgot-password" style={styles.forgotLink}>
+                      Forgot password?
+                    </Link>
+
+                    {/* Sign-in button */}
+                    <Pressable
+                      onPress={() => void handleSignIn()}
+                      disabled={submitting || !email.trim() || !password}
+                      accessibilityRole="button"
+                      accessibilityLabel="Sign in"
+                      accessibilityState={{ disabled: submitting || !email.trim() || !password, busy: submitting }}
+                      style={({ pressed }) => [
+                        styles.signInButton,
+                        (submitting || !email.trim() || !password) && styles.signInButtonDisabled,
+                        pressed && styles.signInButtonPressed,
+                      ]}
+                    >
+                      {submitting ? (
+                        <View style={styles.buttonRow}>
+                          <ActivityIndicator color="#fff" size="small" />
+                          <Text style={styles.signInButtonText}>Signing in…</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.signInButtonText}>Sign in</Text>
+                      )}
+                    </Pressable>
+
+                    {/* Divider */}
+                    <View style={styles.divider}>
+                      <View style={styles.dividerLine} />
+                      <Text style={styles.dividerText}>or</Text>
+                      <View style={styles.dividerLine} />
+                    </View>
+
+                    <Link href="/(auth)/sign-up" style={styles.createLink}>
+                      Create a free account
+                    </Link>
+                  </View>
+                )}
+              </View>
+            </AuthCard>
+
+            {/* Trust footer */}
+            <View style={styles.trustRow}>
+              <View style={styles.trustItem}>
+                <Text style={styles.trustDot}>●</Text>
+                <Text style={styles.trustText}>Fair play verified</Text>
+              </View>
+              <View style={styles.trustItem}>
+                <Text style={styles.trustDot}>●</Text>
+                <Text style={styles.trustText}>Season 2026 active</Text>
+              </View>
+              <View style={styles.trustItem}>
+                <Text style={styles.trustDot}>●</Text>
+                <Text style={styles.trustText}>Live data</Text>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AuthBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 32,
+  },
+
+  // Brand header
+  header: {
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  logo: {
+    width: 64,
+    height: 64,
+    marginBottom: 12,
+  },
+  appName: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#f1f5f9',
+    letterSpacing: 0.5,
+  },
+  tagline: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 4,
+  },
+
+  // Card
+  card: {
+    marginBottom: 20,
+  },
+  cardContent: {
+    padding: 24,
+    paddingTop: 28,
+  },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#f1f5f9',
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 24,
+  },
+
+  // Loading / config error
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+  },
+  loadingText: {
+    color: '#94a3b8',
+    fontSize: 14,
+  },
+  configError: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#78350f',
+    backgroundColor: 'rgba(69, 26, 3, 0.6)',
+    padding: 14,
+  },
+  configErrorTitle: {
+    fontWeight: '600',
+    color: '#fde68a',
+    marginBottom: 4,
+  },
+  configErrorBody: {
+    fontSize: 13,
+    color: '#fef3c7',
+  },
+
+  // Form
+  form: {
+    gap: 14,
+  },
+  forgotLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#14b8a6',
+    textAlign: 'right',
+    marginTop: -4,
+  },
+
+  // Button
+  signInButton: {
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: '#14b8a6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    shadowColor: '#14b8a6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  signInButtonDisabled: {
+    opacity: 0.5,
+    shadowOpacity: 0,
+  },
+  signInButtonPressed: {
+    opacity: 0.82,
+  },
+  signInButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  // Divider
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 2,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(51, 65, 85, 0.6)',
+  },
+  dividerText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+
+  createLink: {
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#94a3b8',
+    paddingVertical: 2,
+  },
+
+  // Trust footer
+  trustRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+    flexWrap: 'wrap',
+  },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  trustDot: {
+    fontSize: 5,
+    color: '#14b8a6',
+  },
+  trustText: {
+    fontSize: 11,
+    color: '#475569',
+  },
+});

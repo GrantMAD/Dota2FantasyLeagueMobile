@@ -163,6 +163,70 @@ describe('mobile data access', () => {
     await expect(getFantasyContext()).rejects.toThrow('Unable to load fantasy context: Authentication is required.');
   });
 
+  it('falls back to mobile_get_fantasy_context when lineup planning rejects the default gameweek', async () => {
+    mobileFantasyContextRpc.mockImplementation(async (name: string) => {
+      if (name === 'mobile_get_fantasy_lineup_context') {
+        return {
+          data: null,
+          error: { message: 'The selected gameweek is not available for lineup planning.' },
+        };
+      }
+      if (name === 'mobile_get_fantasy_context') {
+        return {
+          data: {
+            fantasySeasonId: 10,
+            seasonId: 1,
+            budget: 95.5,
+            freeTransfers: 1,
+            totalPoints: 120,
+            globalRank: 4,
+            gameweek: {
+              id: 2,
+              gameweekNumber: 2,
+              deadline: '2026-10-06T12:00:00.000Z',
+              status: 'active',
+              isLocked: true,
+              hasUpcoming: true,
+            },
+            chips: {
+              tripleCaptainUsed: false,
+              tripleCaptainGameweekId: null,
+              benchBoostUsed: false,
+              benchBoostGameweekId: null,
+              wildcardUsed: false,
+              wildcardUsedGameweekId: null,
+            },
+            lineup: [],
+            ownedPlayers: [],
+          },
+          error: null,
+        };
+      }
+      if (name === 'mobile_get_gameweeks') {
+        return {
+          data: {
+            gameweeks: [
+              {
+                id: 3,
+                gameweek_number: 3,
+                deadline: '2099-01-01T12:00:00.000Z',
+                status: 'upcoming',
+              },
+            ],
+          },
+          error: null,
+        };
+      }
+      return { data: null, error: null };
+    });
+
+    const result = await getFantasyContext();
+    expect(result.budget).toBe(95.5);
+    expect(result.defaultGameweekId).toBe(2);
+    expect(result.availableGameweeks).toHaveLength(1);
+    expect(result.availableGameweeks[0].id).toBe(3);
+  });
+
   it('loads dashboard announcements through the authenticated Supabase RPC', async () => {
     mobileFantasyContextRpc.mockResolvedValue({ data: {
         events: [{

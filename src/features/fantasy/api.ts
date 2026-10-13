@@ -230,9 +230,47 @@ function parseLineupEntry(value: unknown): FantasyLineupEntry {
 }
 
 export async function getFantasyContext(gameweekId?: number): Promise<FantasyContext> {
-  const { data: value, error } = await getSupabaseClient().rpc('mobile_get_fantasy_lineup_context', {
+  let { data: value, error } = await getSupabaseClient().rpc('mobile_get_fantasy_lineup_context', {
     p_gameweek_id: gameweekId ?? null,
   });
+
+  if (error && gameweekId === undefined && error.message.includes('not available for lineup planning')) {
+    const fallback = await getSupabaseClient().rpc('mobile_get_fantasy_context');
+    if (!fallback.error && isRecord(fallback.data)) {
+      let availableGameweeks: unknown[] = [];
+      try {
+        const gwRes = await getSupabaseClient().rpc('mobile_get_gameweeks');
+        if (!gwRes.error && isRecord(gwRes.data) && Array.isArray(gwRes.data.gameweeks)) {
+          const now = Date.now();
+          availableGameweeks = gwRes.data.gameweeks
+            .filter((gw) =>
+              isRecord(gw) &&
+              (gw.status === 'active' || gw.status === 'upcoming') &&
+              typeof gw.deadline === 'string' &&
+              new Date(gw.deadline).getTime() > now
+            )
+            .map((gw) => ({
+              id: (gw as Record<string, unknown>).id,
+              gameweekNumber: (gw as Record<string, unknown>).gameweek_number,
+              deadline: (gw as Record<string, unknown>).deadline,
+              status: (gw as Record<string, unknown>).status,
+              isLocked: false,
+            }));
+        }
+      } catch {
+        // Fallback to empty if gameweeks RPC fails
+      }
+      value = {
+        ...fallback.data,
+        defaultGameweekId: isRecord(fallback.data.gameweek) && typeof fallback.data.gameweek.id === 'number'
+          ? fallback.data.gameweek.id
+          : null,
+        availableGameweeks,
+      };
+      error = null;
+    }
+  }
+
   if (error) {
     throw new ApiError(`Unable to load fantasy context: ${error.message}`, 500);
   }
