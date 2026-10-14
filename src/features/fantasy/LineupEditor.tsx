@@ -101,9 +101,9 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
 
   const mutation = useMutation({
     mutationFn: saveLineup,
-    onSuccess: async () => {
+    onSuccess: () => {
       Alert.alert('Lineup saved', 'Your gameweek lineup has been updated.');
-      await queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] });
+      void queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] });
     },
     onError: (error) => {
       setSaveError(error instanceof Error ? error.message : 'Lineup could not be saved. Please try again.');
