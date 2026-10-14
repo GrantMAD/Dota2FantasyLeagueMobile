@@ -10,6 +10,8 @@ const SQUAD_MAX_SIZE = 8;
 interface SquadBuilderProps {
   context: FantasyContext;
   userId: string;
+  quickAddPlayerId?: number;
+  quickAddPlayerName?: string;
 }
 
 function playerName(player: MarketPlayer): string {
@@ -30,13 +32,48 @@ function canFillStarterRoles(players: (FantasyPlayer | MarketPlayer)[]): boolean
   );
 }
 
-export function SquadBuilder({ context, userId }: SquadBuilderProps) {
+export function SquadBuilder({
+  context,
+  userId,
+  quickAddPlayerId,
+  quickAddPlayerName,
+}: SquadBuilderProps) {
   const queryClient = useQueryClient();
   const { colors } = useMobileTheme();
   const [search, setSearch] = useState('');
-  const [selectedPlayers, setSelectedPlayers] = useState<Map<number, MarketPlayer>>(new Map());
+  const [manuallySelectedPlayers, setManuallySelectedPlayers] = useState<Map<number, MarketPlayer>>(new Map());
+  const [dismissedQuickAddId, setDismissedQuickAddId] = useState<number | null>(null);
   const deferredSearch = useDeferredValue(search);
   const remainingSlots = Math.max(0, SQUAD_MAX_SIZE - context.ownedPlayers.length);
+  const quickAddQuery = useQuery({
+    queryKey: ['player-market-quick-add', quickAddPlayerId, quickAddPlayerName],
+    queryFn: () => getPlayerMarket(quickAddPlayerName ?? ''),
+    enabled: Boolean(quickAddPlayerId && quickAddPlayerName),
+    staleTime: 60_000,
+  });
+  const quickAddPlayer = quickAddQuery.data?.find((player) => player.id === quickAddPlayerId) ?? null;
+  const manualSelectionCost = [...manuallySelectedPlayers.values()].reduce(
+    (total, player) => total + (player.current_price ?? 0),
+    0
+  );
+  const quickAddWouldCompleteSquad = Boolean(
+    quickAddPlayer && context.ownedPlayers.length + manuallySelectedPlayers.size + 1 === SQUAD_MAX_SIZE
+  );
+  const quickAddFitsSquad = Boolean(
+    quickAddPlayer &&
+    quickAddPlayer.availability_status === 'available' &&
+    !context.ownedPlayers.some((player) => player.id === quickAddPlayer.id) &&
+    manuallySelectedPlayers.size < remainingSlots &&
+    quickAddPlayer.current_price !== null &&
+    manualSelectionCost + quickAddPlayer.current_price <= context.budget &&
+    (!quickAddWouldCompleteSquad ||
+      canFillStarterRoles([...context.ownedPlayers, ...manuallySelectedPlayers.values(), quickAddPlayer]))
+  );
+  const quickAddIsSelected = Boolean(
+    quickAddFitsSquad && quickAddPlayerId !== dismissedQuickAddId
+  );
+  const selectedPlayers = new Map(manuallySelectedPlayers);
+  if (quickAddIsSelected && quickAddPlayer) selectedPlayers.set(quickAddPlayer.id, quickAddPlayer);
   const selectionCost = [...selectedPlayers.values()].reduce(
     (total, player) => total + (player.current_price ?? 0),
     0
@@ -58,7 +95,7 @@ export function SquadBuilder({ context, userId }: SquadBuilderProps) {
   const addMutation = useMutation({
     mutationFn: addPlayersToSquad,
     onSuccess: async (result) => {
-      setSelectedPlayers(new Map());
+      setManuallySelectedPlayers(new Map());
       await queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] });
       Alert.alert(
         'Squad updated',
@@ -70,6 +107,10 @@ export function SquadBuilder({ context, userId }: SquadBuilderProps) {
     !context.ownedPlayers.some((owned) => owned.id === player.id) &&
     player.availability_status === 'available'
   );
+  const visiblePlayers = [
+    ...(quickAddPlayer ? [quickAddPlayer] : []),
+    ...availablePlayers.filter((player) => player.id !== quickAddPlayer?.id),
+  ];
 
   function confirmAddPlayers() {
     if (!canAddPlayers || !context.fantasySeasonId) return;
@@ -132,7 +173,23 @@ export function SquadBuilder({ context, userId }: SquadBuilderProps) {
         </View>
       ) : (
         <View className="gap-2">
-          {availablePlayers
+          {quickAddQuery.isError ? (
+            <Text accessibilityRole="alert" className="text-sm text-red-300">
+              {quickAddQuery.error instanceof Error ? quickAddQuery.error.message : 'Unable to load the selected player.'}
+            </Text>
+          ) : null}
+          {quickAddPlayer && !quickAddFitsSquad ? (
+            <Text className="text-sm leading-5 text-amber-200">
+              {quickAddPlayer.availability_status !== 'available'
+                ? 'The selected player is unavailable.'
+                : quickAddPlayer.current_price === null
+                  ? 'The selected player has no current price.'
+                  : quickAddPlayer.current_price + manualSelectionCost > context.budget
+                    ? 'The selected player is over your remaining budget.'
+                    : 'The selected player does not fit the remaining squad slots or role requirements.'}
+            </Text>
+          ) : null}
+          {visiblePlayers
             .slice(0, 12)
             .map((player) => {
               const isSelected = selectedPlayers.has(player.id);
@@ -144,6 +201,8 @@ export function SquadBuilder({ context, userId }: SquadBuilderProps) {
                 !canFillStarterRoles([...context.ownedPlayers, ...selectedPlayers.values(), player]);
               const cannotSelect = !isSelected && (
                 selectedPlayers.size >= remainingSlots ||
+                player.availability_status !== 'available' ||
+                context.ownedPlayers.some((owned) => owned.id === player.id) ||
                 player.current_price === null ||
                 exceedsBudget ||
                 invalidFinalRoles
@@ -159,7 +218,11 @@ export function SquadBuilder({ context, userId }: SquadBuilderProps) {
                   disabled={cannotSelect || addMutation.isPending}
                   onPress={() => {
                     addMutation.reset();
-                    setSelectedPlayers((current) => {
+                    if (player.id === quickAddPlayerId && quickAddPlayer) {
+                      setDismissedQuickAddId(isSelected ? quickAddPlayer.id : null);
+                      return;
+                    }
+                    setManuallySelectedPlayers((current) => {
                       const next = new Map(current);
                       if (next.has(player.id)) next.delete(player.id);
                       else next.set(player.id, player);
@@ -168,6 +231,7 @@ export function SquadBuilder({ context, userId }: SquadBuilderProps) {
                   }}
                 >
                   <Text className="font-semibold text-white">{playerName(player)}</Text>
+                  {isSelected ? <Text className="mt-1 text-xs font-semibold text-brand-300">Selected for your squad</Text> : null}
                   <Text className="mt-1 text-xs text-slate-400">
                     {player.primary_role ?? 'Role unavailable'} ·{' '}
                     {player.current_price === null ? 'Price unavailable' : `${player.current_price.toFixed(1)}M`}

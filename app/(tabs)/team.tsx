@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Screen } from '@/src/components/Screen';
@@ -14,6 +15,14 @@ import { getTransferHistory } from '@/src/features/fantasy/api';
 import { useAuth } from '@/src/lib/auth';
 
 export default function TeamScreen() {
+  const params = useLocalSearchParams<{ quickAddPlayerId?: string; quickAddPlayerName?: string }>();
+  const parsedQuickAddId = Number(params.quickAddPlayerId);
+  const quickAddPlayerId = Number.isSafeInteger(parsedQuickAddId) && parsedQuickAddId > 0
+    ? parsedQuickAddId
+    : undefined;
+  const quickAddPlayerName = typeof params.quickAddPlayerName === 'string'
+    ? params.quickAddPlayerName
+    : undefined;
   const query = useFantasyContext();
   const [selectedGameweekId, setSelectedGameweekId] = useState<number | undefined>();
   const [activeTab, setActiveTab] = useState<'squad' | 'history'>('squad');
@@ -191,7 +200,7 @@ export default function TeamScreen() {
               </Pressable>
             </View>
 
-            {activeTab === 'history' ? (
+            {activeTab === 'history' && !quickAddPlayerId ? (
               /* Enhanced Transfer History Timeline */
               <View className="gap-4">
                 {/* 4-Tile Summary */}
@@ -277,7 +286,12 @@ export default function TeamScreen() {
               /* Squad Management Tab */
               <>
                 {session?.user.id && query.data.ownedPlayers.length < 8 ? (
-                  <SquadBuilder context={query.data} userId={session.user.id} />
+                  <SquadBuilder
+                    context={query.data}
+                    userId={session.user.id}
+                    quickAddPlayerId={quickAddPlayerId}
+                    quickAddPlayerName={quickAddPlayerName}
+                  />
                 ) : null}
                 {query.data.availableGameweeks.length > 1 ? (
                   <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
@@ -349,6 +363,8 @@ export default function TeamScreen() {
                     key={`${query.data.gameweek?.id ?? 'none'}:${query.data.ownedPlayers.map((player) => player.id).sort((a, b) => a - b).join(',')}`}
                     context={query.data}
                     userId={session.user.id}
+                    quickAddPlayerId={query.data.ownedPlayers.length >= 8 ? quickAddPlayerId : undefined}
+                    quickAddPlayerName={query.data.ownedPlayers.length >= 8 ? quickAddPlayerName : undefined}
                   />
                 ) : null}
                 <View className="flex-row gap-3">
@@ -398,7 +414,12 @@ export default function TeamScreen() {
           </>
         ) : (
           query.data && session?.user.id ? (
-            <SquadBuilder context={query.data} userId={session.user.id} />
+            <SquadBuilder
+              context={query.data}
+              userId={session.user.id}
+              quickAddPlayerId={quickAddPlayerId}
+              quickAddPlayerName={quickAddPlayerName}
+            />
           ) : (
             <View className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
               <Text className="font-semibold text-white">No squad found</Text>

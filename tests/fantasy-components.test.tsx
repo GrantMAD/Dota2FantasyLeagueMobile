@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { FantasyContext, FantasyLineupEntry, FantasyPlayer, MarketPlayer } from '../src/features/fantasy/api';
 import { LineupEditor } from '../src/features/fantasy/LineupEditor';
+import { SquadBuilder } from '../src/features/fantasy/SquadBuilder';
 import { TransferMarket } from '../src/features/fantasy/TransferMarket';
 import { ChipActivationPanel } from '../src/features/fantasy/ChipActivationPanel';
 import { activateChip, getPlayerMarket, getTransferHistory, processTransfer, saveLineup } from '../src/features/fantasy/api';
@@ -56,6 +57,18 @@ function createLineupEntry(
     is_captain: isCaptain,
     is_vice_captain: isViceCaptain,
     professional_players: player,
+  };
+}
+
+function createMarketPlayer(id: number, role: string, name = `Market Player ${id}`): MarketPlayer {
+  return {
+    id,
+    name,
+    in_game_name: null,
+    primary_role: role,
+    availability_status: 'available',
+    current_price: 10,
+    recent_points: 12,
   };
 }
 
@@ -272,6 +285,47 @@ describe('fantasy management components', () => {
       transfersIn: [10],
       transfersOut: [1],
     }, expect.any(Object));
+  });
+
+  it('pins and selects the quick-added player in the squad builder without filtering other players', async () => {
+    const quickAddPlayer = createMarketPlayer(20, 'carry', 'Quick Carry');
+    const otherPlayer = createMarketPlayer(21, 'mid', 'Another Player');
+    mockedGetPlayerMarket.mockImplementation(async (search) =>
+      search === 'Quick Carry' ? [quickAddPlayer] : [otherPlayer]
+    );
+
+    const view = renderWithQueryClient(
+      <SquadBuilder
+        context={createContext({ ownedPlayers: startingPlayers.slice(0, 4) })}
+        userId="manager-1"
+        quickAddPlayerId={20}
+        quickAddPlayerName="Quick Carry"
+      />
+    );
+
+    await waitFor(() => expect(view.getByText('Selected for your squad')).toBeTruthy());
+    expect(view.getByText('Quick Carry')).toBeTruthy();
+    expect(view.getByText('Another Player')).toBeTruthy();
+  });
+
+  it('pins and preselects the quick-added player in the transfer market', async () => {
+    const quickAddPlayer = createMarketPlayer(20, 'carry', 'Quick Carry');
+    mockedGetPlayerMarket.mockImplementation(async (search) =>
+      search === 'Quick Carry' ? [quickAddPlayer] : []
+    );
+    mockedGetTransferHistory.mockResolvedValue([]);
+
+    const view = renderWithQueryClient(
+      <TransferMarket
+        context={createContext()}
+        userId="manager-1"
+        quickAddPlayerId={20}
+        quickAddPlayerName="Quick Carry"
+      />
+    );
+
+    await waitFor(() => expect(view.getByText('Selected as replacement')).toBeTruthy());
+    expect(view.getByText('Quick Carry')).toBeTruthy();
   });
 
   it('requires explicit irreversible-action confirmation before activating a chip', async () => {

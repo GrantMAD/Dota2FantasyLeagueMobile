@@ -277,6 +277,22 @@ export default function DiscoverScreen() {
                     {selectedForCompare ? 'Remove from comparison' : 'Add to comparison'}
                   </Text>
                 </Pressable>
+                {player.availability_status === 'available' && !ownedPlayerIds.has(player.id) ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add ${playerName(player)} to your squad`}
+                    className="min-h-11 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/10"
+                    onPress={() => router.push({
+                      pathname: '/(tabs)/team',
+                      params: {
+                        quickAddPlayerId: String(player.id),
+                        quickAddPlayerName: playerName(player),
+                      },
+                    })}
+                  >
+                    <Text className="text-sm font-semibold text-emerald-300">＋ Add to squad</Text>
+                  </Pressable>
+                ) : null}
               </View>
             );})}
           </View>

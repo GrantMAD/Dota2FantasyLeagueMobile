@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
 import type { FantasyContext, FantasyPlayer, MarketPlayer } from './api';
@@ -8,6 +8,8 @@ import { useMobileTheme } from '@/src/lib/theme';
 interface TransferMarketProps {
   context: FantasyContext;
   userId: string;
+  quickAddPlayerId?: number;
+  quickAddPlayerName?: string;
 }
 
 function normalizeRole(role: string | null): string {
@@ -25,20 +27,41 @@ function playerName(player: { in_game_name: string | null; name: string }): stri
   return player.in_game_name || player.name;
 }
 
-export function TransferMarket({ context, userId }: TransferMarketProps) {
+export function TransferMarket({
+  context,
+  userId,
+  quickAddPlayerId,
+  quickAddPlayerName,
+}: TransferMarketProps) {
   const queryClient = useQueryClient();
   const { colors } = useMobileTheme();
   const [search, setSearch] = useState('');
   const [selectedOutId, setSelectedOutId] = useState<number | null>(null);
-  const [selectedInId, setSelectedInId] = useState<number | null>(null);
+  const [selectionOverride, setSelectionOverride] = useState<{
+    quickAddId: number | undefined;
+    playerId: number | null;
+  } | null>(null);
+  const [dismissedQuickAddId, setDismissedQuickAddId] = useState<number | null>(null);
   const deferredSearch = useDeferredValue(search);
-  const ownedIds = new Set(context.ownedPlayers.map((player) => player.id));
+  const ownedIds = useMemo(
+    () => new Set(context.ownedPlayers.map((player) => player.id)),
+    [context.ownedPlayers]
+  );
+  const selectedInId = selectionOverride && selectionOverride.quickAddId === quickAddPlayerId
+    ? selectionOverride.playerId
+    : null;
   const selectedOut = context.ownedPlayers.find((player) => player.id === selectedOutId) ?? null;
 
   const marketQuery = useQuery({
     queryKey: ['player-market', deferredSearch],
     queryFn: () => getPlayerMarket(deferredSearch),
     enabled: context.ownedPlayers.length > 0,
+    staleTime: 60_000,
+  });
+  const quickAddQuery = useQuery({
+    queryKey: ['player-market-quick-add', quickAddPlayerId, quickAddPlayerName],
+    queryFn: () => getPlayerMarket(quickAddPlayerName ?? ''),
+    enabled: Boolean(quickAddPlayerId && quickAddPlayerName),
     staleTime: 60_000,
   });
   const historyQuery = useQuery({
@@ -61,11 +84,34 @@ export function TransferMarket({ context, userId }: TransferMarketProps) {
     },
   });
 
+  const quickAddPlayer = quickAddQuery.data?.find((player) => player.id === quickAddPlayerId) ?? null;
   const incomingPlayers = (marketQuery.data ?? []).filter((player) => {
     if (ownedIds.has(player.id) || player.availability_status !== 'available') return false;
     return !selectedOut || matchesRole(player, selectedOut);
   });
-  const selectedIn = incomingPlayers.find((player) => player.id === selectedInId) ?? null;
+  const visibleIncomingPlayers = [
+    ...(quickAddPlayer &&
+      !ownedIds.has(quickAddPlayer.id) &&
+      quickAddPlayer.availability_status === 'available' &&
+      (!selectedOut || matchesRole(quickAddPlayer, selectedOut))
+      ? [quickAddPlayer]
+      : []),
+    ...incomingPlayers.filter((player) => player.id !== quickAddPlayer?.id),
+  ];
+  const quickAddIsSelectable = Boolean(
+    quickAddPlayer &&
+    !ownedIds.has(quickAddPlayer.id) &&
+    quickAddPlayer.availability_status === 'available' &&
+    (!selectedOut || matchesRole(quickAddPlayer, selectedOut))
+  );
+  const quickAddIsSelected = Boolean(
+    quickAddIsSelectable &&
+    selectedInId === null &&
+    quickAddPlayerId !== dismissedQuickAddId
+  );
+  const selectedIn = visibleIncomingPlayers.find(
+    (player) => player.id === (selectedInId ?? (quickAddIsSelected ? quickAddPlayerId : null))
+  ) ?? null;
   const canTransfer = Boolean(
     context.fantasySeasonId &&
     !context.gameweek?.isLocked &&
@@ -123,8 +169,16 @@ export function TransferMarket({ context, userId }: TransferMarketProps) {
               }`}
               disabled={context.gameweek?.isLocked || transferMutation.isPending}
               onPress={() => {
-                setSelectedOutId(selected ? null : player.id);
-                setSelectedInId(null);
+                const nextSelectedOut = selected ? null : player.id;
+                setSelectedOutId(nextSelectedOut);
+                if (
+                  quickAddPlayer &&
+                  quickAddIsSelected &&
+                  nextSelectedOut !== null &&
+                  !matchesRole(quickAddPlayer, player)
+                ) {
+                  setDismissedQuickAddId(quickAddPlayer.id);
+                }
                 transferMutation.reset();
               }}
             >
@@ -147,7 +201,8 @@ export function TransferMarket({ context, userId }: TransferMarketProps) {
           editable={!context.gameweek?.isLocked && !transferMutation.isPending}
           onChangeText={(value) => {
             setSearch(value);
-            setSelectedInId(null);
+            setSelectionOverride({ quickAddId: quickAddPlayerId, playerId: null });
+            setDismissedQuickAddId(null);
           }}
           placeholder={selectedOut ? `Search ${selectedOut.primary_role ?? 'players'}` : 'Select a player to sell first'}
           placeholderTextColor={colors.placeholder}
@@ -159,9 +214,21 @@ export function TransferMarket({ context, userId }: TransferMarketProps) {
           <Text accessibilityRole="alert" className="text-sm text-red-300">
             {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
           </Text>
-        ) : incomingPlayers.length > 0 ? (
-          incomingPlayers.slice(0, 12).map((player) => {
-            const selected = player.id === selectedInId;
+        ) : visibleIncomingPlayers.length > 0 ? (
+          <>
+          {quickAddQuery.isError ? (
+            <Text accessibilityRole="alert" className="text-sm text-red-300">
+              {quickAddQuery.error instanceof Error ? quickAddQuery.error.message : 'Unable to load the selected player.'}
+            </Text>
+          ) : null}
+          {quickAddPlayer && selectedOut && !matchesRole(quickAddPlayer, selectedOut) ? (
+            <Text className="text-sm leading-5 text-amber-200">
+              The selected player does not match the role of the player you are selling.
+            </Text>
+          ) : null}
+          {visibleIncomingPlayers.slice(0, 12).map((player) => {
+            const isQuickAdd = player.id === quickAddPlayerId;
+            const selected = player.id === selectedIn?.id;
             return (
               <Pressable
                 key={player.id}
@@ -172,18 +239,29 @@ export function TransferMarket({ context, userId }: TransferMarketProps) {
                 }`}
                 disabled={!selectedOut || context.gameweek?.isLocked || transferMutation.isPending}
                 onPress={() => {
-                  setSelectedInId(selected ? null : player.id);
+                  if (isQuickAdd) {
+                    setSelectionOverride({ quickAddId: quickAddPlayerId, playerId: null });
+                    setDismissedQuickAddId(selected ? player.id : null);
+                  } else {
+                    setSelectionOverride({
+                      quickAddId: quickAddPlayerId,
+                      playerId: selected ? null : player.id,
+                    });
+                    setDismissedQuickAddId(null);
+                  }
                   transferMutation.reset();
                 }}
               >
                 <Text className="font-semibold text-white">{playerName(player)}</Text>
+                {selected ? <Text className="mt-1 text-xs font-semibold text-brand-300">Selected as replacement</Text> : null}
                 <Text className="mt-1 text-xs text-slate-400">
                   {player.primary_role ?? 'Role unavailable'} · {player.current_price === null ? 'Price unavailable' : player.current_price.toFixed(1)}
                   {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
                 </Text>
               </Pressable>
             );
-          })
+          })}
+          </>
         ) : (
           <Text className="py-3 text-sm leading-5 text-slate-400">
             {selectedOut ? 'No available players match this role and search.' : 'Choose a player to sell to see eligible replacements.'}
