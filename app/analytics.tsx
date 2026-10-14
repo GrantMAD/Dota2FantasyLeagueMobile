@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { getAnalytics } from '@/src/features/analytics/api';
+import { getAnalyticsTrendForRange, getCaptainEfficiencyAssessment, type AnalyticsTrendRange } from '@/src/features/analytics/presentation';
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
@@ -17,12 +18,14 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 export default function AnalyticsScreen() {
   const [tab, setTab] = useState<'my' | 'market' | 'dream'>('my');
+  const [trendRange, setTrendRange] = useState<AnalyticsTrendRange>('all');
   const query = useQuery({
     queryKey: ['analytics'],
     queryFn: getAnalytics,
     staleTime: 60_000,
   });
-  const maxTrend = Math.max(1, ...(query.data?.trend ?? []).map((item) => item.userScore));
+  const visibleTrend = getAnalyticsTrendForRange(query.data?.trend ?? [], trendRange);
+  const maxTrend = Math.max(1, ...visibleTrend.map((item) => item.userScore));
 
   return (
     <Screen>
@@ -106,8 +109,30 @@ export default function AnalyticsScreen() {
                 className="gap-5"
               >
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <Text className="text-lg font-bold text-white">Gameweek trend</Text>
-              {query.data.trend.length ? (
+              <View className="gap-3">
+                <Text className="text-lg font-bold text-white">Gameweek trend</Text>
+                <View accessibilityRole="tablist" accessibilityLabel="Gameweek trend range" className="flex-row gap-2">
+                  {([
+                    ['3', 'Last 3'],
+                    ['6', 'Last 6'],
+                    ['all', 'All'],
+                  ] as const).map(([range, label]) => (
+                    <Pressable
+                      key={range}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${label} gameweeks`}
+                      accessibilityState={{ selected: trendRange === range }}
+                      className={`min-h-10 flex-1 items-center justify-center rounded-lg border px-2 ${
+                        trendRange === range ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-950'
+                      }`}
+                      onPress={() => setTrendRange(range)}
+                    >
+                      <Text className={`text-xs font-semibold ${trendRange === range ? 'text-brand-300' : 'text-slate-300'}`}>{label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+              {visibleTrend.length ? (
                 <>
                   <View
                     accessible
@@ -119,7 +144,7 @@ export default function AnalyticsScreen() {
                     <Text className="w-20 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Your score</Text>
                     <Text className="w-24 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Global average</Text>
                   </View>
-                  {query.data.trend.map((trend) => (
+                  {visibleTrend.map((trend) => (
                     <View key={trend.gameweekId} className="gap-2 border-b border-slate-800 py-3">
                       <View
                         accessible
@@ -152,15 +177,42 @@ export default function AnalyticsScreen() {
 
             <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <Text className="text-lg font-bold text-white">Captain efficiency</Text>
+              {(() => {
+                const assessment = getCaptainEfficiencyAssessment(query.data.captainEfficiency.efficiency);
+                const normalizedEfficiency = Math.min(100, Math.max(0, query.data.captainEfficiency.efficiency));
+                return (
+                  <>
+                    <View className="flex-row items-center justify-between gap-3">
+                      <Text className="text-sm text-slate-400">Efficiency</Text>
+                      <View className="flex-row items-center gap-2">
+                        <Text className={`text-lg font-bold ${assessment.color}`}>
+                          {query.data.captainEfficiency.efficiency.toFixed(1)}%
+                        </Text>
+                        <Text className={`rounded-full border border-slate-700 px-2 py-1 text-xs font-semibold ${assessment.color}`}>
+                          {assessment.label}
+                        </Text>
+                      </View>
+                    </View>
+                    <View
+                      accessible
+                      accessibilityRole="progressbar"
+                      accessibilityLabel={`Captain efficiency: ${assessment.label}`}
+                      accessibilityValue={{ min: 0, max: 100, now: normalizedEfficiency }}
+                      className="h-2.5 overflow-hidden rounded-full bg-slate-800"
+                    >
+                      <View className={`h-full ${assessment.label === 'Good' ? 'bg-emerald-400' : assessment.label === 'Average' ? 'bg-amber-400' : 'bg-rose-400'}`} style={{ width: `${normalizedEfficiency}%` }} />
+                    </View>
+                    <Text className={`text-xs ${assessment.color}`}>
+                      {assessment.description} · Good ≥80%, Average ≥50%, Poor below 50%
+                    </Text>
+                  </>
+                );
+              })()}
               <View className="flex-row justify-between">
                 <Text className="text-sm text-slate-400">Captain points / ideal</Text>
                 <Text className="font-semibold text-white">
                   {query.data.captainEfficiency.captainPoints.toFixed(1)} / {query.data.captainEfficiency.idealCapPoints.toFixed(1)}
                 </Text>
-              </View>
-              <View className="flex-row justify-between">
-                <Text className="text-sm text-slate-400">Efficiency</Text>
-                <Text className="font-bold text-cyan-300">{query.data.captainEfficiency.efficiency.toFixed(1)}%</Text>
               </View>
             </View>
 
@@ -187,12 +239,23 @@ export default function AnalyticsScreen() {
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <Text className="text-lg font-bold text-white">Dream team</Text>
               {query.data.dreamTeam.length ? query.data.dreamTeam.map((player, index) => (
-                <View key={`${player.playerName}-${index}`} className="flex-row items-center justify-between gap-3">
-                  <View className="flex-1">
-                    <Text className="font-semibold text-white">{player.playerName}</Text>
-                    <Text className="text-xs text-slate-500">{player.team} · {player.role}</Text>
+                <View
+                  key={`${player.playerName}-${index}`}
+                  className={`gap-3 rounded-xl border p-4 ${
+                    index < 5 ? 'border-brand-500/30 bg-brand-500/5' : 'border-slate-800 bg-slate-950/50'
+                  }`}
+                >
+                  <View className="flex-row items-start justify-between gap-3">
+                    <View className="flex-1">
+                      <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                        {index < 5 ? `Starter ${index + 1}` : `Bench ${index - 4}`}
+                      </Text>
+                      <Text className="mt-1 font-bold text-white">{player.playerName}</Text>
+                      <Text className="mt-1 text-xs text-slate-400">{player.team}</Text>
+                    </View>
+                    <Text className="font-bold text-amber-300">{player.points.toFixed(1)} pts</Text>
                   </View>
-                  <Text className="font-bold text-amber-300">{player.points.toFixed(1)}</Text>
+                  <Text className="self-start rounded-full border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300">{player.role}</Text>
                 </View>
               )) : <Text className="text-sm text-slate-400">No scored professional players are available yet.</Text>}
             </View>
@@ -200,12 +263,19 @@ export default function AnalyticsScreen() {
             <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <Text className="text-lg font-bold text-white">Best value</Text>
               {query.data.valueForMoney.length ? query.data.valueForMoney.map((player, index) => (
-                <View key={`${player.playerName}-${index}`} className="flex-row items-center justify-between gap-3">
-                  <View className="flex-1">
-                    <Text className="font-semibold text-white">{player.playerName}</Text>
-                    <Text className="text-xs text-slate-500">{player.team} · {player.role} · {player.price.toFixed(1)}</Text>
+                <View key={`${player.playerName}-${index}`} className="gap-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                  <View className="flex-row items-start justify-between gap-3">
+                    <View className="flex-1">
+                      <Text className="font-bold text-white">{player.playerName}</Text>
+                      <Text className="mt-1 text-xs text-slate-400">{player.team}</Text>
+                    </View>
+                    <Text className="font-bold text-emerald-300">{player.roi.toFixed(2)} ROI</Text>
                   </View>
-                  <Text className="font-bold text-emerald-300">{player.roi.toFixed(2)} ROI</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.role}</Text>
+                    <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.price.toFixed(1)}M</Text>
+                    <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.ownership.toFixed(1)}% owned</Text>
+                  </View>
                 </View>
               )) : <Text className="text-sm text-slate-400">Value rankings will appear when match data is available.</Text>}
             </View>
@@ -223,14 +293,18 @@ export default function AnalyticsScreen() {
                   <Text className="text-lg font-bold text-white">Market & metagame intelligence</Text>
                   <Text className="text-sm leading-5 text-slate-400">Ownership, value, and return-on-investment signals from the current player market.</Text>
                   {query.data.market.length ? query.data.market.map((player, index) => (
-                    <View key={`${player.playerName}-${index}`} className="flex-row items-center justify-between gap-3 border-t border-slate-800 pt-3">
-                      <View className="flex-1">
-                        <Text className="font-semibold text-white">{player.playerName}</Text>
-                        <Text className="mt-1 text-xs text-slate-500">{player.team} · {player.role} · {player.price.toFixed(1)}M</Text>
-                      </View>
-                      <View className="items-end">
+                    <View key={`${player.playerName}-${index}`} className="gap-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                      <View className="flex-row items-start justify-between gap-3">
+                        <View className="flex-1">
+                          <Text className="font-bold text-white">{player.playerName}</Text>
+                          <Text className="mt-1 text-xs text-slate-400">{player.team}</Text>
+                        </View>
                         <Text className="font-bold text-brand-300">{player.roi.toFixed(2)} ROI</Text>
-                        <Text className="text-xs text-slate-400">{player.ownership.toFixed(1)}% owned</Text>
+                      </View>
+                      <View className="flex-row flex-wrap gap-2">
+                        <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.role}</Text>
+                        <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.price.toFixed(1)}M</Text>
+                        <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.ownership.toFixed(1)}% owned</Text>
                       </View>
                     </View>
                   )) : <Text className="text-sm text-slate-400">Market insights will appear when player data is available.</Text>}
