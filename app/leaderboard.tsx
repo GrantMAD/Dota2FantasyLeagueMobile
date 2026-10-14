@@ -129,21 +129,54 @@ export default function LeaderboardScreen() {
               <Text className="text-sm text-slate-300">{leaderboard.data.total} managers</Text>
               <Text className="text-xs text-slate-500">{formatUpdatedAt(leaderboard.data.lastRecalculatedAt)}</Text>
             </View>
+            {leaderboard.data.topGameweekScorer ? (
+              <View className="flex-row items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+                <Text className="text-xl text-amber-300" accessibilityLabel="Star">★</Text>
+                <View className="flex-1">
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-amber-300">Top gameweek scorer</Text>
+                  <Text className="mt-1 font-semibold text-white">
+                    {leaderboard.data.topGameweekScorer.manager}
+                    <Text className="text-amber-200"> · {leaderboard.data.topGameweekScorer.points} pts</Text>
+                  </Text>
+                </View>
+              </View>
+            ) : null}
             {leaderboard.data.entries.length ? (
               <View className="gap-2">
                 {leaderboard.data.entries.map((entry) => {
                   const isCurrentUser = entry.fantasyTeam.userId === session?.user.id;
+                  const isTopScorer = entry.fantasyTeam.id === leaderboard.data.topGameweekScorer?.fantasySeasonId;
+                  const rankMovement = entry.previousRank === null
+                    ? 'No previous rank'
+                    : entry.previousRank > entry.rank
+                      ? `Up ${entry.previousRank - entry.rank} places`
+                      : entry.previousRank < entry.rank
+                        ? `Down ${entry.rank - entry.previousRank} places`
+                        : 'No rank change';
                   return (
                     <View
                       key={`${entry.id}-${entry.rank}`}
                       className={`flex-row items-center gap-3 rounded-xl border p-3 ${
-                        isCurrentUser ? 'border-brand-500/60 bg-brand-500/10' : 'border-slate-800 bg-slate-900'
+                        isTopScorer
+                          ? 'border-amber-500/50 bg-amber-500/10'
+                          : isCurrentUser ? 'border-brand-500/60 bg-brand-500/10' : 'border-slate-800 bg-slate-900'
                       }`}
                     >
                       <Text className="w-9 text-center text-base font-bold text-amber-300">#{entry.rank}</Text>
                       <View className="flex-1">
-                        <Text className={`font-semibold ${isCurrentUser ? 'text-brand-200' : 'text-white'}`}>
+                        <Text className={`font-semibold ${isTopScorer ? 'text-amber-200' : isCurrentUser ? 'text-brand-200' : 'text-white'}`}>
                           {entry.fantasyTeam.name}{isCurrentUser ? ' · You' : ''}
+                        </Text>
+                        <Text className="mt-1 text-xs text-slate-400" accessibilityLabel={`Rank movement: ${rankMovement}`}>
+                          {entry.previousRank === null
+                            ? '—'
+                            : entry.previousRank > entry.rank
+                              ? `↑ ${entry.previousRank - entry.rank}`
+                              : entry.previousRank < entry.rank
+                                ? `↓ ${entry.rank - entry.previousRank}`
+                                : '—'}
+                          {entry.isPinned ? ' · Your rank' : ''}
+                          {isTopScorer ? ' · ★ Top scorer' : ''}
                         </Text>
                         {entry.fantasyTeam.username ? (
                           <Text className="mt-1 text-xs text-slate-500">@{entry.fantasyTeam.username}</Text>

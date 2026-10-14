@@ -968,9 +968,10 @@ describe('mobile data access', () => {
       leaderboard: [{
         id: 88,
         rank: 3,
-        previous_rank: null,
+        previous_rank: 4,
         total_points: 112,
         gameweek_points: 14,
+        is_pinned: true,
         fantasy_teams: {
           id: 19,
           name: 'Team Radiant',
@@ -980,6 +981,7 @@ describe('mobile data access', () => {
       }],
       lastRecalculatedAt: '2026-10-07T10:00:00.000Z',
       pagination: { page: 2, limit: 50, total: 72 },
+      topGameweekScorer: { fantasySeasonId: 19, manager: 'Radiant Manager', points: 14 },
     }, error: null });
 
     await expect(getLeaderboard({ page: 2, gameweekId: 7 })).resolves.toMatchObject({
@@ -988,11 +990,14 @@ describe('mobile data access', () => {
       total: 72,
       entries: [{
         rank: 3,
+        previousRank: 4,
+        isPinned: true,
         totalPoints: 112,
         fantasyTeam: { name: 'Team Radiant', userId: 'manager-19', managerName: 'Radiant Manager' },
       }],
+      topGameweekScorer: { fantasySeasonId: 19, manager: 'Radiant Manager', points: 14 },
     });
-    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_leaderboard', {
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_leaderboard_v2', {
       p_page: 2,
       p_gameweek_id: 7,
     });

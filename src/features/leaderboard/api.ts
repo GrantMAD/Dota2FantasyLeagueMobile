@@ -4,8 +4,10 @@ import { getSupabaseClient } from '@/src/lib/supabase';
 export interface LeaderboardEntry {
   id: number;
   rank: number;
+  previousRank: number | null;
   totalPoints: number;
   gameweekPoints: number;
+  isPinned: boolean;
   fantasyTeam: {
     id: number | null;
     name: string;
@@ -21,6 +23,11 @@ export interface LeaderboardPage {
   limit: number;
   total: number;
   lastRecalculatedAt: string | null;
+  topGameweekScorer: {
+    fantasySeasonId: number;
+    manager: string;
+    points: number;
+  } | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -35,11 +42,23 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
 }
 
+function isTopGameweekScorer(
+  value: unknown,
+): value is { fantasySeasonId: number; manager: string; points: number } {
+  return isRecord(value) &&
+    Number.isInteger(value.fantasySeasonId) &&
+    typeof value.manager === 'string' &&
+    typeof value.points === 'number' &&
+    Number.isFinite(value.points);
+}
+
 function parseEntry(value: unknown): LeaderboardEntry {
   if (
     !isRecord(value) ||
     !Number.isInteger(value.id) ||
     !Number.isInteger(value.rank) ||
+    !isNullableNumber(value.previous_rank) ||
+    (value.is_pinned !== undefined && typeof value.is_pinned !== 'boolean') ||
     typeof value.total_points !== 'number' ||
     !Number.isFinite(value.total_points) ||
     typeof value.gameweek_points !== 'number' ||
@@ -68,8 +87,10 @@ function parseEntry(value: unknown): LeaderboardEntry {
   return {
     id: Number(value.id),
     rank: Number(value.rank),
+    previousRank: value.previous_rank,
     totalPoints: value.total_points,
     gameweekPoints: value.gameweek_points,
+    isPinned: value.is_pinned === true,
     fantasyTeam: {
       id: value.fantasy_teams.id,
       name: value.fantasy_teams.name,
@@ -84,7 +105,7 @@ export async function getLeaderboard(params: {
   page: number;
   gameweekId: number | null;
 }): Promise<LeaderboardPage> {
-  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_leaderboard', {
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_leaderboard_v2', {
     p_page: params.page,
     p_gameweek_id: params.gameweekId,
   });
@@ -97,7 +118,8 @@ export async function getLeaderboard(params: {
     !Number.isInteger(result.pagination.page) ||
     !Number.isInteger(result.pagination.limit) ||
     !Number.isInteger(result.pagination.total) ||
-    !isNullableString(result.lastRecalculatedAt)
+    !isNullableString(result.lastRecalculatedAt) ||
+    !(result.topGameweekScorer === null || isTopGameweekScorer(result.topGameweekScorer))
   ) {
     throw new ApiError('Leaderboard data was returned in an unexpected format.', 502);
   }
@@ -108,5 +130,12 @@ export async function getLeaderboard(params: {
     limit: Number(result.pagination.limit),
     total: Number(result.pagination.total),
     lastRecalculatedAt: result.lastRecalculatedAt,
+    topGameweekScorer: result.topGameweekScorer === null
+      ? null
+      : {
+          fantasySeasonId: result.topGameweekScorer.fantasySeasonId,
+          manager: result.topGameweekScorer.manager,
+          points: result.topGameweekScorer.points,
+        },
   };
 }
