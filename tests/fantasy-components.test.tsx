@@ -153,6 +153,8 @@ describe('fantasy management components', () => {
     const context = createContext();
     const view = renderWithQueryClient(<LineupEditor context={context} userId="manager-1" />);
 
+    expect(view.getByText('C')).toBeTruthy();
+    expect(view.getByText('VC')).toBeTruthy();
     expect(view.getByRole('button', { name: 'Save lineup' }).props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(view.getAllByRole('button', { name: 'Captain' })[1]);
     expect(view.getByRole('button', { name: 'Save lineup' }).props.accessibilityState.disabled).toBe(false);
@@ -169,6 +171,62 @@ describe('fantasy management components', () => {
         expect.objectContaining({ playerId: 1, slot: 'carry', isCaptain: false, isViceCaptain: true }),
       ]),
     }, expect.any(Object));
+  });
+
+  it('requires confirmation before saving within two hours of the deadline', async () => {
+    mockedSaveLineup.mockResolvedValue();
+    const deadline = new Date(Date.now() + 90 * 60 * 1000).toISOString();
+    const context = createContext({
+      gameweek: {
+        id: 24,
+        gameweekNumber: 7,
+        deadline,
+        status: 'active',
+        isLocked: false,
+        hasUpcoming: true,
+      },
+    });
+    const view = renderWithQueryClient(<LineupEditor context={context} userId="manager-1" />);
+
+    await fireEvent.press(view.getAllByRole('button', { name: 'Captain' })[1]);
+    await fireEvent.press(view.getByRole('button', { name: 'Save lineup' }));
+
+    expect(mockedSaveLineup).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Deadline approaching',
+      expect.stringMatching(/Deadline is in 1h \d+m for Gameweek 7/),
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Keep editing', style: 'cancel' }),
+        expect.objectContaining({ text: 'Save lineup', onPress: expect.any(Function) }),
+      ]),
+    );
+
+    await act(async () => confirmAlertAction('Save lineup'));
+    await waitFor(() => expect(mockedSaveLineup).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not submit if the deadline has passed since context loaded', async () => {
+    const context = createContext({
+      gameweek: {
+        id: 24,
+        gameweekNumber: 7,
+        deadline: new Date(Date.now() - 60_000).toISOString(),
+        status: 'active',
+        isLocked: false,
+        hasUpcoming: true,
+      },
+    });
+    const view = renderWithQueryClient(<LineupEditor context={context} userId="manager-1" />);
+
+    await fireEvent.press(view.getAllByRole('button', { name: 'Captain' })[1]);
+    await fireEvent.press(view.getByRole('button', { name: 'Save lineup' }));
+
+    expect(mockedSaveLineup).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Deadline passed',
+      'This gameweek is now locked. Refresh your team to see the latest lineup status.',
+    );
+    expect(view.getByText('The gameweek deadline has passed. Refresh your team to check the locked lineup.')).toBeTruthy();
   });
 
   it('requires confirmation before submitting a role-matched transfer', async () => {

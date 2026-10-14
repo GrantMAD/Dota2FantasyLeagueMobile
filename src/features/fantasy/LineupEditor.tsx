@@ -68,6 +68,15 @@ function getLineupError(lineup: FantasyLineupEntry[]): string | null {
   return null;
 }
 
+function formatTimeUntilDeadline(deadline: string): string {
+  const deadlineTime = new Date(deadline).getTime();
+  if (!Number.isFinite(deadlineTime)) return 'soon';
+  const minutesRemaining = Math.max(0, Math.ceil((deadlineTime - Date.now()) / 60_000));
+  const hours = Math.floor(minutesRemaining / 60);
+  const minutes = minutesRemaining % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
 interface LineupEditorProps {
   context: FantasyContext;
   userId: string;
@@ -150,11 +159,37 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
     setSaveError(null);
   }
 
-  function submitLineup() {
+  function submitLineup(confirmedNearDeadline = false) {
     if (isLocked || mutation.isPending || !context.gameweek || !context.fantasySeasonId) return;
     if (lineupError) {
       setSaveError(lineupError);
       return;
+    }
+
+    const deadline = context.gameweek.deadline;
+    if (deadline) {
+      const timeUntilDeadline = new Date(deadline).getTime() - Date.now();
+      if (Number.isFinite(timeUntilDeadline) && timeUntilDeadline <= 0) {
+        setSaveError('The gameweek deadline has passed. Refresh your team to check the locked lineup.');
+        Alert.alert('Deadline passed', 'This gameweek is now locked. Refresh your team to see the latest lineup status.');
+        void queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] });
+        return;
+      }
+      if (
+        Number.isFinite(timeUntilDeadline) &&
+        timeUntilDeadline <= 2 * 60 * 60 * 1000 &&
+        !confirmedNearDeadline
+      ) {
+        Alert.alert(
+          'Deadline approaching',
+          `Deadline is in ${formatTimeUntilDeadline(deadline)} for Gameweek ${context.gameweek.gameweekNumber}. Are you sure you want to save these lineup changes?`,
+          [
+            { text: 'Keep editing', style: 'cancel' },
+            { text: 'Save lineup', onPress: () => submitLineup(true) },
+          ],
+        );
+        return;
+      }
     }
 
     mutation.mutate({
@@ -181,8 +216,13 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
       </View>
 
       {isLocked ? (
-        <View accessibilityRole="alert" className="rounded-xl border border-amber-800 bg-amber-950 p-3">
-          <Text className="text-sm font-medium text-amber-100">This gameweek is locked. Lineup changes are unavailable.</Text>
+        <View accessibilityRole="alert" className="gap-1 rounded-xl border border-red-700/60 bg-red-950/70 p-4">
+          <Text className="text-sm font-bold text-red-100">
+            Lineup locked for Gameweek {context.gameweek?.gameweekNumber ?? '—'}
+          </Text>
+          <Text className="text-xs leading-5 text-red-200/80">
+            The deadline has passed. Your saved lineup is read-only and can no longer be changed.
+          </Text>
         </View>
       ) : null}
 
@@ -199,9 +239,27 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
                   <Text className="text-xs font-semibold uppercase tracking-wider text-brand-400">
                     {SLOT_LABELS[slot]}
                   </Text>
-                  <Text className="mt-1 text-sm font-semibold text-white">
-                    {player?.in_game_name || player?.name || 'No player selected'}
-                  </Text>
+                  <View className="mt-1 flex-row flex-wrap items-center gap-2">
+                    <Text className="text-sm font-semibold text-white">
+                      {player?.in_game_name || player?.name || 'No player selected'}
+                    </Text>
+                    {entry?.is_captain ? (
+                      <Text
+                        accessibilityLabel="Captain"
+                        className="rounded-full border border-amber-400/70 bg-amber-400 px-2 py-0.5 text-xs font-black text-slate-950"
+                      >
+                        C
+                      </Text>
+                    ) : null}
+                    {entry?.is_vice_captain ? (
+                      <Text
+                        accessibilityLabel="Vice-captain"
+                        className="rounded-full border border-cyan-400/70 bg-cyan-400 px-2 py-0.5 text-xs font-black text-slate-950"
+                      >
+                        VC
+                      </Text>
+                    ) : null}
+                  </View>
                   {player ? (
                     <Text className="mt-1 text-xs text-slate-400">
                       {player.primary_role ?? 'Role unavailable'} · {player.current_price.toFixed(1)}
@@ -255,7 +313,7 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
           isLocked || mutation.isPending || mutation.isSuccess || !dirty || Boolean(lineupError) ? 'opacity-50' : 'active:opacity-80'
         }`}
         disabled={isLocked || mutation.isPending || mutation.isSuccess || !dirty || Boolean(lineupError)}
-        onPress={submitLineup}
+        onPress={() => submitLineup()}
       >
         {mutation.isPending ? (
           <View className="flex-row items-center gap-2">
