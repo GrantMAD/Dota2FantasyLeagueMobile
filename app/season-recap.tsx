@@ -1,9 +1,18 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, Share, Text, View } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import { SvgXml } from 'react-native-svg';
+import { captureRef, type ViewShotRef } from 'react-native-view-shot';
+import ViewShot from 'react-native-view-shot';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/src/components/Screen';
 import { getSeasonRecaps, type SeasonRecap } from '@/src/features/season-recap/api';
+import {
+  createSeasonRecapShareCardSvg,
+  SEASON_RECAP_CARD_THEMES,
+  type SeasonRecapCardTheme,
+} from '@/src/features/season-recap/share-card';
 
 function formatSeasonDates(start: string | null, end: string | null): string {
   const format = (value: string | null) => {
@@ -31,9 +40,12 @@ function privacySafeSummary(recap: SeasonRecap): string {
 
 export default function SeasonRecapScreen() {
   const [sharingConsent, setSharingConsent] = useState(false);
+  const [showPrivacyDetails, setShowPrivacyDetails] = useState(false);
+  const [cardTheme, setCardTheme] = useState<SeasonRecapCardTheme>('radiant');
   const [sharingId, setSharingId] = useState<number | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const cardRefs = useRef(new Map<number, ViewShotRef>());
   const query = useQuery({
     queryKey: ['season-recaps'],
     queryFn: getSeasonRecaps,
@@ -53,6 +65,36 @@ export default function SeasonRecapScreen() {
       setShareMessage('Your privacy-safe recap was shared.');
     } catch (error) {
       setShareError(error instanceof Error ? error.message : 'Unable to share this recap.');
+    } finally {
+      setSharingId(null);
+    }
+  }
+
+  async function shareCard(recap: SeasonRecap) {
+    if (!sharingConsent || sharingId !== null) return;
+    setSharingId(recap.fantasySeasonId);
+    setShareError(null);
+    setShareMessage(null);
+    try {
+      if (!await Sharing.isAvailableAsync()) {
+        throw new Error('Image sharing is unavailable on this device.');
+      }
+      const cardRef = cardRefs.current.get(recap.fantasySeasonId);
+      if (!cardRef) throw new Error('The recap card preview is not ready yet.');
+      const imageUri = await captureRef(cardRef, {
+        format: 'png',
+        quality: 1,
+        width: 1600,
+        height: 1280,
+      });
+      await Sharing.shareAsync(imageUri, {
+        mimeType: 'image/png',
+        UTI: 'public.png',
+        dialogTitle: `${recap.seasonName} recap card`,
+      });
+      setShareMessage('Your recap card is ready to share or save.');
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : 'Unable to share this recap card.');
     } finally {
       setSharingId(null);
     }
@@ -113,11 +155,51 @@ export default function SeasonRecapScreen() {
                 <View className="flex-1">
                   <Text className="font-semibold text-white">I choose to share a privacy-safe recap</Text>
                   <Text className="mt-1 text-xs leading-5 text-slate-400">
-                    Sharing includes results and selected player statistics only—not your manager name, account details,
-                    squad name, league name, or a public link.
+                    Sharing or saving creates a copy you can give to others. Nothing is published automatically, and
+                    both actions stay disabled until you opt in.
                   </Text>
                 </View>
               </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showPrivacyDetails }}
+                className="ml-8 py-1"
+                onPress={() => setShowPrivacyDetails((current) => !current)}
+              >
+                <Text className="text-sm font-medium text-cyan-300">
+                  {showPrivacyDetails ? 'Hide information details' : 'What information is included?'}
+                </Text>
+              </Pressable>
+              {showPrivacyDetails ? (
+                <View className="ml-8 gap-1">
+                  <Text className="text-xs leading-5 text-slate-400">
+                    Included: season results and selected player statistics such as points, rankings, best gameweek,
+                    top-scoring pick, and transfer count.
+                  </Text>
+                  <Text className="text-xs leading-5 text-slate-400">
+                    Excluded: manager name, account details, squad name, league name, and public links.
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <View className="gap-2">
+              <Text className="font-semibold text-white">Recap card theme</Text>
+              <View accessibilityLabel="Recap card theme" className="flex-row flex-wrap gap-2">
+                {SEASON_RECAP_CARD_THEMES.map((theme) => (
+                  <Pressable
+                    key={theme.id}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: cardTheme === theme.id }}
+                    className={`rounded-lg border px-3 py-2 ${
+                      cardTheme === theme.id ? 'border-cyan-400 bg-cyan-950' : 'border-slate-700 bg-slate-950'
+                    }`}
+                    onPress={() => setCardTheme(theme.id)}
+                  >
+                    <Text className="text-sm font-semibold text-white">{theme.name}</Text>
+                    <Text className="mt-0.5 text-xs text-slate-400">{theme.description}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
             {shareError ? <Text accessibilityRole="alert" className="text-sm text-red-300">{shareError}</Text> : null}
             {shareMessage ? <Text accessibilityRole="alert" className="text-sm text-cyan-300">{shareMessage}</Text> : null}
@@ -176,6 +258,22 @@ export default function SeasonRecapScreen() {
                     </View>
                   ) : null}
                 </View>
+                <View className="gap-3 border-t border-slate-800 pt-4">
+                  <Text className="text-sm font-semibold text-white">Share card preview</Text>
+                  <ViewShot
+                    ref={(instance) => {
+                      if (instance) cardRefs.current.set(recap.fantasySeasonId, instance);
+                      else cardRefs.current.delete(recap.fantasySeasonId);
+                    }}
+                    style={{ width: '100%', aspectRatio: 1.25, overflow: 'hidden', borderRadius: 12 }}
+                  >
+                    <SvgXml
+                      xml={createSeasonRecapShareCardSvg(recap, cardTheme)}
+                      width="100%"
+                      height="100%"
+                    />
+                  </ViewShot>
+                </View>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={{ disabled: !sharingConsent || sharingId !== null }}
@@ -187,6 +285,19 @@ export default function SeasonRecapScreen() {
                 >
                   <Text className={`font-semibold ${sharingConsent ? 'text-cyan-200' : 'text-slate-500'}`}>
                     {sharingId === recap.fantasySeasonId ? 'Opening share sheet…' : 'Share privacy-safe recap'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !sharingConsent || sharingId !== null }}
+                  className={`min-h-12 items-center justify-center rounded-xl border px-4 ${
+                    sharingConsent ? 'border-amber-700/60 bg-amber-950/40' : 'border-slate-700 bg-slate-950'
+                  }`}
+                  disabled={!sharingConsent || sharingId !== null}
+                  onPress={() => void shareCard(recap)}
+                >
+                  <Text className={`font-semibold ${sharingConsent ? 'text-amber-200' : 'text-slate-500'}`}>
+                    {sharingId === recap.fantasySeasonId ? 'Preparing recap card…' : 'Share / save recap card'}
                   </Text>
                 </Pressable>
               </View>
