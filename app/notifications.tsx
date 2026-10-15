@@ -15,6 +15,7 @@ import {
   type NotificationAction,
   type NotificationCategory,
 } from '@/src/features/notifications/api';
+import { groupNotificationsByDay } from '@/src/features/notifications/presentation';
 
 const categories: { key: NotificationCategory; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -57,6 +58,7 @@ export default function NotificationsScreen() {
   };
   const visibleNotifications = notifications
     .filter((notification) => matchesNotificationCategory(notification, category));
+  const notificationGroups = groupNotificationsByDay(visibleNotifications);
   const invalidateNotifications = () => queryClient.invalidateQueries({ queryKey: ['notifications'] });
   const readOne = useMutation({
     mutationFn: markNotificationRead,
@@ -127,21 +129,23 @@ export default function NotificationsScreen() {
           ))}
         </View>
 
-        {visibleNotifications.length ? (
+        {visibleNotifications.length || unreadCount > 0 ? (
           <View className="flex-row gap-3">
-            <Pressable
-              accessibilityRole="button"
-              className="min-h-10 flex-1 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-2"
-              disabled={busy || unreadCount === 0}
-              onPress={() => {
-                setActionError(null);
-                readAll.mutate();
-              }}
-            >
-              <Text className={`text-xs font-semibold ${unreadCount ? 'text-slate-200' : 'text-slate-500'}`}>
-                Mark all read
-              </Text>
-            </Pressable>
+            {unreadCount > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                className="min-h-10 flex-1 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-2"
+                disabled={busy}
+                onPress={() => {
+                  setActionError(null);
+                  readAll.mutate();
+                }}
+              >
+                <Text className="text-xs font-semibold text-slate-200">
+                  Mark all read
+                </Text>
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               className="min-h-10 flex-1 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-2"
@@ -177,52 +181,59 @@ export default function NotificationsScreen() {
             </Pressable>
           </View>
         ) : visibleNotifications.length ? (
-          <View className="gap-3">
-            {visibleNotifications.map((notification) => {
-              const action = notificationActionFor(notification);
-              const typeCategory = notificationCategoryForType(notification.type);
-              return (
-                <View
-                  key={notification.id}
-                  className={`gap-3 rounded-2xl border p-4 ${
-                    notification.is_read ? 'border-slate-800 bg-slate-900' : 'border-cyan-800/70 bg-cyan-950/30'
-                  }`}
-                >
-                  <View className="flex-row items-start justify-between gap-3">
-                    <View className="flex-1">
-                      <Text className="font-semibold text-white">{notification.title}</Text>
-                      <Text className="mt-1 text-sm leading-5 text-slate-300">{notification.message}</Text>
-                    </View>
-                    {!notification.is_read ? <View className="mt-1 h-2 w-2 rounded-full bg-cyan-300" /> : null}
-                  </View>
-                  <View className="flex-row items-center justify-between gap-2">
-                    <Text className="text-xs uppercase tracking-wider text-slate-500">
-                      {typeCategory ?? 'Update'} · {relativeTime(notification.created_at)}
-                    </Text>
-                    {!notification.is_read ? (
+          <View className="gap-5">
+            {notificationGroups.map((group) => (
+              <View key={group.label} className="gap-3">
+                <Text className="text-xs font-semibold uppercase tracking-[2px] text-slate-400">
+                  {group.label}
+                </Text>
+                {group.notifications.map((notification) => {
+                  const action = notificationActionFor(notification);
+                  const typeCategory = notificationCategoryForType(notification.type);
+                  return (
+                    <View
+                      key={notification.id}
+                      className={`gap-3 rounded-2xl border p-4 ${
+                        notification.is_read ? 'border-slate-800 bg-slate-900' : 'border-cyan-800/70 bg-cyan-950/30'
+                      }`}
+                    >
+                      <View className="flex-row items-start justify-between gap-3">
+                        <View className="flex-1">
+                          <Text className="font-semibold text-white">{notification.title}</Text>
+                          <Text className="mt-1 text-sm leading-5 text-slate-300">{notification.message}</Text>
+                        </View>
+                        {!notification.is_read ? <View className="mt-1 h-2 w-2 rounded-full bg-cyan-300" /> : null}
+                      </View>
+                      <View className="flex-row items-center justify-between gap-2">
+                        <Text className="text-xs uppercase tracking-wider text-slate-500">
+                          {typeCategory ?? 'Update'} · {relativeTime(notification.created_at)}
+                        </Text>
+                        {!notification.is_read ? (
+                          <Pressable
+                            accessibilityRole="button"
+                            disabled={busy}
+                            onPress={() => {
+                              setActionError(null);
+                              readOne.mutate(notification.id);
+                            }}
+                          >
+                            <Text className="text-xs font-semibold text-slate-300">Mark read</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
                       <Pressable
                         accessibilityRole="button"
+                        className="min-h-10 items-center justify-center rounded-lg bg-cyan-500 px-3"
                         disabled={busy}
-                        onPress={() => {
-                          setActionError(null);
-                          readOne.mutate(notification.id);
-                        }}
+                        onPress={() => openAction(notification.id, notification.is_read, action)}
                       >
-                        <Text className="text-xs font-semibold text-slate-300">Mark read</Text>
+                        <Text className="text-xs font-bold uppercase tracking-wider text-on-accent">{action.label}</Text>
                       </Pressable>
-                    ) : null}
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    className="min-h-10 items-center justify-center rounded-lg bg-cyan-500 px-3"
-                    disabled={busy}
-                    onPress={() => openAction(notification.id, notification.is_read, action)}
-                  >
-                    <Text className="text-xs font-bold uppercase tracking-wider text-on-accent">{action.label}</Text>
-                  </Pressable>
-                </View>
-              );
-            })}
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
           </View>
         ) : (
           <View className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-6">
