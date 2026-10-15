@@ -19,6 +19,7 @@ export interface ManagerProfile {
   pushNotifications: boolean;
   memberSince: string;
   themePreference: ThemePreference;
+  bannerTheme?: string | null;
 }
 
 export interface ManagerProfileUpdate {
@@ -29,6 +30,7 @@ export interface ManagerProfileUpdate {
   timezone?: string;
   emailNotifications: boolean;
   pushNotifications: boolean;
+  bannerTheme?: string;
 }
 
 export interface ManagerSignupResult {
@@ -79,6 +81,7 @@ function parseProfile(value: unknown): ManagerProfile | null {
     pushNotifications: value.push_notifications,
     memberSince: value.member_since,
     themePreference: value.theme_preference,
+    bannerTheme: typeof value.banner_theme === 'string' ? value.banner_theme : null,
   };
 }
 
@@ -143,6 +146,7 @@ export async function updateManagerProfile(update: ManagerProfileUpdate): Promis
   if (update.bio !== undefined) updates.bio = update.bio;
   if (update.countryCode !== undefined) updates.country_code = update.countryCode;
   if (update.timezone !== undefined) updates.timezone = update.timezone;
+  if (update.bannerTheme !== undefined) updates.banner_theme = update.bannerTheme;
   const profile = await updateProfile(updates);
   if (
     (update.bio !== undefined && profile.bio !== (update.bio.trim() || null)) ||
@@ -154,6 +158,10 @@ export async function updateManagerProfile(update: ManagerProfileUpdate): Promis
   return profile;
 }
 
+
+export async function updateBannerTheme(themeId: string): Promise<ManagerProfile> {
+  return updateProfile({ banner_theme: themeId });
+}
 export async function updatePushNotificationPreference(enabled: boolean): Promise<ManagerProfile> {
   return updateProfile({ push_notifications: enabled });
 }

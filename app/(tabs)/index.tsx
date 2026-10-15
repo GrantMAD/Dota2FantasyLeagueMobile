@@ -337,9 +337,14 @@ export default function HomeScreen() {
                                 {entry.is_captain ? 'Captain' : entry.is_vice_captain ? 'Vice' : ''}
                               </Text>
                             </View>
-                            <Text className="text-xs font-semibold text-emerald-300">
-                              Last GW · {player.last_gw_points.toFixed(1)} pts
-                            </Text>
+                            <View className="flex-row items-center justify-between">
+                              <Text className="text-xs font-semibold text-emerald-300">
+                                GW Pts · {((player.current_gw_points ?? 0) * (entry.is_captain ? 2 : 1)).toFixed(1)} pts
+                              </Text>
+                              {entry.is_captain && (player.current_gw_points ?? 0) > 0 ? (
+                                <Text className="text-[10px] font-bold text-amber-300 opacity-80">&times;2</Text>
+                              ) : null}
+                            </View>
                           </Pressable>
                         </Link>
                       );

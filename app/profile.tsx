@@ -1,24 +1,30 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'expo-router';
 import { Button } from '@/src/components/Button';
 import { Screen } from '@/src/components/Screen';
 import { TextField } from '@/src/components/TextField';
 import {
   getManagerProfile,
   type ManagerProfile,
+  updateBannerTheme,
   updateManagerProfile,
   updatePushNotificationPreference,
 } from '@/src/features/account/api';
+import {
+  MOBILE_BANNER_THEMES,
+  getMobileBannerTheme,
+} from '@/src/features/account/bannerThemes';
+import { AccountHealthProgress } from '@/src/features/account/AccountHealthProgress';
+import { ProfileAchievements } from '@/src/features/account/ProfileAchievements';
+import { computeAchievements } from '@/src/features/account/achievementsData';
 import { usePushNotificationStatus } from '@/src/lib/push-notifications';
 import {
   requestAndRegisterPushNotifications,
   unregisterDevicePushToken,
 } from '@/src/lib/push-token-registration';
 import { useAuth } from '@/src/lib/auth';
-import { useMobileTheme } from '@/src/lib/theme';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 
 function PreferenceToggle({
@@ -64,7 +70,7 @@ export default function ProfileScreen() {
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Your account</Text>
           <Text className="mt-2 text-3xl font-bold text-white">Profile & Settings</Text>
           <Text className="mt-1 text-sm leading-5 text-slate-400">
-            Your competitive identity, fantasy career snapshot, account details, and notification preferences.
+            Your competitive identity, hero banner, fantasy career snapshot, account details, and achievements.
           </Text>
         </View>
 
@@ -83,6 +89,7 @@ export default function ProfileScreen() {
         ) : query.data ? (
           <>
             <ProfileOverview profile={query.data} />
+            <ProfileAchievementsSection profile={query.data} />
             <ProfileEditor key={query.data.id} profile={query.data} />
           </>
         ) : (
@@ -99,6 +106,7 @@ export default function ProfileScreen() {
 }
 
 function ProfileOverview({ profile }: { profile: ManagerProfile }) {
+  const queryClient = useQueryClient();
   const fantasyQuery = useFantasyContext();
   const label = profile.displayName?.trim() || profile.username;
   const initials = label.trim().slice(0, 1).toUpperCase() || 'U';
@@ -106,9 +114,48 @@ function ProfileOverview({ profile }: { profile: ManagerProfile }) {
   const hasSquad = Boolean(fantasyQuery.data?.ownedPlayers.length);
   const hasBio = Boolean(profile.bio?.trim());
 
+  const currentTheme = getMobileBannerTheme(profile.bannerTheme);
+  const [themeModalVisible, setThemeModalVisible] = useState(false);
+
+  const bannerMutation = useMutation({
+    mutationFn: updateBannerTheme,
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ManagerProfile | null>(['manager-profile'], updated);
+      setThemeModalVisible(false);
+    },
+    onError: (err: Error) => {
+      Alert.alert('Unable to save banner theme', err.message);
+    },
+  });
+
+  const healthItems: [string, boolean][] = [
+    ['Profile identity', Boolean(profile.displayName?.trim() || profile.username)],
+    ['Fantasy squad', hasSquad],
+    ['Bio added', hasBio],
+    ['Preferences set', Boolean(profile.timezone)],
+  ];
+  const completedHealthCount = healthItems.filter(([, complete]) => complete).length;
+
   return (
     <View className="gap-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-      <View className="h-20 bg-brand-500/15" />
+      {/* Hero Banner Header */}
+      <View className={`h-28 ${currentTheme.bgClass} justify-between p-3`}>
+        <View className="flex-row items-center justify-between">
+          <View className={`rounded-full px-2 py-0.5 ${currentTheme.badgeBg}`}>
+            <Text className={`text-[10px] font-bold uppercase tracking-wider ${currentTheme.badgeText}`}>
+              {currentTheme.name} ({currentTheme.dotaRole})
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setThemeModalVisible(true)}
+            className="rounded-lg border border-slate-700 bg-slate-950/80 px-2.5 py-1"
+          >
+            <Text className="text-xs font-semibold text-slate-200">Change Theme</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Avatar and Info Header */}
       <View className="-mt-12 flex-row items-end gap-4 px-4">
         <View className="h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-slate-900 bg-slate-800">
           {avatarUrl ? (
@@ -122,12 +169,14 @@ function ProfileOverview({ profile }: { profile: ManagerProfile }) {
           <Text className="text-sm text-slate-400">@{profile.username}</Text>
         </View>
       </View>
+
       <View className="gap-3 px-4 pb-4">
         <View className="flex-row gap-2">
           <ProfileMetric label="Fantasy squad" value={hasSquad ? `${fantasyQuery.data?.ownedPlayers.length} players` : 'No squad yet'} />
           <ProfileMetric label="Total points" value={String(fantasyQuery.data?.totalPoints ?? 0)} />
           <ProfileMetric label="Global rank" value={fantasyQuery.data?.globalRank ? `#${fantasyQuery.data.globalRank}` : '—'} />
         </View>
+
         <View className="gap-2 border-t border-slate-800 pt-3">
           <Text className="font-semibold text-white">About this manager</Text>
           <Text className="text-sm leading-5 text-slate-300">
@@ -139,16 +188,89 @@ function ProfileOverview({ profile }: { profile: ManagerProfile }) {
             <ProfileTag value={profile.role === 'admin' ? 'Admin access' : 'Manager account'} />
           </View>
         </View>
-        <View className="gap-2 border-t border-slate-800 pt-3">
-          <Text className="font-semibold text-white">Account health</Text>
-          <HealthRow label="Profile identity" complete={Boolean(profile.displayName?.trim() || profile.username)} />
-          <HealthRow label="Fantasy squad" complete={hasSquad} />
-          <HealthRow label="Bio added" complete={hasBio} />
-          <HealthRow label="Preferences set" complete={Boolean(profile.timezone)} />
+
+        {/* Account Health with Circular Gauge */}
+        <View className="gap-3 border-t border-slate-800 pt-3">
+          <View className="flex-row items-center justify-between">
+            <View>
+              <Text className="font-semibold text-white">Account health</Text>
+              <Text className="text-xs text-slate-400">Readiness for competitive seasons</Text>
+            </View>
+            <AccountHealthProgress completed={completedHealthCount} total={healthItems.length} />
+          </View>
+          {healthItems.map(([itemLabel, complete]) => (
+            <HealthRow key={itemLabel} label={itemLabel} complete={complete} />
+          ))}
         </View>
       </View>
+
+      {/* Banner Theme Selection Modal */}
+      <Modal
+        visible={themeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setThemeModalVisible(false)}
+      >
+        <View className="flex-1 items-center justify-center bg-black/75 px-5">
+          <View className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-5">
+            <Text className="text-base font-bold text-white">Choose Hero Banner Theme</Text>
+            <Text className="mt-1 text-xs text-slate-400">
+              Customize your profile banner inspired by Dota hero roles.
+            </Text>
+
+            <View className="mt-4 gap-2">
+              {MOBILE_BANNER_THEMES.map((theme) => {
+                const isSelected = theme.id === currentTheme.id;
+                return (
+                  <Pressable
+                    key={theme.id}
+                    onPress={() => bannerMutation.mutate(theme.id)}
+                    className={`flex-row items-center justify-between rounded-xl border p-3 ${
+                      isSelected
+                        ? 'border-brand-500 bg-brand-950/40'
+                        : 'border-slate-800 bg-slate-950/60'
+                    }`}
+                  >
+                    <View className="flex-row items-center gap-3">
+                      <View className={`h-6 w-6 rounded-md ${theme.bgClass}`} />
+                      <View>
+                        <Text className="text-sm font-bold text-white">{theme.name}</Text>
+                        <Text className="text-xs text-slate-400">{theme.heroInspiration}</Text>
+                      </View>
+                    </View>
+                    {isSelected && (
+                      <Text className="text-sm font-bold text-brand-400">✓</Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Pressable
+              onPress={() => setThemeModalVisible(false)}
+              className="mt-4 items-center rounded-xl border border-slate-700 bg-slate-800 py-2.5"
+            >
+              <Text className="text-sm font-semibold text-slate-200">Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
+}
+
+function ProfileAchievementsSection({ profile }: { profile: ManagerProfile }) {
+  const fantasyQuery = useFantasyContext();
+  const achievements = computeAchievements({
+    hasSquad: Boolean(fantasyQuery.data?.ownedPlayers.length),
+    totalPoints: Number(fantasyQuery.data?.totalPoints ?? 0),
+    globalRank: fantasyQuery.data?.globalRank ?? null,
+    hasBio: Boolean(profile.bio?.trim()),
+    timezone: profile.timezone,
+    countryCode: profile.countryCode,
+  });
+
+  return <ProfileAchievements achievements={achievements} />;
 }
 
 function ProfileMetric({ label, value }: { label: string; value: string }) {
@@ -177,7 +299,6 @@ function HealthRow({ label, complete }: { label: string; complete: boolean }) {
 
 function ProfileEditor({ profile }: { profile: ManagerProfile }) {
   const queryClient = useQueryClient();
-  const themePreference = useMobileTheme();
   const { session } = useAuth();
   const pushStatus = usePushNotificationStatus();
   const [username, setUsername] = useState(profile.username);
@@ -257,167 +378,87 @@ function ProfileEditor({ profile }: { profile: ManagerProfile }) {
   }
 
   return (
-    <>
-      <View className="gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <Text className="text-xs uppercase tracking-wider text-slate-400">Account email</Text>
-        <Text className="font-semibold text-white">{profile.email ?? 'Email unavailable'}</Text>
-        <Text className="mt-2 text-xs uppercase tracking-wider text-slate-400">Member since</Text>
-        <Text className="text-sm text-slate-300">{new Date(profile.memberSince).toLocaleDateString()}</Text>
-      </View>
-
-      <View className="gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <Text className="text-lg font-bold text-white">Manager profile</Text>
-        <TextField
-          autoCapitalize="none"
-          autoCorrect={false}
-          label="Username"
-          onChangeText={setUsername}
-          placeholder="Manager username"
-          value={username}
-        />
-        <TextField
-          autoCapitalize="words"
-          label="Display name"
-          onChangeText={setDisplayName}
-          placeholder="Name shown to other managers"
-          value={displayName}
-        />
-        <TextField
-          label="Bio"
-          maxLength={500}
-          multiline
-          onChangeText={setBio}
-          placeholder="A short introduction for your league rivals"
-          style={{ minHeight: 96 }}
-          textAlignVertical="top"
-          value={bio}
-        />
-        <View className="flex-row gap-3">
-          <View className="flex-1">
-            <TextField
-              autoCapitalize="characters"
-              label="Country code"
-              maxLength={2}
-              onChangeText={setCountryCode}
-              placeholder="US"
-              value={countryCode}
-            />
-          </View>
-          <View className="flex-1">
-            <TextField
-              autoCapitalize="none"
-              label="Timezone"
-              onChangeText={setTimezone}
-              placeholder="UTC"
-              value={timezone}
-            />
-          </View>
-        </View>
-      </View>
-
-      <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <View>
-          <Text className="text-lg font-bold text-white">Appearance</Text>
-          <Text className="mt-1 text-sm leading-5 text-slate-400">
-            This preference is shared with the web app.
-          </Text>
-        </View>
-        <View className="flex-row gap-3">
-          {(['dark', 'light'] as const).map((theme) => (
-            <Pressable
-              key={theme}
-              accessibilityRole="radio"
-              accessibilityState={{
-                checked: themePreference.theme === theme,
-                disabled: themePreference.isSaving,
-              }}
-              className={`min-h-11 flex-1 items-center justify-center rounded-xl border ${
-                themePreference.theme === theme
-                  ? 'border-brand-500 bg-brand-500/15'
-                  : 'border-slate-700 bg-slate-950'
-              } ${themePreference.isSaving ? 'opacity-50' : ''}`}
-              disabled={themePreference.isSaving}
-              onPress={() => void themePreference.setTheme(theme).catch((error: unknown) => {
-                Alert.alert(
-                  'Theme preference could not be saved',
-                  error instanceof Error ? error.message : 'Please try again.'
-                );
-              })}
-            >
-              <Text className={`font-semibold capitalize ${
-                themePreference.theme === theme ? 'text-brand-300' : 'text-slate-300'
-              }`}>
-                {theme}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        {themePreference.isLoading ? <ActivityIndicator accessibilityLabel="Loading theme preference" color="#14b8a6" /> : null}
-        {themePreference.error ? (
-          <Text accessibilityRole="alert" className="text-sm text-red-300">
-            Theme preference could not be synchronized: {themePreference.error}
-          </Text>
-        ) : null}
-      </View>
-
-      <View className="rounded-2xl border border-slate-800 bg-slate-900 px-4">
-        <Text className="pt-4 text-lg font-bold text-white">Notification preferences</Text>
-        <PreferenceToggle
-          description="Receive account and fantasy updates by email."
-          label="Email notifications"
-          onChange={setEmailNotifications}
-          value={emailNotifications}
-        />
-        <PreferenceToggle
-          description="Allow device alerts for fantasy updates. Device permission and registration are also required."
-          label="Push notifications"
-          onChange={setPushNotifications}
-          value={pushNotifications}
-        />
-        <View className="gap-2 border-b border-slate-800 py-4">
-          <Text className="font-semibold text-white">This device</Text>
-          <Text className="text-sm leading-5 text-slate-400">
-            {pushStatus.isDeviceRegistered
-              ? 'This device is registered for push alerts.'
-              : 'Set up this device to receive alerts while the app is closed.'}
-          </Text>
-          <Button
-            disabled={enablingPush}
-            label={pushStatus.isDeviceRegistered ? 'Refresh device registration' : 'Enable on this device'}
-            loading={enablingPush}
-            onPress={handleEnablePush}
-          />
-          {pushStatus.syncError ? (
-            <Text accessibilityRole="alert" className="text-sm text-amber-300">
-              Device registration needs attention: {pushStatus.syncError}
-            </Text>
-          ) : null}
-        </View>
-      </View>
-
-      <View className="gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <Text className="text-lg font-bold text-white">Account security</Text>
-        <Text className="text-sm leading-5 text-slate-400">
-          Change a forgotten password through the secure account recovery flow.
+    <View className="gap-5 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+      <View>
+        <Text className="text-xl font-bold text-white">Edit Profile & Account</Text>
+        <Text className="mt-1 text-sm leading-5 text-slate-400">
+          Update the profile details shown across leagues and configure device alerts.
         </Text>
-        <Link href="/forgot-password" asChild>
-          <Pressable accessibilityRole="button" className="min-h-11 justify-center">
-            <Text className="font-semibold text-brand-300">Reset password</Text>
-          </Pressable>
-        </Link>
       </View>
 
       {notice ? (
-        <Text accessibilityRole={save.isError ? 'alert' : 'text'} className={save.isError ? 'text-sm text-red-300' : 'text-sm text-emerald-300'}>
-          {notice}
-        </Text>
+        <View className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+          <Text className="text-sm text-slate-200">{notice}</Text>
+        </View>
       ) : null}
+
+      <View className="gap-4">
+        <TextField
+          autoCapitalize="none"
+          label="Username"
+          value={username}
+          onChangeText={setUsername}
+        />
+        <TextField
+          label="Display Name"
+          value={displayName}
+          onChangeText={setDisplayName}
+        />
+        <TextField
+          label="Bio"
+          multiline
+          numberOfLines={3}
+          value={bio}
+          onChangeText={setBio}
+        />
+        <TextField
+          autoCapitalize="characters"
+          label="Country Code"
+          maxLength={2}
+          value={countryCode}
+          onChangeText={setCountryCode}
+        />
+        <TextField
+          label="Timezone"
+          value={timezone}
+          onChangeText={setTimezone}
+        />
+      </View>
+
+      <View className="gap-1 border-t border-slate-800 pt-4">
+        <Text className="text-base font-semibold text-white">Preferences & Notifications</Text>
+        <PreferenceToggle
+          label="Email notifications"
+          description="Receive competition reminders and gameweek digests."
+          value={emailNotifications}
+          onChange={setEmailNotifications}
+        />
+        <PreferenceToggle
+          label="Push notifications"
+          description="Receive deadline alerts and match results on this device."
+          value={pushNotifications}
+          onChange={setPushNotifications}
+        />
+        {!pushNotifications ? (
+          <Pressable
+            accessibilityRole="button"
+            className="mt-2 rounded-xl border border-brand-500/30 bg-brand-500/10 py-3 items-center"
+            disabled={enablingPush}
+            onPress={handleEnablePush}
+          >
+            <Text className="text-sm font-semibold text-brand-300">
+              {enablingPush ? 'Registering device...' : 'Enable device push notifications'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
       <Button
-        disabled={save.isPending || !username.trim()}
-        label="Save profile"
-        loading={save.isPending}
+        accessibilityLabel="Save profile changes"
+        disabled={save.isPending}
+        label={save.isPending ? 'Saving changes...' : 'Save Profile'}
         onPress={handleSave}
       />
-    </>
+    </View>
   );
 }
