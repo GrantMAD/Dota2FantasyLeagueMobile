@@ -8,9 +8,11 @@ import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { getPlayers, getProfessionalTeams } from '@/src/features/players/api';
 import { useMobileTheme } from '@/src/lib/theme';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
+import { getOwnershipPresentation } from '@/src/lib/ownership';
 
 const PAGE_SIZE = 20;
 const roles = ['', 'Carry', 'Mid', 'Offlane', 'Support', 'Hard Support'];
+type SortField = 'price' | 'ownership' | 'points';
 
 function playerName(player: { in_game_name: string | null; name: string }): string {
   return player.in_game_name || player.name;
@@ -25,6 +27,7 @@ export default function DiscoverScreen() {
   const [teamId, setTeamId] = useState<number | null>(null);
   const [availableOnly, setAvailableOnly] = useState(true);
   const [pinOwnedFirst, setPinOwnedFirst] = useState(false);
+  const [sortBy, setSortBy] = useState<SortField>('price');
   const [offset, setOffset] = useState(0);
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const deferredSearch = useDeferredValue(search);
@@ -54,9 +57,23 @@ export default function DiscoverScreen() {
   const displayedPlayers = (query.data?.players ?? []).filter((player) =>
     !availableOnly || player.availability_status === 'available'
   );
-  if (pinOwnedFirst) {
-    displayedPlayers.sort((a, b) => Number(ownedPlayerIds.has(b.id)) - Number(ownedPlayerIds.has(a.id)));
-  }
+
+  displayedPlayers.sort((a, b) => {
+    if (pinOwnedFirst) {
+      const ownedDiff = Number(ownedPlayerIds.has(b.id)) - Number(ownedPlayerIds.has(a.id));
+      if (ownedDiff !== 0) return ownedDiff;
+    }
+    if (sortBy === 'ownership') {
+      const aOwn = a.ownership_percentage ?? 0;
+      const bOwn = b.ownership_percentage ?? 0;
+      return bOwn - aOwn;
+    }
+    if (sortBy === 'points') {
+      return (b.recent_points ?? 0) - (a.recent_points ?? 0);
+    }
+    // Default 'price'
+    return (b.current_price ?? 0) - (a.current_price ?? 0);
+  });
 
   return (
     <Screen>
@@ -177,22 +194,52 @@ export default function DiscoverScreen() {
           </Pressable>
         ) : null}
 
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: availableOnly }}
-          className="min-h-10 flex-row items-center gap-3 self-start"
-          onPress={() => {
-            setAvailableOnly((current) => !current);
-            setOffset(0);
-          }}
-        >
-          <View className={`h-5 w-5 items-center justify-center rounded border ${
-            availableOnly ? 'border-emerald-400 bg-emerald-500/20' : 'border-slate-600'
-          }`}>
-            {availableOnly ? <Text className="text-xs font-bold text-emerald-300">✓</Text> : null}
+        <View className="flex-row items-center justify-between gap-3">
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: availableOnly }}
+            className="min-h-10 flex-row items-center gap-2.5 self-start"
+            onPress={() => {
+              setAvailableOnly((current) => !current);
+              setOffset(0);
+            }}
+          >
+            <View className={`h-5 w-5 items-center justify-center rounded border ${
+              availableOnly ? 'border-emerald-400 bg-emerald-500/20' : 'border-slate-600'
+            }`}>
+              {availableOnly ? <Text className="text-xs font-bold text-emerald-300">✓</Text> : null}
+            </View>
+            <Text className="text-sm text-slate-300">Available only</Text>
+          </Pressable>
+
+          {/* Sort Control */}
+          <View className="flex-row items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/90 p-1">
+            {(
+              [
+                { id: 'price', label: 'Price' },
+                { id: 'ownership', label: 'Ownership' },
+                { id: 'points', label: 'Form' },
+              ] as const
+            ).map((opt) => (
+              <Pressable
+                key={opt.id}
+                accessibilityRole="button"
+                className={`rounded-lg px-2.5 py-1 ${
+                  sortBy === opt.id ? 'bg-brand-500/20 border border-brand-500/50' : 'border border-transparent'
+                }`}
+                onPress={() => setSortBy(opt.id)}
+              >
+                <Text
+                  className={`text-xs font-medium ${
+                    sortBy === opt.id ? 'text-brand-300' : 'text-slate-400'
+                  }`}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
           </View>
-          <Text className="text-sm text-slate-300">Available players only</Text>
-        </Pressable>
+        </View>
 
         {query.isPending ? (
           <View accessibilityLabel="Loading players" className="gap-3">
@@ -225,6 +272,8 @@ export default function DiscoverScreen() {
             </Text>
             {displayedPlayers.map((player) => {
               const selectedForCompare = compareIds.includes(player.id);
+              const ownPresentation = getOwnershipPresentation(player.ownership_percentage);
+              const ownVal = player.ownership_percentage != null ? `${player.ownership_percentage.toFixed(1)}%` : '—';
               return (
               <View key={player.id} className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
                 <Pressable
@@ -243,14 +292,23 @@ export default function DiscoverScreen() {
                       {player.primary_role ?? 'Role unavailable'}
                     </Text>
                   </View>
-                  <View className={`rounded-full px-2.5 py-1 ${
-                    player.availability_status === 'available' ? 'bg-emerald-500/15' : 'bg-amber-500/15'
-                  }`}>
-                    <Text className={`text-xs font-medium ${
-                      player.availability_status === 'available' ? 'text-emerald-300' : 'text-amber-200'
+                  <View className="items-end gap-1.5">
+                    <View className={`rounded-full px-2.5 py-1 ${
+                      player.availability_status === 'available' ? 'bg-emerald-500/15' : 'bg-amber-500/15'
                     }`}>
-                      {player.availability_status ?? 'Unknown'}
-                    </Text>
+                      <Text className={`text-xs font-medium ${
+                        player.availability_status === 'available' ? 'text-emerald-300' : 'text-amber-200'
+                      }`}>
+                        {player.availability_status ?? 'Unknown'}
+                      </Text>
+                    </View>
+                    {player.ownership_percentage != null ? (
+                      <View className={`rounded-full px-2 py-0.5 ${ownPresentation.badgeBg}`}>
+                        <Text className={`text-[10px] font-semibold ${ownPresentation.badgeText}`}>
+                          {ownPresentation.label}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
                 <Text className="text-xs text-slate-400">{player.team_name ?? 'Free agent'}</Text>
@@ -258,7 +316,23 @@ export default function DiscoverScreen() {
                   <PlayerMetric label="Price" value={player.current_price === null ? '—' : `${player.current_price.toFixed(1)}M`} />
                   <PlayerMetric label="Latest" value={`${player.gameweek_points.toFixed(1)} pts`} />
                   <PlayerMetric label="Recent avg" value={`${player.recent_points.toFixed(1)} pts`} />
+                  <PlayerMetric label="Ownership" value={ownVal} />
                 </View>
+
+                {player.ownership_percentage != null ? (
+                  <View className="mt-2.5">
+                    <View className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                      <View
+                        style={{
+                          width: `${Math.min(100, Math.max(2, player.ownership_percentage))}%`,
+                          backgroundColor: ownPresentation.color,
+                        }}
+                        className="h-full rounded-full"
+                      />
+                    </View>
+                  </View>
+                ) : null}
+
                 <Text className="mt-3 text-xs font-semibold text-brand-300">View player details</Text>
                 </Pressable>
                 <Pressable

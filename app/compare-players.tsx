@@ -7,6 +7,7 @@ import { Screen } from '@/src/components/Screen';
 import { getPlayerDetail, normalizePlayerComparisonIds } from '@/src/features/players/api';
 import { getManagerProfile } from '@/src/features/account/api';
 import { isPremiumUser } from '@/src/lib/premium';
+import { getOwnershipPresentation } from '@/src/lib/ownership';
 
 function displayName(player: { in_game_name: string | null; name: string }): string {
   return player.in_game_name || player.name;
@@ -97,7 +98,25 @@ export default function ComparePlayersScreen() {
                   <ComparisonRow label="Season points" values={query.data.map((player) => `${player.total_season_points.toFixed(1)}`)} />
                   <ComparisonRow label="Latest gameweek" values={query.data.map((player) => `${player.last_gw_points.toFixed(1)}`)} />
                   <ComparisonRow label="Recent average" values={query.data.map((player) => `${player.recent_points.toFixed(1)}`)} />
-                  <ComparisonRow label="Ownership" values={query.data.map((player) => `${player.ownership_percentage.toFixed(1)}%`)} />
+                  {/* Ownership comparison row with tier badge pills */}
+                  <View className="flex-row border-b border-slate-800 px-3 py-3 items-center">
+                    <Text className="w-28 text-xs font-medium text-slate-400">Ownership</Text>
+                    {query.data.map((player) => {
+                      const ownPres = getOwnershipPresentation(player.ownership_percentage);
+                      return (
+                        <View key={`own-${player.id}`} className="w-[120px] items-center gap-1">
+                          <Text className="text-center text-xs font-semibold text-slate-200">
+                            {`${player.ownership_percentage.toFixed(1)}%`}
+                          </Text>
+                          <View className={`rounded-full px-2 py-0.5 ${ownPres.badgeBg}`}>
+                            <Text className={`text-[10px] font-semibold ${ownPres.badgeText}`}>
+                              {ownPres.label}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
                   {hasPremium ? (
                     <>
                       <ComparisonRow

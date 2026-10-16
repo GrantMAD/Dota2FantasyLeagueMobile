@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'reac
 import type { FantasyContext, FantasyPlayer, MarketPlayer } from './api';
 import { getPlayerMarket, getTransferHistory, processTransfer } from './api';
 import { useMobileTheme } from '@/src/lib/theme';
+import { getOwnershipPresentation } from '@/src/lib/ownership';
 
 interface TransferMarketProps {
   context: FantasyContext;
@@ -226,41 +227,51 @@ export function TransferMarket({
               The selected player does not match the role of the player you are selling.
             </Text>
           ) : null}
-          {visibleIncomingPlayers.slice(0, 12).map((player) => {
-            const isQuickAdd = player.id === quickAddPlayerId;
-            const selected = player.id === selectedIn?.id;
-            return (
-              <Pressable
-                key={player.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                className={`min-h-14 justify-center rounded-xl border px-3 ${
-                  selected ? 'border-brand-500 bg-brand-500/10' : 'border-slate-800 bg-slate-950'
-                }`}
-                disabled={!selectedOut || context.gameweek?.isLocked || transferMutation.isPending}
-                onPress={() => {
-                  if (isQuickAdd) {
-                    setSelectionOverride({ quickAddId: quickAddPlayerId, playerId: null });
-                    setDismissedQuickAddId(selected ? player.id : null);
-                  } else {
-                    setSelectionOverride({
-                      quickAddId: quickAddPlayerId,
-                      playerId: selected ? null : player.id,
-                    });
-                    setDismissedQuickAddId(null);
-                  }
-                  transferMutation.reset();
-                }}
-              >
-                <Text className="font-semibold text-white">{playerName(player)}</Text>
-                {selected ? <Text className="mt-1 text-xs font-semibold text-brand-300">Selected as replacement</Text> : null}
-                <Text className="mt-1 text-xs text-slate-400">
-                  {player.primary_role ?? 'Role unavailable'} · {player.current_price === null ? 'Price unavailable' : player.current_price.toFixed(1)}
-                  {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
-                </Text>
-              </Pressable>
-            );
-          })}
+              {visibleIncomingPlayers.slice(0, 12).map((player) => {
+                const isQuickAdd = player.id === quickAddPlayerId;
+                const selected = player.id === selectedIn?.id;
+                const ownPres = getOwnershipPresentation(player.ownership_percentage);
+                return (
+                  <Pressable
+                    key={player.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    className={`min-h-14 justify-center rounded-xl border px-3 py-2.5 ${
+                      selected ? 'border-brand-500 bg-brand-500/10' : 'border-slate-800 bg-slate-950'
+                    }`}
+                    disabled={!selectedOut || context.gameweek?.isLocked || transferMutation.isPending}
+                    onPress={() => {
+                      if (isQuickAdd) {
+                        setSelectionOverride({ quickAddId: quickAddPlayerId, playerId: null });
+                        setDismissedQuickAddId(selected ? player.id : null);
+                      } else {
+                        setSelectionOverride({
+                          quickAddId: quickAddPlayerId,
+                          playerId: selected ? null : player.id,
+                        });
+                        setDismissedQuickAddId(null);
+                      }
+                      transferMutation.reset();
+                    }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <Text className="font-semibold text-white">{playerName(player)}</Text>
+                      {player.ownership_percentage != null ? (
+                        <View className={`rounded-full px-2 py-0.5 ${ownPres.badgeBg}`}>
+                          <Text className={`text-[10px] font-semibold ${ownPres.badgeText}`}>
+                            {`${player.ownership_percentage.toFixed(1)}%`}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {selected ? <Text className="mt-1 text-xs font-semibold text-brand-300">Selected as replacement</Text> : null}
+                    <Text className="mt-1 text-xs text-slate-400">
+                      {player.primary_role ?? 'Role unavailable'} · {player.current_price === null ? 'Price unavailable' : `${player.current_price.toFixed(1)}M`}
+                      {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
+                    </Text>
+                  </Pressable>
+                );
+              })}
           </>
         ) : (
           <Text className="py-3 text-sm leading-5 text-slate-400">

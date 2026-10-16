@@ -7,6 +7,7 @@ import { Screen } from '@/src/components/Screen';
 import { aggregateLatestGameweekScoreBreakdown, getPlayerDetail } from '@/src/features/players/api';
 import { getManagerProfile } from '@/src/features/account/api';
 import { isPremiumUser } from '@/src/lib/premium';
+import { getOwnershipPresentation } from '@/src/lib/ownership';
 
 function displayName(player: { in_game_name: string | null; name: string }): string {
   return player.in_game_name || player.name;
@@ -92,8 +93,44 @@ export default function PlayerDetailScreen() {
                 <Metric label="Price" value={`${query.data.current_price?.toFixed(1) ?? '—'}M`} />
                 <Metric label="Season" value={`${query.data.total_season_points.toFixed(1)} pts`} />
                 <Metric label="Latest GW" value={`${query.data.last_gw_points.toFixed(1)} pts`} />
-                <Metric label="Owned by" value={`${query.data.ownership_percentage.toFixed(1)}%`} />
               </View>
+
+              {/* Enhanced Ownership Card */}
+              {(() => {
+                const ownPres = getOwnershipPresentation(query.data.ownership_percentage);
+                const ownPct = query.data.ownership_percentage;
+                return (
+                  <View className="gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3.5">
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                        Player Ownership
+                      </Text>
+                      <View className={`rounded-full px-2.5 py-0.5 ${ownPres.badgeBg}`}>
+                        <Text className={`text-xs font-semibold ${ownPres.badgeText}`}>
+                          {ownPres.label}
+                        </Text>
+                      </View>
+                    </View>
+                    <View className="flex-row items-baseline justify-between">
+                      <Text className="text-2xl font-bold text-white">
+                        {ownPct.toFixed(1)}%
+                      </Text>
+                      <Text className="text-xs text-slate-400">
+                        of fantasy managers
+                      </Text>
+                    </View>
+                    <View className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                      <View
+                        style={{
+                          width: `${Math.min(100, Math.max(2, ownPct))}%`,
+                          backgroundColor: ownPres.color,
+                        }}
+                        className="h-full rounded-full"
+                      />
+                    </View>
+                  </View>
+                );
+              })()}
               <View className={`self-start rounded-full px-3 py-1 ${
                 query.data.availability_status === 'available' ? 'bg-emerald-500/15' : 'bg-amber-500/15'
               }`}>

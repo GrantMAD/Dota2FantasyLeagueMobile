@@ -9,6 +9,7 @@ export interface DirectoryPlayer {
   primary_role: string | null;
   availability_status: string | null;
   current_price: number | null;
+  ownership_percentage?: number | null;
   gameweek_points: number;
   recent_points: number;
   team_name: string | null;
@@ -163,6 +164,7 @@ function parsePlayer(value: unknown): DirectoryPlayer {
       ? value.availability_status
       : null,
     current_price: typeof value.current_price === 'number' ? value.current_price : null,
+    ownership_percentage: typeof value.ownership_percentage === 'number' ? value.ownership_percentage : null,
     gameweek_points: value.gameweek_points,
     recent_points: value.recent_points,
     team_name: isRecord(team) ? String(team.name) : null,

@@ -421,6 +421,7 @@ export interface MarketPlayer {
   primary_role: string | null;
   availability_status: string | null;
   current_price: number | null;
+  ownership_percentage?: number | null;
   recent_points: number | null;
 }
 
@@ -450,6 +451,9 @@ function parseMarketPlayer(value: unknown): MarketPlayer {
     primary_role: typeof value.primary_role === 'string' ? value.primary_role : null,
     availability_status: typeof value.availability_status === 'string' ? value.availability_status : null,
     current_price: currentPrice === null ? null : Number(currentPrice),
+    ...(typeof value.ownership_percentage === 'number'
+      ? { ownership_percentage: value.ownership_percentage }
+      : {}),
     recent_points: typeof value.recent_points === 'number' ? value.recent_points : null,
   };
 }
