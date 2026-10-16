@@ -1569,60 +1569,64 @@ describe('mobile data access', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('loads Premium waitlist status through the authenticated web endpoint', async () => {
-    (fetch as jest.Mock).mockResolvedValue(new Response(JSON.stringify({
-      waitlisted: true,
-      email: 'waitlist@example.test',
-    }), { status: 200 }));
+  it('loads Premium waitlist status through the authenticated Supabase RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: {
+        waitlisted: true,
+        email: 'waitlist@example.test',
+      },
+      error: null,
+    });
 
     await expect(getPremiumWaitlistStatus()).resolves.toEqual({
       waitlisted: true,
       email: 'waitlist@example.test',
     });
-    expect(fetch).toHaveBeenCalledWith(
-      'https://web.example.test/api/premium/waitlist',
-      expect.objectContaining({
-        method: 'GET',
-        headers: { Authorization: 'Bearer test-access-token' },
-      }),
-    );
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_premium_waitlist');
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('joins the Premium waitlist with explicit consent and normalized session auth', async () => {
-    (fetch as jest.Mock).mockResolvedValue(new Response(JSON.stringify({
-      waitlisted: true,
-    }), { status: 200 }));
+  it('joins the Premium waitlist with explicit consent through the authenticated Supabase RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: {
+        waitlisted: true,
+        email: 'manager@example.test',
+      },
+      error: null,
+    });
 
     await expect(joinPremiumWaitlist('  Manager@Example.Test ')).resolves.toEqual({
       waitlisted: true,
       email: 'manager@example.test',
     });
-    expect(fetch).toHaveBeenCalledWith(
-      'https://web.example.test/api/premium/waitlist',
-      expect.objectContaining({
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer test-access-token',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: 'Manager@Example.Test', consent: true }),
-      }),
-    );
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_join_premium_waitlist', {
+      p_email: 'Manager@Example.Test',
+      p_consent: true,
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('withdraws Premium waitlist consent and reports web API errors', async () => {
-    (fetch as jest.Mock)
-      .mockResolvedValueOnce(new Response(JSON.stringify({ waitlisted: false }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Sign in again.' }), { status: 401 }));
+  it('withdraws Premium waitlist consent through the authenticated Supabase RPC and reports errors', async () => {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({
+        data: { waitlisted: false, email: '' },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: '28000', message: 'Authentication is required.' },
+      });
 
     await expect(removePremiumWaitlistEntry()).resolves.toEqual({
       waitlisted: false,
       email: '',
     });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_remove_premium_waitlist');
     await expect(getPremiumWaitlistStatus()).rejects.toMatchObject({
       name: 'ApiError',
       status: 401,
-      message: 'Sign in again.',
+      message: 'Sign in again to manage the Premium waitlist.',
     });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,4 @@
 import { ApiError } from '@/src/lib/errors';
-import { getWebBaseUrl } from '@/src/lib/web';
 import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface PremiumWaitlistStatus {
@@ -7,71 +6,69 @@ export interface PremiumWaitlistStatus {
   email: string;
 }
 
-interface WaitlistResponse {
+interface WaitlistRpcResult {
   waitlisted?: unknown;
   email?: unknown;
-  error?: unknown;
 }
 
-async function requestWaitlist(
-  method: 'GET' | 'POST' | 'DELETE',
-  body?: { email: string; consent: true },
-): Promise<PremiumWaitlistStatus> {
-  const { data, error: sessionError } = await getSupabaseClient().auth.getSession();
-  const token = data.session?.access_token;
-  if (sessionError || !token) {
-    throw new ApiError('Sign in again to manage the Premium waitlist.', 401);
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(`${getWebBaseUrl()}/api/premium/waitlist`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-  } catch (error: unknown) {
-    throw new ApiError(
-      error instanceof Error ? `Unable to reach the Premium waitlist: ${error.message}` : 'Unable to reach the Premium waitlist.',
-      503,
-    );
-  }
-
-  let result: WaitlistResponse;
-  try {
-    result = (await response.json()) as WaitlistResponse;
-  } catch {
-    throw new ApiError('The Premium waitlist returned an invalid response.', 502);
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      typeof result.error === 'string' ? result.error : 'Unable to update the Premium waitlist.',
-      response.status,
-    );
-  }
-
-  if (typeof result.waitlisted !== 'boolean' || (result.email !== undefined && typeof result.email !== 'string')) {
+function parseWaitlistResult(data: unknown): PremiumWaitlistStatus {
+  if (
+    typeof data !== 'object' ||
+    data === null ||
+    typeof (data as WaitlistRpcResult).waitlisted !== 'boolean' ||
+    typeof (data as WaitlistRpcResult).email !== 'string'
+  ) {
     throw new ApiError('The Premium waitlist returned an unexpected response.', 502);
   }
-
+  const result = data as WaitlistRpcResult;
   return {
-    waitlisted: result.waitlisted,
-    email: method === 'POST' ? body?.email.trim().toLowerCase() ?? '' : result.email ?? '',
+    waitlisted: result.waitlisted as boolean,
+    email: (result.email as string).trim().toLowerCase(),
   };
 }
 
-export function getPremiumWaitlistStatus(): Promise<PremiumWaitlistStatus> {
-  return requestWaitlist('GET');
+export async function getPremiumWaitlistStatus(): Promise<PremiumWaitlistStatus> {
+  const { data, error } = await getSupabaseClient().rpc('mobile_get_premium_waitlist');
+  if (error) {
+    const isAuth = error.code === '28000' || error.message.toLowerCase().includes('auth');
+    throw new ApiError(
+      isAuth ? 'Sign in again to manage the Premium waitlist.' : `Unable to reach the Premium waitlist: ${error.message}`,
+      isAuth ? 401 : 500,
+    );
+  }
+  return parseWaitlistResult(data);
 }
 
-export function joinPremiumWaitlist(email: string): Promise<PremiumWaitlistStatus> {
-  return requestWaitlist('POST', { email: email.trim(), consent: true });
+export async function joinPremiumWaitlist(email: string): Promise<PremiumWaitlistStatus> {
+  const normalized = email.trim();
+  const { data, error } = await getSupabaseClient().rpc('mobile_join_premium_waitlist', {
+    p_email: normalized,
+    p_consent: true,
+  });
+  if (error) {
+    const isAuth = error.code === '28000' || error.message.toLowerCase().includes('auth');
+    const isValidation = error.code === '22023';
+    throw new ApiError(
+      isAuth
+        ? 'Sign in again to manage the Premium waitlist.'
+        : error.message || 'Unable to join the Premium waitlist right now.',
+      isAuth ? 401 : isValidation ? 400 : 500,
+    );
+  }
+  return parseWaitlistResult(data);
 }
 
-export function removePremiumWaitlistEntry(): Promise<PremiumWaitlistStatus> {
-  return requestWaitlist('DELETE');
+export async function removePremiumWaitlistEntry(): Promise<PremiumWaitlistStatus> {
+  const { data, error } = await getSupabaseClient().rpc('mobile_remove_premium_waitlist');
+  if (error) {
+    const isAuth = error.code === '28000' || error.message.toLowerCase().includes('auth');
+    throw new ApiError(
+      isAuth
+        ? 'Sign in again to manage the Premium waitlist.'
+        : error.message || 'Unable to remove your waitlist signup right now.',
+      isAuth ? 401 : 500,
+    );
+  }
+  return parseWaitlistResult(data);
 }
+
