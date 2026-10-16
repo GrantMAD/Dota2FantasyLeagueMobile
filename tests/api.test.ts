@@ -22,6 +22,11 @@ import { getAnalytics } from '../src/features/analytics/api';
 import { getDashboardWhatsNew } from '../src/features/dashboard/api';
 import { getSeasonRecaps } from '../src/features/season-recap/api';
 import {
+  getPremiumWaitlistStatus,
+  joinPremiumWaitlist,
+  removePremiumWaitlistEntry,
+} from '../src/features/premium/api';
+import {
   createManagerAccount,
   getManagerProfile,
   getThemePreference,
@@ -1562,5 +1567,62 @@ describe('mobile data access', () => {
       p_fantasy_season_id: 9,
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('loads Premium waitlist status through the authenticated web endpoint', async () => {
+    (fetch as jest.Mock).mockResolvedValue(new Response(JSON.stringify({
+      waitlisted: true,
+      email: 'waitlist@example.test',
+    }), { status: 200 }));
+
+    await expect(getPremiumWaitlistStatus()).resolves.toEqual({
+      waitlisted: true,
+      email: 'waitlist@example.test',
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      'https://web.example.test/api/premium/waitlist',
+      expect.objectContaining({
+        method: 'GET',
+        headers: { Authorization: 'Bearer test-access-token' },
+      }),
+    );
+  });
+
+  it('joins the Premium waitlist with explicit consent and normalized session auth', async () => {
+    (fetch as jest.Mock).mockResolvedValue(new Response(JSON.stringify({
+      waitlisted: true,
+    }), { status: 200 }));
+
+    await expect(joinPremiumWaitlist('  Manager@Example.Test ')).resolves.toEqual({
+      waitlisted: true,
+      email: 'manager@example.test',
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      'https://web.example.test/api/premium/waitlist',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer test-access-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: 'Manager@Example.Test', consent: true }),
+      }),
+    );
+  });
+
+  it('withdraws Premium waitlist consent and reports web API errors', async () => {
+    (fetch as jest.Mock)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ waitlisted: false }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Sign in again.' }), { status: 401 }));
+
+    await expect(removePremiumWaitlistEntry()).resolves.toEqual({
+      waitlisted: false,
+      email: '',
+    });
+    await expect(getPremiumWaitlistStatus()).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 401,
+      message: 'Sign in again.',
+    });
   });
 });
