@@ -804,13 +804,23 @@ describe('mobile data access', () => {
         gold_per_minute: 321,
         professional_players: { id: 41, name: 'Player Name', in_game_name: 'PlayerTag' },
       }],
-      fantasyBreakdown: [{ player_id: 41, total_points: 12.5 }],
+      fantasyBreakdown: [{
+        player_id: 41,
+        total_points: 12.5,
+        combat_points: 4.2,
+        economy_points: 3.1,
+      }],
     }, error: null });
 
     await expect(getMatchDetails(81)).resolves.toMatchObject({
       match: { id: 81, status: 'completed' },
       playerStats: [{ id: 501, player_id: 41, hero_name: 'Crystal Maiden', kills: 3, assists: 15 }],
-      fantasyBreakdown: [{ player_id: 41, total_points: 12.5 }],
+      fantasyBreakdown: [{
+        player_id: 41,
+        total_points: 12.5,
+        combat_points: 4.2,
+        economy_points: 3.1,
+      }],
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_match_details', {
       p_match_id: 81,

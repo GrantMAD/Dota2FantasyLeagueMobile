@@ -53,10 +53,38 @@ export interface TournamentSummary {
   participating_teams: { id: number; name: string }[];
 }
 
+export interface FantasyCategoryBreakdown {
+  player_id: number;
+  combat_points?: number | null;
+  economy_points?: number | null;
+  objective_points?: number | null;
+  teamfight_points?: number | null;
+  win_points?: number | null;
+  series_points?: number | null;
+  performance_index_points?: number | null;
+  consistency_points?: number | null;
+  penalty_points?: number | null;
+  total_points: number | null;
+}
+
+export interface UserLineupDetail {
+  playerId: number;
+  slot: string;
+  isCaptain: boolean;
+  isViceCaptain: boolean;
+  isStarter: boolean;
+}
+
+export interface UserFantasyImpact {
+  userOwnedPlayerIds: number[];
+  lineupDetails: UserLineupDetail[];
+}
+
 export interface MatchDetails {
   match: MatchSummary;
   playerStats: MatchPlayerStat[];
-  fantasyBreakdown: { player_id: number; total_points: number | null }[];
+  fantasyBreakdown: FantasyCategoryBreakdown[];
+  userFantasyImpact?: UserFantasyImpact | null;
 }
 
 export interface MatchPlayerStat {
@@ -287,7 +315,7 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
       player: parseStatPlayer(playerValue),
     };
   });
-  const fantasyBreakdown = result.fantasyBreakdown.map((row) => {
+  const fantasyBreakdown = result.fantasyBreakdown.map((row): FantasyCategoryBreakdown => {
     if (
       !isRecord(row) ||
       !Number.isInteger(row.player_id) ||
@@ -295,12 +323,108 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
     ) {
       throw new ApiError('Match data was returned in an unexpected format.', 502);
     }
-    return { player_id: Number(row.player_id), total_points: row.total_points };
+    return {
+      player_id: Number(row.player_id),
+      total_points: row.total_points,
+      combat_points: nullableFiniteNumber(row.combat_points) ? (row.combat_points as number | null) : null,
+      economy_points: nullableFiniteNumber(row.economy_points) ? (row.economy_points as number | null) : null,
+      objective_points: nullableFiniteNumber(row.objective_points) ? (row.objective_points as number | null) : null,
+      teamfight_points: nullableFiniteNumber(row.teamfight_points) ? (row.teamfight_points as number | null) : null,
+      win_points: nullableFiniteNumber(row.win_points) ? (row.win_points as number | null) : null,
+      series_points: nullableFiniteNumber(row.series_points) ? (row.series_points as number | null) : null,
+      performance_index_points: nullableFiniteNumber(row.performance_index_points) ? (row.performance_index_points as number | null) : null,
+      consistency_points: nullableFiniteNumber(row.consistency_points) ? (row.consistency_points as number | null) : null,
+      penalty_points: nullableFiniteNumber(row.penalty_points) ? (row.penalty_points as number | null) : null,
+    };
   });
+
+  const parsedMatch = parseMatch(result.match);
+
+  // User fantasy impact resolution
+  let userFantasyImpact: UserFantasyImpact | null = null;
+  try {
+    const supabase = getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
+
+    if (userId && parsedMatch.gameweek_id) {
+      const { data: fantasySeasonData } = await supabase
+        .from('fantasy_seasons')
+        .select('id')
+        .eq('user_id', userId)
+        .limit(1);
+
+      const fantasySeasonId = fantasySeasonData?.[0]?.id;
+      if (fantasySeasonId) {
+        const [{ data: lineupRow }, { data: squadMembers }] = await Promise.all([
+          supabase
+            .from('fantasy_lineups')
+            .select('carry_id, mid_id, offlane_id, support_id, hard_support_id, bench_1_id, bench_2_id, bench_3_id, captain_player_id, vice_captain_player_id')
+            .eq('fantasy_season_id', fantasySeasonId)
+            .eq('gameweek_id', parsedMatch.gameweek_id)
+            .maybeSingle(),
+          supabase
+            .from('fantasy_squad_members')
+            .select('player_id')
+            .eq('fantasy_season_id', fantasySeasonId),
+        ]);
+
+        const ownedIds = (squadMembers ?? []).map((m: { player_id: number }) => m.player_id);
+        const lineupDetails: UserLineupDetail[] = [];
+
+        if (lineupRow) {
+          const starterSlots: Array<[string, number | null]> = [
+            ['Carry', lineupRow.carry_id],
+            ['Mid', lineupRow.mid_id],
+            ['Offlane', lineupRow.offlane_id],
+            ['Support', lineupRow.support_id],
+            ['Hard Support', lineupRow.hard_support_id],
+          ];
+          const benchSlots: Array<[string, number | null]> = [
+            ['Bench 1', lineupRow.bench_1_id],
+            ['Bench 2', lineupRow.bench_2_id],
+            ['Bench 3', lineupRow.bench_3_id],
+          ];
+
+          for (const [slot, pId] of starterSlots) {
+            if (pId) {
+              lineupDetails.push({
+                playerId: pId,
+                slot,
+                isCaptain: lineupRow.captain_player_id === pId,
+                isViceCaptain: lineupRow.vice_captain_player_id === pId,
+                isStarter: true,
+              });
+            }
+          }
+          for (const [slot, pId] of benchSlots) {
+            if (pId) {
+              lineupDetails.push({
+                playerId: pId,
+                slot,
+                isCaptain: false,
+                isViceCaptain: false,
+                isStarter: false,
+              });
+            }
+          }
+        }
+
+        userFantasyImpact = {
+          userOwnedPlayerIds: ownedIds,
+          lineupDetails,
+        };
+      }
+    }
+  } catch {
+    // Non-fatal if fantasy impact cannot be looked up
+  }
+
   return {
-    match: parseMatch(result.match),
+    match: parsedMatch,
     playerStats,
     fantasyBreakdown,
+    userFantasyImpact,
   };
 }
 
