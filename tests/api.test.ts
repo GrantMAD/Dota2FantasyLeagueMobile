@@ -122,6 +122,89 @@ describe('mobile data access', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('resolves a used Wildcard gameweek number through the authenticated gameweek RPC', async () => {
+    mobileFantasyContextRpc.mockImplementation(async (name: string) => {
+      if (name === 'mobile_get_fantasy_lineup_context') {
+        return {
+          data: {
+            fantasySeasonId: 12,
+            seasonId: 3,
+            budget: 100,
+            freeTransfers: 1,
+            totalPoints: 0,
+            globalRank: null,
+            gameweek: null,
+            defaultGameweekId: null,
+            availableGameweeks: [],
+            chips: {
+              tripleCaptainUsed: false,
+              tripleCaptainGameweekId: null,
+              benchBoostUsed: false,
+              benchBoostGameweekId: null,
+              wildcardUsed: true,
+              wildcardUsedGameweekId: 42,
+            },
+            lineup: [],
+            ownedPlayers: [],
+          },
+          error: null,
+        };
+      }
+      if (name === 'mobile_get_gameweeks') {
+        return {
+          data: { gameweeks: [{ id: 42, gameweek_number: 11 }] },
+          error: null,
+        };
+      }
+      return { data: null, error: null };
+    });
+
+    await expect(getFantasyContext()).resolves.toMatchObject({
+      chips: {
+        wildcardUsed: true,
+        wildcardUsedGameweekId: 42,
+        wildcardUsedGameweekNumber: 11,
+      },
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_gameweeks');
+  });
+
+  it('surfaces errors when resolving the used Wildcard gameweek', async () => {
+    mobileFantasyContextRpc.mockImplementation(async (name: string) => {
+      if (name === 'mobile_get_fantasy_lineup_context') {
+        return {
+          data: {
+            fantasySeasonId: 12,
+            seasonId: 3,
+            budget: 100,
+            freeTransfers: 1,
+            totalPoints: 0,
+            globalRank: null,
+            gameweek: null,
+            defaultGameweekId: null,
+            availableGameweeks: [],
+            chips: {
+              tripleCaptainUsed: false,
+              tripleCaptainGameweekId: null,
+              benchBoostUsed: false,
+              benchBoostGameweekId: null,
+              wildcardUsed: true,
+              wildcardUsedGameweekId: 42,
+            },
+            lineup: [],
+            ownedPlayers: [],
+          },
+          error: null,
+        };
+      }
+      return { data: null, error: { message: 'Gameweek schedule unavailable.' } };
+    });
+
+    await expect(getFantasyContext()).rejects.toThrow(
+      'Unable to load Wildcard usage details: Gameweek schedule unavailable.'
+    );
+  });
+
   it('requests a selected gameweek lineup and validates available planning weeks', async () => {
     mockFantasyContextRpc({
       fantasySeasonId: 12,

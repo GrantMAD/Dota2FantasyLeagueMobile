@@ -13,7 +13,16 @@ export function WildcardPanel({ context, userId }: WildcardPanelProps) {
   const mutation = useMutation({
     mutationFn: activateWildcard,
     onSuccess: async (result) => {
-      Alert.alert('Wildcard activated', result.message);
+      const activatedGameweekNumber = context.gameweek?.id === result.gameweekId
+        ? context.gameweek.gameweekNumber
+        : null;
+      const gameweekMessage = activatedGameweekNumber === null
+        ? ''
+        : ` Used in Gameweek ${activatedGameweekNumber}.`;
+      Alert.alert(
+        'Wildcard activated',
+        `${result.message}${gameweekMessage} Your Wildcard can be used once per season and is available again next season.`
+      );
       await queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] });
     },
   });
@@ -54,9 +63,11 @@ export function WildcardPanel({ context, userId }: WildcardPanelProps) {
         <Text className="text-base font-semibold text-amber-200">Wildcard</Text>
         <Text className="mt-1 text-sm leading-5 text-amber-100/80">
           {wildcardActive
-            ? 'Active for this gameweek. Use the multi-transfer builder below before the deadline.'
+            ? `Active for Gameweek ${context.gameweek?.gameweekNumber}. Use the multi-transfer builder below before the deadline. It can be used once per season and is available again next season.`
             : unavailable
-              ? 'Already used this season.'
+              ? context.chips.wildcardUsedGameweekNumber === null
+                ? 'Already used this season. Your Wildcard is available again next season.'
+                : `Used in Gameweek ${context.chips.wildcardUsedGameweekNumber}. Your Wildcard is available again next season.`
               : context.gameweek?.isLocked
                 ? 'Unavailable while the gameweek is locked.'
                 : 'Available once this season. Activation is immediate and cannot be undone.'}

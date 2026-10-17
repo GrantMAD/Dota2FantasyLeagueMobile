@@ -7,7 +7,8 @@ import { LineupEditor } from '../src/features/fantasy/LineupEditor';
 import { SquadBuilder } from '../src/features/fantasy/SquadBuilder';
 import { TransferMarket } from '../src/features/fantasy/TransferMarket';
 import { ChipActivationPanel } from '../src/features/fantasy/ChipActivationPanel';
-import { activateChip, getPlayerMarket, getTransferHistory, processTransfer, saveLineup } from '../src/features/fantasy/api';
+import { WildcardPanel } from '../src/features/fantasy/WildcardPanel';
+import { activateChip, activateWildcard, getPlayerMarket, getTransferHistory, processTransfer, saveLineup } from '../src/features/fantasy/api';
 
 jest.mock('../src/lib/theme', () => ({
   useMobileTheme: () => ({ colors: { onAccent: '#ffffff', placeholder: '#999999' } }),
@@ -15,6 +16,7 @@ jest.mock('../src/lib/theme', () => ({
 
 jest.mock('../src/features/fantasy/api', () => ({
   activateChip: jest.fn(),
+  activateWildcard: jest.fn(),
   getPlayerMarket: jest.fn(),
   getTransferHistory: jest.fn(),
   processTransfer: jest.fn(),
@@ -24,6 +26,7 @@ jest.mock('../src/features/fantasy/api', () => ({
 const mockedSaveLineup = jest.mocked(saveLineup);
 const mockedProcessTransfer = jest.mocked(processTransfer);
 const mockedActivateChip = jest.mocked(activateChip);
+const mockedActivateWildcard = jest.mocked(activateWildcard);
 const mockedGetPlayerMarket = jest.mocked(getPlayerMarket);
 const mockedGetTransferHistory = jest.mocked(getTransferHistory);
 let queryClients: QueryClient[] = [];
@@ -118,6 +121,7 @@ function createContext(overrides: Partial<FantasyContext> = {}): FantasyContext 
       benchBoostGameweekId: null,
       wildcardUsed: false,
       wildcardUsedGameweekId: null,
+      wildcardUsedGameweekNumber: null,
     },
     lineup,
     ownedPlayers: startingPlayers,
@@ -150,6 +154,7 @@ describe('fantasy management components', () => {
     mockedSaveLineup.mockReset();
     mockedProcessTransfer.mockReset();
     mockedActivateChip.mockReset();
+    mockedActivateWildcard.mockReset();
     mockedGetPlayerMarket.mockReset();
     mockedGetTransferHistory.mockReset();
   });
@@ -351,5 +356,38 @@ describe('fantasy management components', () => {
       fantasySeasonId: 12,
       chip: 'triple-captain',
     }, expect.any(Object));
+  });
+
+  it('shows the used Wildcard gameweek and next-season availability', () => {
+    const context = createContext({
+      chips: {
+        ...createContext().chips,
+        wildcardUsed: true,
+        wildcardUsedGameweekId: 18,
+        wildcardUsedGameweekNumber: 4,
+      },
+    });
+    const view = renderWithQueryClient(<WildcardPanel context={context} userId="manager-1" />);
+
+    expect(view.getByText('Used in Gameweek 4. Your Wildcard is available again next season.')).toBeTruthy();
+    expect(view.getByText('Used')).toBeTruthy();
+  });
+
+  it('includes the activated gameweek and next-season availability in the confirmation', async () => {
+    mockedActivateWildcard.mockResolvedValue({ message: 'Wildcard activated.', gameweekId: 24 });
+    const view = renderWithQueryClient(
+      <WildcardPanel context={createContext()} userId="manager-1" />
+    );
+
+    await fireEvent.press(view.getByRole('button', { name: 'Activate Wildcard' }));
+    confirmAlertAction('Activate Wildcard');
+
+    await waitFor(() => expect(mockedActivateWildcard).toHaveBeenCalledWith({
+      fantasySeasonId: 12,
+    }, expect.any(Object)));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
+      'Wildcard activated',
+      'Wildcard activated. Used in Gameweek 7. Your Wildcard can be used once per season and is available again next season.',
+    ));
   });
 });

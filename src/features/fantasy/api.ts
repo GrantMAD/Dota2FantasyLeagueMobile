@@ -59,6 +59,7 @@ export interface FantasyContext {
     benchBoostGameweekId: number | null;
     wildcardUsed: boolean;
     wildcardUsedGameweekId: number | null;
+    wildcardUsedGameweekNumber: number | null;
   };
   lineup: FantasyLineupEntry[];
   ownedPlayers: FantasyPlayer[];
@@ -302,6 +303,27 @@ export async function getFantasyContext(gameweekId?: number): Promise<FantasyCon
     throw new ApiError('Fantasy data was returned in an unexpected format.', 502);
   }
 
+  let wildcardUsedGameweekNumber: number | null = null;
+  if (chips.wildcardUsedGameweekId !== null) {
+    const { data: gameweeksData, error: gameweeksError } = await getSupabaseClient().rpc('mobile_get_gameweeks');
+    if (gameweeksError) {
+      throw new ApiError(`Unable to load Wildcard usage details: ${gameweeksError.message}`, 500);
+    }
+    if (!isRecord(gameweeksData) || !Array.isArray(gameweeksData.gameweeks)) {
+      throw new ApiError('Wildcard usage details were returned in an unexpected format.', 502);
+    }
+
+    const wildcardGameweek = gameweeksData.gameweeks.find(
+      (rawGameweek) => isRecord(rawGameweek) && rawGameweek.id === chips.wildcardUsedGameweekId
+    );
+    if (wildcardGameweek !== undefined) {
+      if (!isRecord(wildcardGameweek) || !Number.isInteger(wildcardGameweek.gameweek_number)) {
+        throw new ApiError('Wildcard usage details were returned in an unexpected format.', 502);
+      }
+      wildcardUsedGameweekNumber = Number(wildcardGameweek.gameweek_number);
+    }
+  }
+
   const availableGameweeks = value.availableGameweeks.map((rawGameweek) => {
     if (
       !isRecord(rawGameweek) ||
@@ -363,6 +385,7 @@ export async function getFantasyContext(gameweekId?: number): Promise<FantasyCon
       benchBoostGameweekId: chips.benchBoostGameweekId,
       wildcardUsed: chips.wildcardUsed,
       wildcardUsedGameweekId: chips.wildcardUsedGameweekId,
+      wildcardUsedGameweekNumber,
     },
     lineup: value.lineup.map(parseLineupEntry),
     ownedPlayers: value.ownedPlayers.map(parsePlayer),
