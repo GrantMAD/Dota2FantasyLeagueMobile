@@ -8,6 +8,8 @@ import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getManagerProfile } from '@/src/features/account/api';
 import { getDashboardWhatsNew } from '@/src/features/dashboard/api';
+import { DashboardLiveMatches } from '@/src/features/dashboard/DashboardLiveMatches';
+import { getMatches } from '@/src/features/competition/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { getLeagues } from '@/src/features/leagues/api';
 import { useAuth } from '@/src/lib/auth';
@@ -38,6 +40,12 @@ export default function HomeScreen() {
     enabled: Boolean(session),
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
+  });
+  const liveMatchesQuery = useQuery({
+    queryKey: ['dashboard-live-matches'],
+    queryFn: () => getMatches('live'),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
   const myLeagues = (leaguesQuery.data ?? [])
     .filter((league) => league.standings.some((standing) => standing.userId === session?.user.id))
@@ -104,9 +112,10 @@ export default function HomeScreen() {
                 query.refetch(),
                 leaguesQuery.refetch(),
                 whatsNewQuery.refetch(),
+                liveMatchesQuery.refetch(),
               ]);
             }}
-            refreshing={query.isRefetching}
+            refreshing={query.isRefetching || liveMatchesQuery.isRefetching}
             tintColor="#14b8a6"
           />
         }
@@ -294,6 +303,18 @@ export default function HomeScreen() {
                 </Text>
               </View>
             ) : null}
+            {/* Live Matches In Progress */}
+            {liveMatchesQuery.data && liveMatchesQuery.data.length > 0 ? (
+              <DashboardLiveMatches
+                matches={liveMatchesQuery.data}
+                userStarterTeamIds={
+                  starters
+                    .map((s) => s.professional_players?.professional_teams?.id)
+                    .filter((id): id is number => typeof id === 'number')
+                }
+              />
+            ) : null}
+
             {hasSquad ? (
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
                 <View className="flex-row items-center justify-between">
