@@ -96,7 +96,10 @@ export function SquadBuilder({
     mutationFn: addPlayersToSquad,
     onSuccess: async (result) => {
       setManuallySelectedPlayers(new Map());
-      await queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] }),
+        queryClient.invalidateQueries({ queryKey: ['transfer-history-analytics', userId] }),
+      ]);
       Alert.alert(
         'Squad updated',
         `Added players to your squad. ${result.squadSize}/${result.squadMaxSize} players selected.`

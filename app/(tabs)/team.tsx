@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, LayoutChangeEvent, Pressable, RefreshControl, Text, View } from 'react-native';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
@@ -11,8 +12,122 @@ import { TransferMarket } from '@/src/features/fantasy/TransferMarket';
 import { WildcardPanel } from '@/src/features/fantasy/WildcardPanel';
 import { WildcardTransferBuilder } from '@/src/features/fantasy/WildcardTransferBuilder';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
-import { getTransferHistory } from '@/src/features/fantasy/api';
+import { getTransferHistoryAnalytics } from '@/src/features/fantasy/api';
+import type { TransferInsight } from '@/src/features/fantasy/transfer-history-analytics';
 import { useAuth } from '@/src/lib/auth';
+
+function SquadValueChart({ data }: { data: { gameweekNumber: number; value: number | null }[] }) {
+  const [width, setWidth] = useState(0);
+  const height = 190;
+  const left = 42;
+  const right = 12;
+  const top = 14;
+  const bottom = 22;
+  const values = data.flatMap((point) => point.value === null ? [] : [point.value]);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const plotWidth = Math.max(0, width - left - right);
+  const plotHeight = height - top - bottom;
+  const xForIndex = (index: number) => left + (data.length <= 1 ? plotWidth / 2 : index * plotWidth / (data.length - 1));
+  const yForValue = (value: number) => top + ((max - value) / range) * plotHeight;
+  const segments: string[] = [];
+  let segment = '';
+
+  data.forEach((point, index) => {
+    if (point.value === null) {
+      if (segment) segments.push(segment);
+      segment = '';
+      return;
+    }
+    segment += `${segment ? ' L' : 'M'} ${xForIndex(index)} ${yForValue(point.value)}`;
+  });
+  if (segment) segments.push(segment);
+
+  return (
+    <View
+      accessibilityLabel="Squad market value by completed gameweek, excluding bank balance"
+      className="h-48 w-full"
+      onLayout={(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width)}
+    >
+      {width > 0 && values.length > 0 ? (
+        <Svg height={height} width={width}>
+          {[0, 0.5, 1].map((fraction) => {
+            const y = top + fraction * plotHeight;
+            return <Line key={fraction} x1={left} x2={width - right} y1={y} y2={y} stroke="#334155" strokeDasharray="4 4" />;
+          })}
+          {segments.map((path, index) => (
+            <Path key={index} d={path} fill="none" stroke="#22d3ee" strokeWidth={2.5} />
+          ))}
+          {data.map((point, index) => point.value === null ? null : (
+            <Circle
+              key={point.gameweekNumber}
+              cx={xForIndex(index)}
+              cy={yForValue(point.value)}
+              r={3.5}
+              fill="#22d3ee"
+            />
+          ))}
+        </Svg>
+      ) : (
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-center text-xs text-slate-400">
+            {data.length ? 'No complete price snapshots are available to chart.' : 'Completed gameweek history is not available yet.'}
+          </Text>
+        </View>
+      )}
+      {values.length > 0 ? (
+        <View className="flex-row justify-between px-1">
+          <Text className="text-[10px] text-slate-500">GW {data[0]?.gameweekNumber}</Text>
+          <Text className="text-[10px] text-slate-500">GW {data[data.length - 1]?.gameweekNumber}</Text>
+        </View>
+      ) : null}
+      {values.length > 0 ? (
+        <Text className="mt-1 text-center text-[10px] text-slate-500">
+          Player value ($M): {min.toFixed(1)}–{max.toFixed(1)}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function TransferInsightCard({ title, insight, positive, hasTransfers, loading, error }: {
+  title: string;
+  insight: TransferInsight | null;
+  positive: boolean;
+  hasTransfers: boolean;
+  loading: boolean;
+  error: boolean;
+}) {
+  return (
+    <View className="flex-1 min-w-[45%] rounded-xl border border-slate-800 bg-slate-900 p-3">
+      <Text className="text-xs font-bold text-white">{title}</Text>
+      {insight ? (
+        <>
+          <Text className="mt-2 text-xs text-slate-200" numberOfLines={2}>
+            {insight.playerOut} → {insight.playerIn}
+          </Text>
+          <Text className={`mt-1 text-base font-bold ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {insight.netPoints > 0 ? '+' : ''}{insight.netPoints.toFixed(1)} pts
+          </Text>
+          <Text className="mt-1 text-[10px] text-slate-400">
+            Net points over GW {insight.gameweekNumbers.join(', ')}
+          </Text>
+        </>
+      ) : (
+        <Text className="mt-2 text-xs text-slate-400">
+          {error
+            ? 'Transfer insights could not be loaded.'
+            : loading
+              ? 'Loading transfer insights…'
+              : hasTransfers
+                ? 'No swap has a fully completed three-gameweek window yet.'
+                : 'No transfer swaps are recorded yet.'}
+        </Text>
+      )}
+    </View>
+  );
+}
 
 export default function TeamScreen() {
   const params = useLocalSearchParams<{ quickAddPlayerId?: string; quickAddPlayerName?: string }>();
@@ -36,8 +151,8 @@ export default function TeamScreen() {
   );
 
   const historyQuery = useQuery({
-    queryKey: ['transfer-history', session?.user.id],
-    queryFn: getTransferHistory,
+    queryKey: ['transfer-history-analytics', session?.user.id],
+    queryFn: getTransferHistoryAnalytics,
     enabled: Boolean(session?.user.id),
     staleTime: 60_000,
   });
@@ -60,7 +175,7 @@ export default function TeamScreen() {
 
   // Transfer history summary calculations
   const historySummary = useMemo(() => {
-    const records = historyQuery.data ?? [];
+    const records = historyQuery.data?.transfers ?? [];
     let totalMoves = 0;
     let totalPenalty = 0;
     const gameweeks = new Set<number>();
@@ -81,7 +196,7 @@ export default function TeamScreen() {
       totalPenalty,
       totalGameweeks: gameweeks.size,
     };
-  }, [historyQuery.data]);
+  }, [historyQuery.data?.transfers]);
 
   return (
     <Screen>
@@ -225,6 +340,69 @@ export default function TeamScreen() {
                   </View>
                 </View>
 
+                <View className="gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Net Budget Change</Text>
+                    <Text className={`font-mono text-lg font-bold ${
+                      historyQuery.data?.analytics.netBudgetChange === null || !historyQuery.data
+                        ? 'text-slate-400'
+                        : historyQuery.data.analytics.netBudgetChange > 0
+                          ? 'text-emerald-400'
+                          : historyQuery.data.analytics.netBudgetChange < 0
+                            ? 'text-rose-400'
+                            : 'text-white'
+                    }`}>
+                      {!historyQuery.data || historyQuery.data.analytics.netBudgetChange === null
+                        ? 'Unavailable'
+                        : `${historyQuery.data.analytics.netBudgetChange > 0 ? '+$' : historyQuery.data.analytics.netBudgetChange < 0 ? '-$' : '$'}${Math.abs(historyQuery.data.analytics.netBudgetChange).toFixed(1)}M`}
+                    </Text>
+                  </View>
+                  <Text className="text-xs text-slate-400">
+                    {historyQuery.isError
+                      ? 'Transfer budget analytics could not be loaded.'
+                      : `Based on ${historyQuery.data?.analytics.pricedTransactions ?? 0} of ${historyQuery.data?.analytics.totalTransactions ?? 0} fully priced transactions.`}
+                  </Text>
+                  <View className="border-t border-slate-800 pt-3">
+                    <Text className="text-sm font-semibold text-white">Owned Squad Value</Text>
+                    <Text className="mt-1 text-xs text-slate-400">
+                      Historical player market value by completed gameweek, excluding bank balance.
+                    </Text>
+                    {historyQuery.data ? (
+                      <SquadValueChart data={historyQuery.data.analytics.squadValueHistory} />
+                    ) : historyQuery.isError ? (
+                      <Text accessibilityRole="alert" className="py-8 text-center text-xs text-red-300">
+                        Unable to load squad value history.
+                      </Text>
+                    ) : (
+                      <ActivityIndicator accessibilityLabel="Loading squad value history" className="py-8" color="#14b8a6" />
+                    )}
+                    {historyQuery.data?.analytics.squadValueHistory.some((point) => point.value === null) ? (
+                      <Text className="text-[10px] text-slate-500">
+                        Gaps indicate incomplete ownership or player-price history.
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View className="flex-row flex-wrap gap-2">
+                  <TransferInsightCard
+                    title="Best Transfer"
+                    insight={historyQuery.data?.analytics.bestTransfer ?? null}
+                    positive
+                    hasTransfers={Boolean(historyQuery.data?.transfers.length)}
+                    loading={historyQuery.isPending}
+                    error={historyQuery.isError}
+                  />
+                  <TransferInsightCard
+                    title="Worst Transfer"
+                    insight={historyQuery.data?.analytics.worstTransfer ?? null}
+                    positive={false}
+                    hasTransfers={Boolean(historyQuery.data?.transfers.length)}
+                    loading={historyQuery.isPending}
+                    error={historyQuery.isError}
+                  />
+                </View>
+
                 {historyQuery.isPending ? (
                   <ActivityIndicator accessibilityLabel="Loading transfer history" className="py-6" color="#14b8a6" />
                 ) : historyQuery.isError ? (
@@ -233,9 +411,9 @@ export default function TeamScreen() {
                       {historyQuery.error instanceof Error ? historyQuery.error.message : 'Unable to load transfer history.'}
                     </Text>
                   </View>
-                ) : historyQuery.data?.length ? (
+                ) : historyQuery.data?.transfers.length ? (
                   <View className="gap-3">
-                    {historyQuery.data.map((entry) => (
+                    {historyQuery.data.transfers.map((entry) => (
                       <View key={entry.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
                         <View className="flex-row items-center justify-between border-b border-slate-800 pb-2">
                           <View className="flex-row items-center gap-2">
@@ -258,20 +436,37 @@ export default function TeamScreen() {
                         </View>
                         <View className="pt-3 gap-2">
                           {entry.moves.map((move, index) => (
-                            <View key={`${entry.id}-${index}`} className="flex-row items-center gap-2">
-                              <View className="flex-1 rounded-lg bg-rose-950/40 border border-rose-900/40 px-2.5 py-1.5">
-                                <Text className="text-xs font-semibold text-rose-300" numberOfLines={1}>
-                                  ▼ {move.playerOut ?? 'Squad addition'}
-                                </Text>
+                            <View key={`${entry.id}-${index}`} className="gap-1">
+                              <View className="flex-row items-center gap-2">
+                                <View className="flex-1 rounded-lg bg-rose-950/40 border border-rose-900/40 px-2.5 py-1.5">
+                                  <Text className="text-xs font-semibold text-rose-300" numberOfLines={1}>
+                                    ▼ {move.playerOut ?? 'Squad addition'}
+                                  </Text>
+                                </View>
+                                <Text className="text-slate-500 font-bold">→</Text>
+                                <View className="flex-1 rounded-lg bg-emerald-950/40 border border-emerald-900/40 px-2.5 py-1.5">
+                                  <Text className="text-xs font-semibold text-emerald-300" numberOfLines={1}>
+                                    ▲ {move.playerIn ?? 'Squad removal'}
+                                  </Text>
+                                </View>
                               </View>
-                              <Text className="text-slate-500 font-bold">→</Text>
-                              <View className="flex-1 rounded-lg bg-emerald-950/40 border border-emerald-900/40 px-2.5 py-1.5">
-                                <Text className="text-xs font-semibold text-emerald-300" numberOfLines={1}>
-                                  ▲ {move.playerIn ?? 'Squad removal'}
+                              <Text className="text-[10px] text-slate-400">
+                                Budget impact: {move.budgetImpact === null
+                                  ? 'unavailable'
+                                  : `${move.budgetImpact > 0 ? '+$' : move.budgetImpact < 0 ? '-$' : '$'}${Math.abs(move.budgetImpact).toFixed(1)}M`}
+                                {move.netPointsNextThreeGameweeks !== null
+                                  ? ` · Three-gameweek net: ${move.netPointsNextThreeGameweeks > 0 ? '+' : ''}${move.netPointsNextThreeGameweeks.toFixed(1)} pts`
+                                  : ''}
                                 </Text>
-                              </View>
                             </View>
                           ))}
+                        </View>
+                        <View className="mt-3 border-t border-slate-800 pt-2">
+                          <Text className="text-xs text-slate-400">
+                            Transaction budget impact: {entry.budgetImpact === null
+                              ? 'unavailable'
+                              : `${entry.budgetImpact > 0 ? '+$' : entry.budgetImpact < 0 ? '-$' : '$'}${Math.abs(entry.budgetImpact).toFixed(1)}M`}
+                          </Text>
                         </View>
                       </View>
                     ))}

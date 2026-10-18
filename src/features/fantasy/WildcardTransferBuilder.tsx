@@ -58,6 +58,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] }),
         queryClient.invalidateQueries({ queryKey: ['transfer-history', userId] }),
+        queryClient.invalidateQueries({ queryKey: ['transfer-history-analytics', userId] }),
       ]);
     },
   });

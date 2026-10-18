@@ -81,6 +81,7 @@ export function TransferMarket({
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] }),
         queryClient.invalidateQueries({ queryKey: ['transfer-history', userId] }),
+        queryClient.invalidateQueries({ queryKey: ['transfer-history-analytics', userId] }),
       ]);
     },
   });

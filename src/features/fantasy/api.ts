@@ -1,5 +1,13 @@
 import { ApiError } from '@/src/lib/errors';
 import { getSupabaseClient } from '@/src/lib/supabase';
+import {
+  calculateTransferHistoryAnalytics,
+  type TransferAnalyticsEntry,
+  type TransferGameweekHistory,
+  type TransferMemberHistory,
+  type TransferPriceHistory,
+  type TransferScoreHistory,
+} from './transfer-history-analytics';
 
 export interface FantasyPlayer {
   id: number;
@@ -581,6 +589,178 @@ export async function getTransferHistory(): Promise<TransferHistoryEntry[]> {
   });
 }
 
+function parsePositiveInteger(value: unknown, message: string): number {
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+      throw new ApiError(message, 502);
+    }
+    return value;
+  }
+
+  function parseNullablePositiveInteger(value: unknown, message: string): number | null {
+    return value === null ? null : parsePositiveInteger(value, message);
+  }
+
+  function parseNullableFiniteNumber(value: unknown, message: string): number | null {
+    if (value === null) return null;
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new ApiError(message, 502);
+    return value;
+  }
+
+  export async function getTransferHistoryAnalytics(): Promise<{
+    transfers: TransferAnalyticsEntry[];
+    analytics: ReturnType<typeof calculateTransferHistoryAnalytics>['analytics'];
+  }> {
+    const { data: result, error } = await getSupabaseClient().rpc('mobile_get_transfer_history_analytics', {
+      p_limit: 100,
+    });
+    if (error) throw new ApiError(`Unable to load transfer history analytics: ${error.message}`, 500);
+    if (
+      !isRecord(result) ||
+      !Array.isArray(result.transfers) ||
+      !Array.isArray(result.transferDetails) ||
+      !Array.isArray(result.members) ||
+      !Array.isArray(result.gameweeks) ||
+      !Array.isArray(result.scores) ||
+      !Array.isArray(result.prices)
+    ) {
+      throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+    }
+
+    const detailsById = new Map<number, {
+      fantasySeasonId: number | null;
+      seasonId: number | null;
+      gameweekId: number | null;
+      playerInIds: number[];
+      playerOutIds: number[];
+    }>();
+    for (const item of result.transferDetails) {
+      if (!isRecord(item) || !Number.isSafeInteger(item.id)) {
+        throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+      }
+      const parsePlayerIds = (ids: unknown): number[] => {
+        if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0)) {
+          throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+        }
+        return ids;
+      };
+      detailsById.set(Number(item.id), {
+        fantasySeasonId: parseNullablePositiveInteger(item.fantasySeasonId, 'Transfer history analytics were returned in an unexpected format.'),
+        seasonId: parseNullablePositiveInteger(item.seasonId, 'Transfer history analytics were returned in an unexpected format.'),
+        gameweekId: parseNullablePositiveInteger(item.gameweekId, 'Transfer history analytics were returned in an unexpected format.'),
+        playerInIds: parsePlayerIds(item.playerInIds),
+        playerOutIds: parsePlayerIds(item.playerOutIds),
+      });
+    }
+
+    const transfers: TransferAnalyticsEntry[] = result.transfers.map((item) => {
+      if (
+        !isRecord(item) ||
+        !Number.isSafeInteger(item.id) ||
+        typeof item.createdAt !== 'string' ||
+        !Array.isArray(item.moves)
+      ) {
+        throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+      }
+      const details = detailsById.get(Number(item.id));
+      if (!details) throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+      return {
+        id: Number(item.id),
+        createdAt: item.createdAt,
+        fantasySeasonId: details.fantasySeasonId,
+        seasonId: details.seasonId,
+        gameweekId: details.gameweekId,
+        gameweekNumber: parseNullablePositiveInteger(item.gameweekNumber, 'Transfer history analytics were returned in an unexpected format.'),
+        penaltyPoints: parseNullableFiniteNumber(item.penaltyPoints, 'Transfer history analytics were returned in an unexpected format.'),
+        budgetImpact: null,
+        moves: item.moves.map((move, index) => {
+          if (!isRecord(move)) throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+          return {
+            playerOutId: details.playerOutIds[index] ?? null,
+            playerInId: details.playerInIds[index] ?? null,
+            playerOut: typeof move.playerOut === 'string' ? move.playerOut : null,
+            playerIn: typeof move.playerIn === 'string' ? move.playerIn : null,
+            budgetImpact: null,
+            netPointsNextThreeGameweeks: null,
+            scoredGameweeks: 0,
+            scoringGameweeks: [],
+          };
+        }),
+      };
+    });
+
+    const members: TransferMemberHistory[] = result.members.map((item) => {
+      if (
+        !isRecord(item) ||
+        typeof item.cost !== 'number' ||
+        !Number.isFinite(item.cost) ||
+        typeof item.acquiredAt !== 'string' ||
+        !(item.removedAt === null || typeof item.removedAt === 'string')
+      ) {
+        throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+      }
+      return {
+        fantasySeasonId: parsePositiveInteger(item.fantasySeasonId, 'Transfer history analytics were returned in an unexpected format.'),
+        playerId: parsePositiveInteger(item.playerId, 'Transfer history analytics were returned in an unexpected format.'),
+        cost: item.cost,
+        acquiredAt: item.acquiredAt,
+        removedAt: item.removedAt,
+      };
+    });
+    const gameweeks: TransferGameweekHistory[] = result.gameweeks.map((item) => {
+      if (
+        !isRecord(item) ||
+        !Number.isSafeInteger(item.gameweekNumber) ||
+        typeof item.status !== 'string' ||
+        !(item.endDate === null || typeof item.endDate === 'string')
+      ) {
+        throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+      }
+      return {
+        id: parsePositiveInteger(item.id, 'Transfer history analytics were returned in an unexpected format.'),
+        seasonId: parsePositiveInteger(item.seasonId, 'Transfer history analytics were returned in an unexpected format.'),
+        gameweekNumber: Number(item.gameweekNumber),
+        status: item.status,
+        endDate: item.endDate,
+      };
+    });
+    const parseScore = (item: unknown): TransferScoreHistory => {
+      if (!isRecord(item) || typeof item.points !== 'number' || !Number.isFinite(item.points)) {
+        throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+      }
+      return {
+        playerId: parsePositiveInteger(item.playerId, 'Transfer history analytics were returned in an unexpected format.'),
+        gameweekId: parsePositiveInteger(item.gameweekId, 'Transfer history analytics were returned in an unexpected format.'),
+        points: item.points,
+      };
+    };
+    const scores = result.scores.map(parseScore);
+    const prices: TransferPriceHistory[] = result.prices.map((item) => {
+      if (!isRecord(item) || typeof item.price !== 'number' || !Number.isFinite(item.price)) {
+        throw new ApiError('Transfer history analytics were returned in an unexpected format.', 502);
+      }
+      return {
+        playerId: parsePositiveInteger(item.playerId, 'Transfer history analytics were returned in an unexpected format.'),
+        gameweekId: parsePositiveInteger(item.gameweekId, 'Transfer history analytics were returned in an unexpected format.'),
+        price: item.price,
+      };
+    });
+
+    const currentFantasySeasonId = result.currentFantasySeasonId === null
+      ? null
+      : parsePositiveInteger(result.currentFantasySeasonId, 'Transfer history analytics were returned in an unexpected format.');
+    const currentSeasonId = result.currentSeasonId === null
+      ? null
+      : parsePositiveInteger(result.currentSeasonId, 'Transfer history analytics were returned in an unexpected format.');
+    return calculateTransferHistoryAnalytics({
+      transfers,
+      members,
+      gameweeks,
+      scores,
+      prices,
+      currentFantasySeasonId,
+      currentSeasonId,
+    });
+  }
 export async function activateChip(payload: {
   fantasySeasonId: number;
   chip: 'triple-captain' | 'bench-boost';

@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
+import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getTransferHistoryAnalytics, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { getGameweeks } from '../src/features/gameweeks/api';
 import {
@@ -1591,6 +1591,64 @@ describe('mobile data access', () => {
       moves: [{ playerOut: 'Player Out', playerIn: 'Player In' }],
     }]);
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_transfer_history', {
+      p_limit: 100,
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('loads and validates authenticated transfer history analytics', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: {
+        transfers: [{
+          id: 15,
+          createdAt: '2026-10-07T10:00:00.000Z',
+          gameweekNumber: 1,
+          penaltyPoints: 0,
+          moves: [{ playerOut: 'Player Out', playerIn: 'Player In' }],
+        }],
+        transferDetails: [{
+          id: 15,
+          fantasySeasonId: 9,
+          seasonId: 3,
+          gameweekId: 101,
+          playerInIds: [20],
+          playerOutIds: [10],
+        }],
+        currentFantasySeasonId: 9,
+        currentSeasonId: 3,
+        members: [
+          { fantasySeasonId: 9, playerId: 10, cost: 12, acquiredAt: '2026-09-01T00:00:00Z', removedAt: '2026-10-07T10:00:20Z' },
+          { fantasySeasonId: 9, playerId: 20, cost: 10, acquiredAt: '2026-10-07T10:00:00Z', removedAt: null },
+        ],
+        gameweeks: [
+          { id: 101, seasonId: 3, gameweekNumber: 1, status: 'closed', endDate: '2026-10-10T23:59:59Z' },
+          { id: 102, seasonId: 3, gameweekNumber: 2, status: 'closed', endDate: '2026-10-17T23:59:59Z' },
+          { id: 103, seasonId: 3, gameweekNumber: 3, status: 'locked', endDate: '2026-10-24T23:59:59Z' },
+        ],
+        scores: [
+          { playerId: 10, gameweekId: 101, points: 3 },
+          { playerId: 20, gameweekId: 101, points: 8 },
+        ],
+        prices: [
+          { playerId: 10, gameweekId: 101, price: 12 },
+          { playerId: 20, gameweekId: 101, price: 10 },
+          { playerId: 20, gameweekId: 102, price: 11 },
+          { playerId: 20, gameweekId: 103, price: 12 },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await getTransferHistoryAnalytics();
+    expect(result.transfers[0].budgetImpact).toBe(2);
+    expect(result.transfers[0].moves[0].netPointsNextThreeGameweeks).toBe(5);
+    expect(result.analytics.netBudgetChange).toBe(2);
+    expect(result.analytics.squadValueHistory).toEqual([
+      { gameweekNumber: 1, value: 10 },
+      { gameweekNumber: 2, value: 11 },
+      { gameweekNumber: 3, value: 12 },
+    ]);
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_transfer_history_analytics', {
       p_limit: 100,
     });
     expect(fetch).not.toHaveBeenCalled();
