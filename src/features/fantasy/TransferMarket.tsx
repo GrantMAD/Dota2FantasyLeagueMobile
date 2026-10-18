@@ -1,8 +1,8 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
-import type { FantasyContext, FantasyPlayer, MarketPlayer } from './api';
-import { getPlayerMarket, getTransferHistory, processTransfer } from './api';
+import type { FantasyContext, FantasyPlayer, MarketPlayer, TransferSuggestion } from './api';
+import { getPlayerMarket, getTransferHistory, getTransferSuggestions, processTransfer } from './api';
 import { useMobileTheme } from '@/src/lib/theme';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
 
@@ -42,6 +42,7 @@ export function TransferMarket({
     quickAddId: number | undefined;
     playerId: number | null;
   } | null>(null);
+  const [suggestedSelection, setSuggestedSelection] = useState<TransferSuggestion | null>(null);
   const [dismissedQuickAddId, setDismissedQuickAddId] = useState<number | null>(null);
   const deferredSearch = useDeferredValue(search);
   const ownedIds = useMemo(
@@ -59,10 +60,18 @@ export function TransferMarket({
     enabled: context.ownedPlayers.length > 0,
     staleTime: 60_000,
   });
+  const suggestionsQuery = useQuery({
+    queryKey: ['transfer-suggestions', context.fantasySeasonId, context.ownedPlayers.map((player) => player.id).join(',')],
+    queryFn: getTransferSuggestions,
+    enabled: Boolean(context.fantasySeasonId && context.ownedPlayers.length > 0),
+    staleTime: 60_000,
+  });
+  const activeQuickAddPlayerId = suggestedSelection?.playerInId ?? quickAddPlayerId;
+  const activeQuickAddPlayerName = suggestedSelection?.playerInName ?? quickAddPlayerName;
   const quickAddQuery = useQuery({
-    queryKey: ['player-market-quick-add', quickAddPlayerId, quickAddPlayerName],
-    queryFn: () => getPlayerMarket(quickAddPlayerName ?? ''),
-    enabled: Boolean(quickAddPlayerId && quickAddPlayerName),
+    queryKey: ['player-market-quick-add', activeQuickAddPlayerId, activeQuickAddPlayerName],
+    queryFn: () => getPlayerMarket(activeQuickAddPlayerName ?? ''),
+    enabled: Boolean(activeQuickAddPlayerId && activeQuickAddPlayerName),
     staleTime: 60_000,
   });
   const historyQuery = useQuery({
@@ -78,15 +87,19 @@ export function TransferMarket({
         'Transfer completed',
         `Your squad has been updated. Penalty: ${result.penaltyPoints} points.`
       );
+      setSelectedOutId(null);
+      setSuggestedSelection(null);
+      setSelectionOverride({ quickAddId: quickAddPlayerId, playerId: null });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] }),
+        queryClient.invalidateQueries({ queryKey: ['transfer-suggestions', context.fantasySeasonId] }),
         queryClient.invalidateQueries({ queryKey: ['transfer-history', userId] }),
         queryClient.invalidateQueries({ queryKey: ['transfer-history-analytics', userId] }),
       ]);
     },
   });
 
-  const quickAddPlayer = quickAddQuery.data?.find((player) => player.id === quickAddPlayerId) ?? null;
+  const quickAddPlayer = quickAddQuery.data?.find((player) => player.id === activeQuickAddPlayerId) ?? null;
   const incomingPlayers = (marketQuery.data ?? []).filter((player) => {
     if (ownedIds.has(player.id) || player.availability_status !== 'available') return false;
     return !selectedOut || matchesRole(player, selectedOut);
@@ -109,7 +122,7 @@ export function TransferMarket({
   const quickAddIsSelected = Boolean(
     quickAddIsSelectable &&
     selectedInId === null &&
-    quickAddPlayerId !== dismissedQuickAddId
+    activeQuickAddPlayerId !== dismissedQuickAddId
   );
   const selectedIn = visibleIncomingPlayers.find(
     (player) => player.id === (selectedInId ?? (quickAddIsSelected ? quickAddPlayerId : null))
@@ -157,6 +170,104 @@ export function TransferMarket({
         </View>
       ) : null}
 
+      <View className="gap-3 rounded-xl border border-indigo-500/30 bg-indigo-950/30 p-4">
+        <View>
+          <Text className="text-base font-bold text-white">Smart transfer suggestions</Text>
+          <Text className="mt-1 text-xs leading-5 text-slate-300">
+            Role-matched swaps based on recent scoring, price movement, your budget, and squad limits.
+            Suggestions are advisory; the transfer server checks the final transaction.
+          </Text>
+        </View>
+        {suggestionsQuery.isPending ? (
+          <ActivityIndicator accessibilityLabel="Loading transfer suggestions" color="#14b8a6" />
+        ) : suggestionsQuery.isError ? (
+          <Text accessibilityRole="alert" className="text-sm text-red-300">
+            {suggestionsQuery.error instanceof Error
+              ? suggestionsQuery.error.message
+              : 'Transfer suggestions could not be loaded.'}
+          </Text>
+        ) : suggestionsQuery.data?.recommendations.length ? (
+          suggestionsQuery.data.recommendations.map((suggestion) => (
+            <View
+              key={`${suggestion.playerOutId}-${suggestion.playerInId}`}
+              className="gap-2 rounded-lg border border-slate-700 bg-slate-900 p-3"
+            >
+              <Text className="text-sm font-semibold text-white">
+                <Text className="text-rose-300">{suggestion.playerOutName}</Text>
+                <Text className="text-slate-500"> → </Text>
+                <Text className="text-emerald-300">{suggestion.playerInName}</Text>
+              </Text>
+              <Text className="text-xs text-slate-400">
+                {suggestion.playerInRole} · {suggestion.playerInCurrentPrice.toFixed(1)}M ·
+                {' '}estimated bank after swap {suggestion.budgetAfter.toFixed(1)}M
+              </Text>
+              {suggestion.reasons.map((reason) => (
+                <Text key={reason} className="text-xs leading-5 text-slate-300">• {reason}</Text>
+              ))}
+              <Pressable
+                accessibilityRole="button"
+                disabled={context.gameweek?.isLocked || transferMutation.isPending}
+                className="min-h-11 items-center justify-center rounded-lg bg-indigo-500/20 px-3"
+                onPress={() => {
+                  setSelectedOutId(suggestion.playerOutId);
+                  setSuggestedSelection(suggestion);
+                  setSelectionOverride({
+                    quickAddId: quickAddPlayerId,
+                    playerId: suggestion.playerInId,
+                  });
+                  setDismissedQuickAddId(null);
+                  transferMutation.reset();
+                }}
+              >
+                <Text className="text-xs font-semibold text-indigo-200">Select this swap</Text>
+              </Pressable>
+            </View>
+          ))
+        ) : (
+          <View className="gap-2">
+            {suggestionsQuery.data &&
+            suggestionsQuery.data.status !== 'no_fantasy_season' &&
+            suggestionsQuery.data.status !== 'no_open_gameweek' &&
+            suggestionsQuery.data.status !== 'no_squad' &&
+            suggestionsQuery.data.completedGameweeks < suggestionsQuery.data.requiredGameweeks ? (
+              <Text className="text-sm leading-5 text-slate-300">
+                More scoring history is needed: {suggestionsQuery.data.completedGameweeks} of
+                {' '}{suggestionsQuery.data.requiredGameweeks} gameweeks are complete.
+              </Text>
+            ) : null}
+            {suggestionsQuery.data &&
+            suggestionsQuery.data.status !== 'no_fantasy_season' &&
+            suggestionsQuery.data.status !== 'no_open_gameweek' &&
+            suggestionsQuery.data.status !== 'no_squad' &&
+            suggestionsQuery.data.pricedRoleMatchedCandidates === 0 ? (
+              <Text className="text-sm leading-5 text-slate-300">
+                No available same-role replacements have a price recorded for the upcoming gameweek yet.
+              </Text>
+            ) : null}
+            {suggestionsQuery.data?.status === 'no_squad' ? (
+              <Text className="text-sm leading-5 text-slate-300">
+                Build your squad before getting transfer suggestions.
+              </Text>
+            ) : null}
+            {suggestionsQuery.data?.status === 'no_open_gameweek' ? (
+              <Text className="text-sm leading-5 text-slate-300">
+                Suggestions are unavailable because there is no gameweek currently open for transfers.
+              </Text>
+            ) : null}
+            {suggestionsQuery.data?.status === 'no_fantasy_season' ? (
+              <Text className="text-sm leading-5 text-slate-300">
+                Join a fantasy season and build your squad to get transfer suggestions.
+              </Text>
+            ) : null}
+            {suggestionsQuery.data?.status === 'no_recommendations' ? (
+              <Text className="text-sm leading-5 text-slate-300">
+                No swaps currently meet the budget, form, price-trend, and team-limit criteria.
+              </Text>
+            ) : null}
+          </View>
+        )}
+      </View>
+
       <View className="gap-2">
         <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Select player to sell</Text>
         {context.ownedPlayers.map((player) => {
@@ -203,6 +314,7 @@ export function TransferMarket({
           editable={!context.gameweek?.isLocked && !transferMutation.isPending}
           onChangeText={(value) => {
             setSearch(value);
+            setSuggestedSelection(null);
             setSelectionOverride({ quickAddId: quickAddPlayerId, playerId: null });
             setDismissedQuickAddId(null);
           }}
@@ -229,7 +341,7 @@ export function TransferMarket({
             </Text>
           ) : null}
               {visibleIncomingPlayers.slice(0, 12).map((player) => {
-                const isQuickAdd = player.id === quickAddPlayerId;
+                const isQuickAdd = player.id === activeQuickAddPlayerId;
                 const selected = player.id === selectedIn?.id;
                 const ownPres = getOwnershipPresentation(player.ownership_percentage);
                 return (

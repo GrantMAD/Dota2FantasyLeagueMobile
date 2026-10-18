@@ -2,13 +2,27 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import type { FantasyContext, FantasyLineupEntry, FantasyPlayer, MarketPlayer } from '../src/features/fantasy/api';
+import type {
+  FantasyContext,
+  FantasyLineupEntry,
+  FantasyPlayer,
+  MarketPlayer,
+  TransferSuggestionResult,
+} from '../src/features/fantasy/api';
 import { LineupEditor } from '../src/features/fantasy/LineupEditor';
 import { SquadBuilder } from '../src/features/fantasy/SquadBuilder';
 import { TransferMarket } from '../src/features/fantasy/TransferMarket';
 import { ChipActivationPanel } from '../src/features/fantasy/ChipActivationPanel';
 import { WildcardPanel } from '../src/features/fantasy/WildcardPanel';
-import { activateChip, activateWildcard, getPlayerMarket, getTransferHistory, processTransfer, saveLineup } from '../src/features/fantasy/api';
+import {
+  activateChip,
+  activateWildcard,
+  getPlayerMarket,
+  getTransferHistory,
+  getTransferSuggestions,
+  processTransfer,
+  saveLineup,
+} from '../src/features/fantasy/api';
 
 jest.mock('../src/lib/theme', () => ({
   useMobileTheme: () => ({ colors: { onAccent: '#ffffff', placeholder: '#999999' } }),
@@ -19,6 +33,7 @@ jest.mock('../src/features/fantasy/api', () => ({
   activateWildcard: jest.fn(),
   getPlayerMarket: jest.fn(),
   getTransferHistory: jest.fn(),
+  getTransferSuggestions: jest.fn(),
   processTransfer: jest.fn(),
   saveLineup: jest.fn(),
 }));
@@ -29,6 +44,7 @@ const mockedActivateChip = jest.mocked(activateChip);
 const mockedActivateWildcard = jest.mocked(activateWildcard);
 const mockedGetPlayerMarket = jest.mocked(getPlayerMarket);
 const mockedGetTransferHistory = jest.mocked(getTransferHistory);
+const mockedGetTransferSuggestions = jest.mocked(getTransferSuggestions);
 let queryClients: QueryClient[] = [];
 
 function createPlayer(id: number, role: string): FantasyPlayer {
@@ -157,6 +173,14 @@ describe('fantasy management components', () => {
     mockedActivateWildcard.mockReset();
     mockedGetPlayerMarket.mockReset();
     mockedGetTransferHistory.mockReset();
+    mockedGetTransferSuggestions.mockReset().mockResolvedValue({
+      gameweekNumber: 7,
+      status: 'no_recommendations',
+      completedGameweeks: 3,
+      requiredGameweeks: 3,
+      pricedRoleMatchedCandidates: 4,
+      recommendations: [],
+    });
   });
 
   afterEach(async () => {
@@ -290,6 +314,74 @@ describe('fantasy management components', () => {
       transfersIn: [10],
       transfersOut: [1],
     }, expect.any(Object));
+  });
+
+  it('preselects the suggested outgoing and incoming players for review', async () => {
+    const incoming = createMarketPlayer(10, 'carry', 'Suggested Replacement');
+    mockedGetPlayerMarket.mockImplementation(async (search) =>
+      search === 'Suggested Replacement' ? [incoming] : []
+    );
+    mockedGetTransferSuggestions.mockResolvedValue({
+      gameweekNumber: 7,
+      status: 'available',
+      completedGameweeks: 3,
+      requiredGameweeks: 3,
+      pricedRoleMatchedCandidates: 4,
+      recommendations: [{
+        playerOutId: 1,
+        playerOutName: 'Player 1',
+        playerOutRole: 'carry',
+        playerInId: 10,
+        playerInName: 'Suggested Replacement',
+        playerInRole: 'carry',
+        playerInCurrentPrice: 10,
+        budgetAfter: 100,
+        reasons: ['The replacement has better recent form.'],
+      }],
+    } satisfies TransferSuggestionResult);
+    mockedProcessTransfer.mockResolvedValue({
+      budget: 100,
+      freeTransfersRemaining: 0,
+      penaltyPoints: 0,
+    });
+    mockedGetTransferHistory.mockResolvedValue([]);
+    const view = renderWithQueryClient(<TransferMarket context={createContext()} userId="manager-1" />);
+
+    await waitFor(() => expect(view.getByRole('button', { name: 'Select this swap' })).toBeTruthy());
+    await fireEvent.press(view.getByRole('button', { name: 'Select this swap' }));
+    await waitFor(() => expect(view.getByText('Selected as replacement')).toBeTruthy());
+    expect(view.getAllByText('Suggested Replacement').length).toBeGreaterThan(0);
+    await fireEvent.press(view.getByRole('button', { name: 'Review transfer' }));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Confirm transfer',
+      expect.stringContaining('Transfer out Player 1 and bring in Suggested Replacement?'),
+      expect.any(Array),
+    );
+    expect(mockedProcessTransfer).not.toHaveBeenCalled();
+    await act(async () => confirmAlertAction('Confirm transfer'));
+    await waitFor(() => expect(mockedProcessTransfer).toHaveBeenCalledWith({
+      fantasySeasonId: 12,
+      transfersIn: [10],
+      transfersOut: [1],
+    }, expect.any(Object)));
+  });
+
+  it('explains both missing gameweek history and missing priced replacements', async () => {
+    mockedGetTransferSuggestions.mockResolvedValue({
+      gameweekNumber: 3,
+      status: 'insufficient_history',
+      completedGameweeks: 1,
+      requiredGameweeks: 3,
+      pricedRoleMatchedCandidates: 0,
+      recommendations: [],
+    });
+    mockedGetPlayerMarket.mockResolvedValue([]);
+    mockedGetTransferHistory.mockResolvedValue([]);
+    const view = renderWithQueryClient(<TransferMarket context={createContext()} userId="manager-1" />);
+
+    await waitFor(() => expect(view.getByText('More scoring history is needed: 1 of 3 gameweeks are complete.')).toBeTruthy());
+    expect(view.getByText('No available same-role replacements have a price recorded for the upcoming gameweek yet.')).toBeTruthy();
   });
 
   it('pins and selects the quick-added player in the squad builder without filtering other players', async () => {

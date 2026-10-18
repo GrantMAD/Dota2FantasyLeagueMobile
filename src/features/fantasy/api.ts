@@ -464,6 +464,27 @@ export interface TransferHistoryEntry {
   moves: { playerOut: string | null; playerIn: string | null }[];
 }
 
+export interface TransferSuggestion {
+  playerOutId: number;
+  playerOutName: string;
+  playerOutRole: string;
+  playerInId: number;
+  playerInName: string;
+  playerInRole: string;
+  playerInCurrentPrice: number;
+  budgetAfter: number;
+  reasons: string[];
+}
+
+export interface TransferSuggestionResult {
+  gameweekNumber: number | null;
+  status: string;
+  completedGameweeks: number;
+  requiredGameweeks: number;
+  pricedRoleMatchedCandidates: number;
+  recommendations: TransferSuggestion[];
+}
+
 function parseMarketPlayer(value: unknown): MarketPlayer {
   const currentPrice = isRecord(value) ? value.current_price : undefined;
   if (
@@ -499,6 +520,63 @@ export async function getPlayerMarket(search: string): Promise<MarketPlayer[]> {
     throw new ApiError('Player market data was returned in an unexpected format.', 502);
   }
   return result.data.map(parseMarketPlayer);
+}
+
+export async function getTransferSuggestions(): Promise<TransferSuggestionResult> {
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_transfer_suggestions', {});
+  if (error) throw new ApiError(`Unable to load transfer suggestions: ${error.message}`, 500);
+  if (
+    !isRecord(result) ||
+    !isNullableNumber(result.gameweek_number) ||
+    typeof result.status !== 'string' ||
+    !Number.isInteger(result.completed_gameweeks) ||
+    !Number.isInteger(result.required_gameweeks) ||
+    !Number.isInteger(result.priced_role_matched_candidates) ||
+    !Array.isArray(result.recommendations)
+  ) {
+    throw new ApiError('Transfer suggestions were returned in an unexpected format.', 502);
+  }
+
+  const recommendations = result.recommendations.map((value): TransferSuggestion => {
+    if (
+      !isRecord(value) ||
+      !Number.isInteger(value.player_out_id) ||
+      typeof value.player_out_name !== 'string' ||
+      typeof value.player_out_role !== 'string' ||
+      !Number.isInteger(value.player_in_id) ||
+      typeof value.player_in_name !== 'string' ||
+      typeof value.player_in_role !== 'string' ||
+      typeof value.player_in_current_price !== 'number' ||
+      !Number.isFinite(value.player_in_current_price) ||
+      typeof value.budget_after !== 'number' ||
+      !Number.isFinite(value.budget_after) ||
+      !Array.isArray(value.reasons) ||
+      !value.reasons.every((reason) => typeof reason === 'string')
+    ) {
+      throw new ApiError('Transfer suggestions were returned in an unexpected format.', 502);
+    }
+
+    return {
+      playerOutId: Number(value.player_out_id),
+      playerOutName: value.player_out_name,
+      playerOutRole: value.player_out_role,
+      playerInId: Number(value.player_in_id),
+      playerInName: value.player_in_name,
+      playerInRole: value.player_in_role,
+      playerInCurrentPrice: value.player_in_current_price,
+      budgetAfter: value.budget_after,
+      reasons: value.reasons,
+    };
+  });
+
+  return {
+    gameweekNumber: result.gameweek_number,
+    status: result.status,
+    completedGameweeks: Number(result.completed_gameweeks),
+    requiredGameweeks: Number(result.required_gameweeks),
+    pricedRoleMatchedCandidates: Number(result.priced_role_matched_candidates),
+    recommendations,
+  };
 }
 
 export async function processTransfer(payload: {
