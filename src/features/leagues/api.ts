@@ -38,6 +38,20 @@ export interface LeagueSummary {
   fixtures: LeagueFixture[];
 }
 
+export interface LeagueActivity {
+  id: number;
+  type: 'transfer' | 'captain_pick' | 'rank_change';
+  createdAt: string;
+  manager: string;
+  gameweekNumber: number | null;
+  fromRank: number | null;
+  toRank: number | null;
+  playersIn: string[];
+  playersOut: string[];
+  captain: string | null;
+  viceCaptain: string | null;
+}
+
 export interface CreateLeagueInput {
   name: string;
   description: string;
@@ -190,4 +204,49 @@ export function joinLeague(inviteCode: string) {
 export async function getLeague(leagueId: number): Promise<LeagueSummary | null> {
   const leagues = await getLeagues();
   return leagues.find((league) => league.id === leagueId) ?? null;
+}
+
+export async function getLeagueActivity(leagueId: number): Promise<LeagueActivity[]> {
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_league_activity', {
+    p_league_id: leagueId,
+    p_limit: 50,
+  });
+  if (error) throw new ApiError(`Unable to load league activity: ${error.message}`, 500);
+  if (!isRecord(result) || !Array.isArray(result.activities)) {
+    throw new ApiError('League activity was returned in an unexpected format.', 502);
+  }
+
+  return result.activities.map((activity): LeagueActivity => {
+    if (
+      !isRecord(activity) ||
+      !Number.isSafeInteger(activity.id) ||
+      (activity.type !== 'transfer' && activity.type !== 'captain_pick' && activity.type !== 'rank_change') ||
+      typeof activity.createdAt !== 'string' ||
+      typeof activity.manager !== 'string' ||
+      !(activity.gameweekNumber === null || Number.isInteger(activity.gameweekNumber)) ||
+      !(activity.fromRank === null || Number.isInteger(activity.fromRank)) ||
+      !(activity.toRank === null || Number.isInteger(activity.toRank)) ||
+      !Array.isArray(activity.playersIn) ||
+      !activity.playersIn.every((player) => typeof player === 'string') ||
+      !Array.isArray(activity.playersOut) ||
+      !activity.playersOut.every((player) => typeof player === 'string') ||
+      !(activity.captain === null || typeof activity.captain === 'string') ||
+      !(activity.viceCaptain === null || typeof activity.viceCaptain === 'string')
+    ) {
+      throw new ApiError('League activity entry was returned in an unexpected format.', 502);
+    }
+    return {
+      id: Number(activity.id),
+      type: activity.type,
+      createdAt: activity.createdAt,
+      manager: activity.manager,
+      gameweekNumber: activity.gameweekNumber === null ? null : Number(activity.gameweekNumber),
+      fromRank: activity.fromRank === null ? null : Number(activity.fromRank),
+      toRank: activity.toRank === null ? null : Number(activity.toRank),
+      playersIn: activity.playersIn,
+      playersOut: activity.playersOut,
+      captain: activity.captain,
+      viceCaptain: activity.viceCaptain,
+    };
+  });
 }

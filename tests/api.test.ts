@@ -16,7 +16,7 @@ import {
   getTournamentDetails,
   getTournaments,
 } from '../src/features/competition/api';
-import { createLeague, getLeagues, joinLeague } from '../src/features/leagues/api';
+import { createLeague, getLeagueActivity, getLeagues, joinLeague } from '../src/features/leagues/api';
 import { getLeaderboard } from '../src/features/leaderboard/api';
 import { getAnalytics } from '../src/features/analytics/api';
 import { getDashboardWhatsNew } from '../src/features/dashboard/api';
@@ -1027,6 +1027,42 @@ describe('mobile data access', () => {
       fixtures: [{ gameweekId: 5, homePoints: 12, awayPoints: 8 }],
     }]);
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_leagues');
+  });
+
+  it('loads and validates the authenticated league activity feed', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
+      activities: [{
+        id: 1,
+        type: 'transfer',
+        createdAt: '2026-10-18T12:00:00Z',
+        manager: 'Manager One',
+        gameweekNumber: 4,
+        fromRank: null,
+        toRank: null,
+        playersIn: ['Player In'],
+        playersOut: ['Player Out'],
+        captain: null,
+        viceCaptain: null,
+      }],
+    }, error: null });
+
+    await expect(getLeagueActivity(21)).resolves.toMatchObject([{
+      id: 1,
+      type: 'transfer',
+      manager: 'Manager One',
+      playersIn: ['Player In'],
+      playersOut: ['Player Out'],
+    }]);
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_league_activity', {
+      p_league_id: 21,
+      p_limit: 50,
+    });
+  });
+
+  it('rejects malformed league activity responses', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: { activities: [{ id: 'invalid' }] }, error: null });
+
+    await expect(getLeagueActivity(21)).rejects.toThrow('League activity entry was returned in an unexpected format.');
   });
 
   it('creates and joins leagues through authenticated RPCs', async () => {

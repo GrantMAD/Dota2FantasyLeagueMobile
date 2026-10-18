@@ -3,7 +3,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/src/components/Screen';
-import { getLeague } from '@/src/features/leagues/api';
+import { getLeague, getLeagueActivity } from '@/src/features/leagues/api';
 import { useAuth } from '@/src/lib/auth';
 
 export default function LeagueDetailScreen() {
@@ -21,6 +21,12 @@ export default function LeagueDetailScreen() {
     enabled: validId,
     staleTime: 60_000,
   });
+  const activityQuery = useQuery({
+    queryKey: ['league-activity', leagueId],
+    queryFn: () => getLeagueActivity(leagueId),
+    enabled: validId && Boolean(query.data),
+    staleTime: 30_000,
+  });
   const league = query.data;
   const standings = [...(league?.standings ?? [])].sort((a, b) => {
     if (a.rank !== null && b.rank !== null) return a.rank - b.rank;
@@ -35,7 +41,14 @@ export default function LeagueDetailScreen() {
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#14b8a6" />
+          <RefreshControl
+            refreshing={query.isRefetching || activityQuery.isRefetching}
+            onRefresh={() => {
+              void query.refetch();
+              if (league) void activityQuery.refetch();
+            }}
+            tintColor="#14b8a6"
+          />
         }
       >
         <Pressable accessibilityRole="button" onPress={() => router.back()}>
@@ -144,6 +157,56 @@ export default function LeagueDetailScreen() {
                 )}
               </View>
             ) : null}
+
+            <View className="gap-3">
+              <View className="flex-row items-end justify-between">
+                <Text className="text-xl font-bold text-white">League activity</Text>
+                <Text className="text-xs text-slate-500">Recent events</Text>
+              </View>
+              {activityQuery.isPending ? (
+                <View accessibilityLabel="Loading league activity" className="items-center py-6">
+                  <ActivityIndicator color="#14b8a6" />
+                </View>
+              ) : activityQuery.isError ? (
+                <View accessibilityRole="alert" className="gap-3 rounded-xl border border-red-900 bg-red-950 p-4">
+                  <Text className="text-sm text-red-100">
+                    {activityQuery.error instanceof Error ? activityQuery.error.message : 'Unable to load league activity.'}
+                  </Text>
+                  <Pressable accessibilityRole="button" onPress={() => void activityQuery.refetch()}>
+                    <Text className="font-semibold text-white">Try again</Text>
+                  </Pressable>
+                </View>
+              ) : activityQuery.data?.length ? (
+                activityQuery.data.map((activity) => {
+                  let description: string;
+                  if (activity.type === 'transfer') {
+                    const movedIn = activity.playersIn.join(', ');
+                    const movedOut = activity.playersOut.join(', ');
+                    description = `Transferred ${movedIn || 'players'}${movedOut ? ` in for ${movedOut}` : ''}`;
+                  } else if (activity.type === 'captain_pick') {
+                    description = `Captain: ${activity.captain ?? 'not set'} · Vice-captain: ${activity.viceCaptain ?? 'not set'}`;
+                  } else {
+                    description = activity.fromRank === null
+                      ? `Joined the rankings at #${activity.toRank ?? '?'}`
+                      : `Moved from #${activity.fromRank} to #${activity.toRank ?? '?'}`;
+                  }
+                  return (
+                    <View key={activity.id} className="gap-1 rounded-xl border border-slate-800 bg-slate-900 p-4">
+                      <Text className="font-semibold text-white">{activity.manager} · {description}</Text>
+                      <Text className="text-xs text-slate-500">
+                        {activity.gameweekNumber === null ? 'League update' : `Gameweek ${activity.gameweekNumber}`}
+                        {' · '}
+                        {new Date(activity.createdAt).toLocaleString()}
+                      </Text>
+                    </View>
+                  );
+                })
+              ) : (
+                <Text className="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-400">
+                  No league activity yet.
+                </Text>
+              )}
+            </View>
           </>
         )}
       </ScrollView>
