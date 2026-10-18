@@ -9,6 +9,7 @@ import { Screen } from '@/src/components/Screen';
 import { getManagerProfile } from '@/src/features/account/api';
 import { getDashboardWhatsNew } from '@/src/features/dashboard/api';
 import { DashboardLiveMatches } from '@/src/features/dashboard/DashboardLiveMatches';
+import { GettingStartedChecklist } from '@/src/features/dashboard/GettingStartedChecklist';
 import { getMatches } from '@/src/features/competition/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { getLeagues } from '@/src/features/leagues/api';
@@ -55,6 +56,7 @@ export default function HomeScreen() {
     .sort((a, b) => STARTER_SLOT_ORDER.indexOf(a.slot) - STARTER_SLOT_ORDER.indexOf(b.slot));
   const squadSize = query.data?.ownedPlayers.length ?? 0;
   const hasSquad = squadSize > 0;
+  const hasCompleteLineup = starters.length === 5 && starters.some((entry) => entry.is_captain);
   const displayName = profileQuery.data?.displayName?.trim() || profileQuery.data?.username;
   const quickActions = !query.data
     ? []
@@ -127,6 +129,17 @@ export default function HomeScreen() {
           </Text>
           <Text className="mt-1 text-sm text-slate-400">Your fantasy team, at a glance.</Text>
         </View>
+
+        {query.data?.fantasySeasonId !== null &&
+        query.data?.fantasySeasonId !== undefined &&
+        leaguesQuery.isSuccess ? (
+          <GettingStartedChecklist
+            hasSquad={hasSquad}
+            ownedPlayerCount={squadSize}
+            hasCompleteLineup={hasCompleteLineup}
+            hasLeague={myLeagues.length > 0}
+          />
+        ) : null}
 
         <View className="gap-4 overflow-hidden rounded-2xl border border-cyan-500/50 bg-cyan-950/30 p-5">
           <View className="flex-row items-center gap-3">
