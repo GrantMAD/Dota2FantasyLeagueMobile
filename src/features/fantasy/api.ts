@@ -453,6 +453,7 @@ export interface MarketPlayer {
   availability_status: string | null;
   current_price: number | null;
   ownership_percentage?: number | null;
+  price_history?: number[] | null;
   recent_points: number | null;
 }
 
@@ -505,6 +506,12 @@ function parseMarketPlayer(value: unknown): MarketPlayer {
     current_price: currentPrice === null ? null : Number(currentPrice),
     ...(typeof value.ownership_percentage === 'number'
       ? { ownership_percentage: value.ownership_percentage }
+      : {}),
+    ...(Array.isArray(value.price_history)
+      ? {
+          price_history: value.price_history
+            .filter((item): item is number => typeof item === 'number' && Number.isFinite(item)),
+        }
       : {}),
     recent_points: typeof value.recent_points === 'number' ? value.recent_points : null,
   };

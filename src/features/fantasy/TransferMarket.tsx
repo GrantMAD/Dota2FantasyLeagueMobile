@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
 import type { FantasyContext, FantasyPlayer, MarketPlayer, TransferSuggestion } from './api';
 import { getPlayerMarket, getTransferHistory, getTransferSuggestions, processTransfer } from './api';
+import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { useMobileTheme } from '@/src/lib/theme';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
 
@@ -378,10 +379,15 @@ export function TransferMarket({
                       ) : null}
                     </View>
                     {selected ? <Text className="mt-1 text-xs font-semibold text-brand-300">Selected as replacement</Text> : null}
-                    <Text className="mt-1 text-xs text-slate-400">
-                      {player.primary_role ?? 'Role unavailable'} · {player.current_price === null ? 'Price unavailable' : `${player.current_price.toFixed(1)}M`}
-                      {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
-                    </Text>
+                    <View className="mt-1 flex-row items-center justify-between">
+                      <Text className="text-xs text-slate-400">
+                        {player.primary_role ?? 'Role unavailable'} · {player.current_price === null ? 'Price unavailable' : `${player.current_price.toFixed(1)}M`}
+                        {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
+                      </Text>
+                      {player.price_history && player.price_history.length > 0 ? (
+                        <PriceSparkline data={player.price_history} width={44} height={14} />
+                      ) : null}
+                    </View>
                   </Pressable>
                 );
               })}

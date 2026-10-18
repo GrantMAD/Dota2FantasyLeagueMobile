@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
+import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { Screen } from '@/src/components/Screen';
 import { aggregateLatestGameweekScoreBreakdown, getPlayerDetail } from '@/src/features/players/api';
 import { getManagerProfile } from '@/src/features/account/api';
@@ -90,7 +91,26 @@ export default function PlayerDetailScreen() {
                 </View>
               </View>
               <View className="flex-row flex-wrap gap-2">
-                <Metric label="Price" value={`${query.data.current_price?.toFixed(1) ?? '—'}M`} />
+                {(() => {
+                  const priceHistory = (query.data.performances ?? [])
+                    .flatMap((perf) => (perf.price != null && Number.isFinite(perf.price) ? [perf.price] : []))
+                    .reverse();
+                  return (
+                    <View className="min-w-20 flex-1 justify-between rounded-lg bg-slate-950 px-3 py-2">
+                      <View>
+                        <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-500">Price</Text>
+                        <Text className="mt-1 text-sm font-semibold text-slate-200">
+                          {`${query.data.current_price?.toFixed(1) ?? '—'}M`}
+                        </Text>
+                      </View>
+                      {priceHistory.length > 0 ? (
+                        <View className="mt-1.5 self-start">
+                          <PriceSparkline data={priceHistory} width={50} height={14} />
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })()}
                 <Metric label="Season" value={`${query.data.total_season_points.toFixed(1)} pts`} />
                 <Metric label="Latest GW" value={`${query.data.last_gw_points.toFixed(1)} pts`} />
               </View>
