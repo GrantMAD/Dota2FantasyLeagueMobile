@@ -44,6 +44,8 @@ export interface FantasyContext {
   freeTransfers: number;
   totalPoints: number;
   globalRank: number | null;
+  targetPoints?: number | null;
+  targetRank?: number | null;
   gameweek: {
     id: number;
     gameweekNumber: number;
@@ -383,6 +385,8 @@ export async function getFantasyContext(gameweekId?: number): Promise<FantasyCon
     freeTransfers: value.freeTransfers,
     totalPoints: value.totalPoints,
     globalRank: value.globalRank,
+    targetPoints: isNullableNumber(value.targetPoints) ? value.targetPoints : null,
+    targetRank: isNullableNumber(value.targetRank) ? value.targetRank : null,
     gameweek,
     defaultGameweekId: value.defaultGameweekId,
     availableGameweeks,
@@ -872,5 +876,35 @@ export async function activateChip(payload: {
   return {
     message: result.message,
     gameweekId,
+  };
+}
+
+export async function updateGoals(payload: {
+  targetPoints?: number | null;
+  targetRank?: number | null;
+}): Promise<{
+  targetPoints: number | null;
+  targetRank: number | null;
+  totalPoints: number;
+  globalRank: number | null;
+}> {
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_update_goals', {
+    p_target_points: payload.targetPoints ?? null,
+    p_target_rank: payload.targetRank ?? null,
+  });
+
+  if (error) {
+    throw new ApiError(`Unable to update personal goals: ${error.message}`, 400);
+  }
+
+  if (!isRecord(result)) {
+    throw new ApiError('Goal update result was returned in an unexpected format.', 502);
+  }
+
+  return {
+    targetPoints: isNullableNumber(result.targetPoints) ? result.targetPoints : null,
+    targetRank: isNullableNumber(result.targetRank) ? result.targetRank : null,
+    totalPoints: typeof result.totalPoints === 'number' ? result.totalPoints : 0,
+    globalRank: isNullableNumber(result.globalRank) ? result.globalRank : null,
   };
 }

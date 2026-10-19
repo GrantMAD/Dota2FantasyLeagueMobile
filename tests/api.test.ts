@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getTransferHistoryAnalytics, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup } from '../src/features/fantasy/api';
+import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getTransferHistoryAnalytics, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup, updateGoals } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { getGameweeks } from '../src/features/gameweeks/api';
 import {
@@ -246,6 +246,40 @@ describe('mobile data access', () => {
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_fantasy_lineup_context', {
       p_gameweek_id: 25,
     });
+  });
+
+  it('updates personal milestones via mobile_update_goals RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: {
+        targetPoints: 500,
+        targetRank: 100,
+        totalPoints: 240,
+        globalRank: 150,
+      },
+      error: null,
+    });
+
+    await expect(updateGoals({ targetPoints: 500, targetRank: 100 })).resolves.toEqual({
+      targetPoints: 500,
+      targetRank: 100,
+      totalPoints: 240,
+      globalRank: 150,
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_update_goals', {
+      p_target_points: 500,
+      p_target_rank: 100,
+    });
+  });
+
+  it('handles errors when updating personal milestones', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: null,
+      error: { message: 'Target points must be a positive number up to 100,000.' },
+    });
+
+    await expect(updateGoals({ targetPoints: -5 })).rejects.toThrow(
+      'Unable to update personal goals: Target points must be a positive number up to 100,000.'
+    );
   });
 
   it('surfaces errors returned by the direct fantasy-context RPC', async () => {

@@ -10,6 +10,7 @@ import { getManagerProfile } from '@/src/features/account/api';
 import { getDashboardWhatsNew } from '@/src/features/dashboard/api';
 import { DashboardLiveMatches } from '@/src/features/dashboard/DashboardLiveMatches';
 import { GettingStartedChecklist } from '@/src/features/dashboard/GettingStartedChecklist';
+import { PersonalGoalsProgress } from '@/src/features/fantasy/PersonalGoalsProgress';
 import { getMatches } from '@/src/features/competition/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { getLeagues } from '@/src/features/leagues/api';
@@ -288,6 +289,13 @@ export default function HomeScreen() {
           </View>
         ) : query.data ? (
           <>
+            <PersonalGoalsProgress
+              totalPoints={query.data.totalPoints}
+              globalRank={query.data.globalRank}
+              targetPoints={query.data.targetPoints}
+              targetRank={query.data.targetRank}
+            />
+
             <View className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
               <Text className="text-sm font-medium text-slate-400">Season points</Text>
               <Text className="mt-2 text-4xl font-bold text-white">{formatMetric(query.data.totalPoints)}</Text>
@@ -296,7 +304,11 @@ export default function HomeScreen() {
               </Text>
             </View>
             <View className="flex-row gap-3">
-              <MetricCard label="Budget" value={formatMetric(query.data.budget)} detail="Available funds" />
+              <MetricCard
+                label="Budget"
+                value={typeof query.data.budget === 'number' && Number.isFinite(query.data.budget) ? `${query.data.budget.toFixed(1)}M` : '—'}
+                detail="Available funds"
+              />
               <MetricCard label="Free transfers" value={formatMetric(query.data.freeTransfers)} />
             </View>
             <View className="flex-row gap-3">
