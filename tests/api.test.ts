@@ -1140,7 +1140,7 @@ describe('mobile data access', () => {
   it('validates manager analytics and leaderboard-related trends from the authenticated RPC', async () => {
     mobileFantasyContextRpc.mockResolvedValue({ data: {
       user: { totalPoints: 151, globalRank: 28, budget: 12.5, squadValue: 87.5, freeTransfers: 2 },
-      trend: [{ gameweekId: 3, userScore: 48, globalAverage: 41.2 }],
+      trend: [{ gameweekId: 3, userScore: 48, globalAverage: 41.2, rank: 42 }],
       roleBreakdown: [{ role: 'Carry', points: 34.5 }],
       captainEfficiency: { captainPoints: 16, idealCapPoints: 20, efficiency: 80 },
       market: [{ playerName: 'Carry Player', team: 'Radiant', role: 'Carry', ownership: 12, price: 8, roi: 15 }],
@@ -1150,7 +1150,7 @@ describe('mobile data access', () => {
 
     await expect(getAnalytics()).resolves.toMatchObject({
       user: { totalPoints: 151, globalRank: 28 },
-      trend: [{ gameweekId: 3, userScore: 48 }],
+      trend: [{ gameweekId: 3, userScore: 48, rank: 42 }],
       captainEfficiency: { efficiency: 80 },
       dreamTeam: [{ playerName: 'Carry Player', points: 18 }],
     });

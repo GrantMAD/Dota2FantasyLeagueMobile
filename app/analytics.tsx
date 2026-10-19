@@ -137,26 +137,30 @@ export default function AnalyticsScreen() {
                   <View
                     accessible
                     accessibilityRole="header"
-                    accessibilityLabel="Columns: Gameweek, Your score, Global average"
+                    accessibilityLabel="Columns: Gameweek, Your score, Global average, Global rank"
                     className="flex-row border-b border-slate-700 pb-2"
                   >
                     <Text className="flex-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Gameweek</Text>
-                    <Text className="w-20 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Your score</Text>
-                    <Text className="w-24 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Global average</Text>
+                    <Text className="w-16 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Score</Text>
+                    <Text className="w-16 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Avg</Text>
+                    <Text className="w-16 text-right text-xs font-semibold uppercase tracking-wide text-amber-400">Rank</Text>
                   </View>
                   {visibleTrend.map((trend) => (
                     <View key={trend.gameweekId} className="gap-2 border-b border-slate-800 py-3">
                       <View
                         accessible
-                        accessibilityLabel={`Gameweek ${trend.gameweekId}. Your score ${trend.userScore.toFixed(1)} points. Global average ${trend.globalAverage.toFixed(1)} points.`}
+                        accessibilityLabel={`Gameweek ${trend.gameweekId}. Your score ${trend.userScore.toFixed(1)} points. Global average ${trend.globalAverage.toFixed(1)} points. Global rank ${trend.rank != null ? `#${trend.rank}` : 'unranked'}.`}
                         className="flex-row items-center"
                       >
-                        <Text className="flex-1 text-sm text-slate-300">Gameweek {trend.gameweekId}</Text>
-                        <Text className="w-20 text-right text-sm font-semibold tabular-nums text-white">
+                        <Text className="flex-1 text-sm text-slate-300">GW {trend.gameweekId}</Text>
+                        <Text className="w-16 text-right text-sm font-semibold tabular-nums text-white">
                           {trend.userScore.toFixed(1)}
                         </Text>
-                        <Text className="w-24 text-right text-sm tabular-nums text-slate-400">
+                        <Text className="w-16 text-right text-sm tabular-nums text-slate-400">
                           {trend.globalAverage.toFixed(1)}
+                        </Text>
+                        <Text className="w-16 text-right text-sm font-medium tabular-nums text-amber-400">
+                          {trend.rank != null ? `#${trend.rank}` : '—'}
                         </Text>
                       </View>
                       <View

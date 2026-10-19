@@ -5,6 +5,7 @@ export interface AnalyticsTrend {
   gameweekId: number;
   userScore: number;
   globalAverage: number;
+  rank?: number | null;
 }
 
 export interface AnalyticsRole {
@@ -131,7 +132,8 @@ export async function getAnalytics(): Promise<ManagerAnalytics> {
       !isRecord(item) ||
       !Number.isInteger(item.gameweekId) ||
       !isNumber(item.userScore) ||
-      !isNumber(item.globalAverage)
+      !isNumber(item.globalAverage) ||
+      !isNullableNumber(item.rank)
     ) {
       throw new ApiError('Score trends were returned in an unexpected format.', 502);
     }
@@ -139,6 +141,7 @@ export async function getAnalytics(): Promise<ManagerAnalytics> {
       gameweekId: Number(item.gameweekId),
       userScore: item.userScore,
       globalAverage: item.globalAverage,
+      rank: item.rank ?? null,
     };
   });
   const roleBreakdown = result.roleBreakdown.map((item): AnalyticsRole => {
