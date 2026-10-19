@@ -4,6 +4,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
+import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { createLeague, getLeagues, joinLeague, type CreateLeagueInput } from '@/src/features/leagues/api';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
@@ -128,6 +129,9 @@ export default function LeaguesScreen() {
           <Text className="mt-1 text-sm leading-5 text-slate-400">
             Follow your classic standings and head-to-head fixtures, or create a league and invite your friends.
           </Text>
+          <View className="mt-3">
+            <DataFreshnessBadge page="leagues" />
+          </View>
         </View>
 
         <View className="flex-row gap-3">

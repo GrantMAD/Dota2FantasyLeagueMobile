@@ -4,6 +4,7 @@ import { SymbolView } from 'expo-symbols';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { MetricCard } from '@/src/components/MetricCard';
+import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getManagerProfile } from '@/src/features/account/api';
@@ -129,6 +130,9 @@ export default function HomeScreen() {
             {displayName ? `Welcome back, ${displayName}` : 'Your dashboard'}
           </Text>
           <Text className="mt-1 text-sm text-slate-400">Your fantasy team, at a glance.</Text>
+          <View className="mt-3">
+            <DataFreshnessBadge page="dashboard" />
+          </View>
         </View>
 
         {query.data?.fantasySeasonId !== null &&

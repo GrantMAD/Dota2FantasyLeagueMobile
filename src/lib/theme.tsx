@@ -24,7 +24,7 @@ const themeColors = {
   },
 } as const;
 
-const themeVariables: Record<ThemePreference, ReturnType<typeof vars>> = {
+export const themeVariables: Record<ThemePreference, ReturnType<typeof vars>> = {
   dark: vars({
     '--color-foreground': '248 250 252',
     '--color-on-accent': '248 250 252',

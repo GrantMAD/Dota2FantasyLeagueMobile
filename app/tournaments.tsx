@@ -4,6 +4,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
+import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { getTournaments } from '@/src/features/competition/api';
 import { useMobileTheme } from '@/src/lib/theme';
 
@@ -55,6 +56,9 @@ export default function TournamentsScreen() {
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Pro circuit</Text>
           <Text className="mt-2 text-3xl font-bold text-white">Tournaments</Text>
           <Text className="mt-1 text-sm leading-5 text-slate-400">Browse eligible fantasy events and archived tournaments.</Text>
+          <View className="mt-3">
+            <DataFreshnessBadge page="tournaments" />
+          </View>
         </View>
         <TextInput
           accessibilityLabel="Search tournaments"

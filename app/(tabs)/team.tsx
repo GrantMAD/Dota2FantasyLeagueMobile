@@ -5,6 +5,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Screen } from '@/src/components/Screen';
+import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { ChipActivationPanel } from '@/src/features/fantasy/ChipActivationPanel';
 import { LineupEditor } from '@/src/features/fantasy/LineupEditor';
 import { SquadBuilder } from '@/src/features/fantasy/SquadBuilder';
@@ -224,6 +225,9 @@ export default function TeamScreen() {
               ? `Gameweek ${query.data.gameweek.gameweekNumber} · ${query.data.gameweek.status}`
               : 'Your current fantasy squad'}
           </Text>
+          <View className="mt-3">
+            <DataFreshnessBadge page="transfers" />
+          </View>
         </View>
 
         {query.isPending ? (

@@ -4,6 +4,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
+import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { getPlayers, getProfessionalTeams } from '@/src/features/players/api';
 import { useMobileTheme } from '@/src/lib/theme';
@@ -95,6 +96,9 @@ export default function DiscoverScreen() {
           <Text className="mt-1 text-sm leading-5 text-slate-400">
               Search professional players by name and role, view their season form, or compare up to four players.
           </Text>
+          <View className="mt-3">
+            <DataFreshnessBadge page="players" />
+          </View>
         </View>
 
         <View className="flex-row gap-3">

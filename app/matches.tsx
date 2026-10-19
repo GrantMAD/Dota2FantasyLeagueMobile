@@ -4,6 +4,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
+import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { getMatchesPage, getTournaments } from '@/src/features/competition/api';
 import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
 
@@ -69,6 +70,9 @@ export default function MatchesScreen() {
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Pro circuit</Text>
           <Text className="mt-2 text-3xl font-bold text-white">Match Center</Text>
           <Text className="mt-1 text-sm leading-5 text-slate-400">Live, upcoming, and completed professional matches.</Text>
+          <View className="mt-3">
+            <DataFreshnessBadge page="matches" />
+          </View>
         </View>
         <TextInput
           accessibilityLabel="Search matches"

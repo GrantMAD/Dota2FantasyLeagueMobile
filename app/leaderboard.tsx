@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/src/components/Screen';
+import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { getGameweeks } from '@/src/features/gameweeks/api';
 import { getLeaderboard } from '@/src/features/leaderboard/api';
 import { useAuth } from '@/src/lib/auth';
@@ -53,6 +54,9 @@ export default function LeaderboardScreen() {
           <Text className="mt-1 text-sm leading-5 text-slate-400">
             Compare season totals or select a gameweek to view its standings.
           </Text>
+          <View className="mt-3">
+            <DataFreshnessBadge page="leaderboard" />
+          </View>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">

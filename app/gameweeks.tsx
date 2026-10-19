@@ -4,6 +4,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
+import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { getGameweeks, type GameweekSummary } from '@/src/features/gameweeks/api';
 
 type Filter = 'all' | 'planning' | 'past';
@@ -75,6 +76,9 @@ export default function GameweeksScreen() {
           <Text className="mt-1 text-sm leading-5 text-slate-400">
             Track deadlines, fixtures, double and blank gameweeks, and completed scores.
           </Text>
+          <View className="mt-3">
+            <DataFreshnessBadge page="gameweeks" />
+          </View>
         </View>
 
         {activeGameweek ? (
