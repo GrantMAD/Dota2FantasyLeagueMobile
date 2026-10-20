@@ -1,6 +1,6 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PersonalGoalsProgress } from '../src/features/fantasy/PersonalGoalsProgress';
 import { updateGoals } from '../src/features/fantasy/api';
 
@@ -9,18 +9,26 @@ jest.mock('../src/features/fantasy/api', () => ({
 }));
 
 const mockedUpdateGoals = jest.mocked(updateGoals);
+const queryClients: QueryClient[] = [];
 
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false, gcTime: 0 },
     },
   });
+  queryClients.push(queryClient);
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
 describe('PersonalGoalsProgress', () => {
+  afterEach(() => {
+    cleanup();
+    queryClients.forEach((queryClient) => queryClient.clear());
+    queryClients.length = 0;
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
