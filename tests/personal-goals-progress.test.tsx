@@ -41,7 +41,7 @@ describe('PersonalGoalsProgress', () => {
   });
 
   it('renders goals progress and achievement status when goals are configured', () => {
-    const { getByText, queryByText } = renderWithClient(
+    const { getByText } = renderWithClient(
       <PersonalGoalsProgress
         totalPoints={600}
         globalRank={25}
@@ -64,7 +64,7 @@ describe('PersonalGoalsProgress', () => {
       globalRank: 150,
     });
 
-    const { getByRole, getByPlaceholderText, getByText } = renderWithClient(
+    const { getByRole, getByPlaceholderText } = renderWithClient(
       <PersonalGoalsProgress
         totalPoints={200}
         globalRank={150}

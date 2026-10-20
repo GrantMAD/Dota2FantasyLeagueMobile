@@ -373,14 +373,14 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
         const lineupDetails: UserLineupDetail[] = [];
 
         if (lineupRow) {
-          const starterSlots: Array<[string, number | null]> = [
+          const starterSlots: [string, number | null][] = [
             ['Carry', lineupRow.carry_id],
             ['Mid', lineupRow.mid_id],
             ['Offlane', lineupRow.offlane_id],
             ['Support', lineupRow.support_id],
             ['Hard Support', lineupRow.hard_support_id],
           ];
-          const benchSlots: Array<[string, number | null]> = [
+          const benchSlots: [string, number | null][] = [
             ['Bench 1', lineupRow.bench_1_id],
             ['Bench 2', lineupRow.bench_2_id],
             ['Bench 3', lineupRow.bench_3_id],
