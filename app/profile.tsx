@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Pressable, Text, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/src/components/Button';
@@ -11,6 +12,7 @@ import {
   updateBannerTheme,
   updateManagerProfile,
   updatePushNotificationPreference,
+  uploadManagerAvatar,
 } from '@/src/features/account/api';
 import {
   MOBILE_BANNER_THEMES,
@@ -310,6 +312,7 @@ function ProfileEditor({ profile }: { profile: ManagerProfile }) {
   const [pushNotifications, setPushNotifications] = useState(profile.pushNotifications);
   const [notice, setNotice] = useState<string | null>(null);
   const [enablingPush, setEnablingPush] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const save = useMutation({
     mutationFn: updateManagerProfile,
@@ -343,6 +346,60 @@ function ProfileEditor({ profile }: { profile: ManagerProfile }) {
       emailNotifications,
       pushNotifications,
     });
+  }
+
+  async function handleChangeAvatar() {
+    setNotice(null);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setNotice('Allow photo library access to choose a profile image.');
+        return;
+      }
+
+      const selection = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (selection.canceled) return;
+
+      const asset = selection.assets[0];
+      if (!asset) throw new Error('No image was selected.');
+      if (asset.fileSize !== null && asset.fileSize !== undefined && asset.fileSize > 5 * 1024 * 1024) {
+        throw new Error('Choose an image that is 5 MB or smaller.');
+      }
+
+      const fileExtension = asset.fileName?.split('.').pop()?.toLowerCase();
+      const mimeType = asset.mimeType?.toLowerCase() ?? (
+        fileExtension === 'jpg' || fileExtension === 'jpeg'
+          ? 'image/jpeg'
+          : fileExtension === 'png'
+            ? 'image/png'
+            : fileExtension === 'webp'
+              ? 'image/webp'
+              : null
+      );
+      if (mimeType !== 'image/jpeg' && mimeType !== 'image/png' && mimeType !== 'image/webp') {
+        throw new Error('Choose a JPEG, PNG, or WebP image.');
+      }
+
+      setUploadingAvatar(true);
+      const { avatarUrl, userId } = await uploadManagerAvatar({
+        uri: asset.uri,
+        mimeType,
+        currentAvatarUrl: profile.avatarUrl,
+      });
+      const updatedProfile = { ...profile, avatarUrl };
+      queryClient.setQueryData<ManagerProfile | null>(['manager-profile'], updatedProfile);
+      queryClient.setQueryData(['manager-avatar', userId], avatarUrl);
+      setNotice('Your profile image has been updated.');
+    } catch (error: unknown) {
+      setNotice(error instanceof Error ? error.message : 'Unable to upload profile image.');
+    } finally {
+      setUploadingAvatar(false);
+    }
   }
 
   function handleEnablePush() {
@@ -393,6 +450,36 @@ function ProfileEditor({ profile }: { profile: ManagerProfile }) {
       ) : null}
 
       <View className="gap-4">
+        <View className="flex-row items-center gap-4 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+          <View className="h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800">
+            {profile.avatarUrl ? (
+              <Image
+                accessibilityLabel="Current profile image"
+                className="h-full w-full"
+                source={{ uri: profile.avatarUrl }}
+              />
+            ) : (
+              <Text className="text-2xl font-bold text-brand-300">
+                {(profile.displayName?.trim() || profile.username).slice(0, 1).toUpperCase()}
+              </Text>
+            )}
+          </View>
+          <View className="flex-1 gap-2">
+            <Text className="font-semibold text-white">Profile image</Text>
+            <Text className="text-xs leading-4 text-slate-400">JPEG, PNG, or WebP · 5 MB maximum</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: uploadingAvatar }}
+              className={`self-start rounded-lg border border-brand-500/40 bg-brand-500/10 px-3 py-2 ${uploadingAvatar ? 'opacity-60' : ''}`}
+              disabled={uploadingAvatar}
+              onPress={() => void handleChangeAvatar()}
+            >
+              <Text className="text-xs font-semibold text-brand-300">
+                {uploadingAvatar ? 'Uploading image...' : profile.avatarUrl ? 'Change image' : 'Add image'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
         <TextField
           autoCapitalize="none"
           label="Username"

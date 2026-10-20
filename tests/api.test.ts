@@ -35,6 +35,7 @@ import {
   updateManagerProfile,
   updatePushNotificationPreference,
   updateThemePreference,
+  uploadManagerAvatar,
 } from '../src/features/account/api';
 import {
   clearReadNotifications,
@@ -1467,6 +1468,58 @@ describe('mobile data access', () => {
       p_updates: { theme_preference: 'light' },
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('uploads a manager avatar directly to Supabase Storage and saves its URL with the mobile RPC', async () => {
+    const imageBytes = Uint8Array.from([1, 2, 3, 4]).buffer;
+    jest.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => imageBytes,
+    } as Response);
+    const storage = {
+      upload: jest.fn().mockResolvedValue({ data: { path: 'test-user/avatar.png' }, error: null }),
+      getPublicUrl: jest.fn().mockReturnValue({
+        data: { publicUrl: 'https://project.example.test/storage/v1/object/public/profile-avatars/test-user/avatar.png' },
+      }),
+      remove: jest.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    jest.spyOn(supabase.storage, 'from').mockReturnValue(storage as unknown as ReturnType<typeof supabase.storage.from>);
+    mobileFantasyContextRpc.mockResolvedValueOnce({
+      data: { avatar_url: 'https://project.example.test/storage/v1/object/public/profile-avatars/test-user/avatar.png' },
+      error: null,
+    });
+
+    await expect(uploadManagerAvatar({
+      uri: 'file:///avatar.png',
+      mimeType: 'image/png',
+      currentAvatarUrl: null,
+    })).resolves.toMatchObject({
+      avatarUrl: 'https://project.example.test/storage/v1/object/public/profile-avatars/test-user/avatar.png',
+      userId: 'test-user',
+    });
+
+    expect(storage.upload).toHaveBeenCalledWith(
+      expect.stringMatching(/^test-user\/.+\.png$/),
+      imageBytes,
+      expect.objectContaining({ contentType: 'image/png', upsert: false }),
+    );
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_update_profile_avatar', {
+      p_avatar_url: 'https://project.example.test/storage/v1/object/public/profile-avatars/test-user/avatar.png',
+      p_object_path: expect.stringMatching(/^test-user\/.+\.png$/),
+    });
+    expect(fetch).toHaveBeenCalledWith('file:///avatar.png');
+  });
+
+  it('rejects unsupported image types without uploading to Storage', async () => {
+    await expect(uploadManagerAvatar({
+      uri: 'file:///avatar.heic',
+      mimeType: 'image/heic',
+      currentAvatarUrl: null,
+    })).rejects.toMatchObject({ message: 'Choose a JPEG, PNG, or WebP image.', status: 400 });
+    expect(mobileFantasyContextRpc).not.toHaveBeenCalledWith(
+      'mobile_update_profile_avatar',
+      expect.anything(),
+    );
   });
 
   it('updates the push preference and registers or removes the current device token', async () => {

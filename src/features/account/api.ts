@@ -112,6 +112,89 @@ export async function getManagerAvatarUrl(userId: string): Promise<string | null
   return data.avatar_url;
 }
 
+export async function uploadManagerAvatar(input: {
+  uri: string;
+  mimeType: string;
+  currentAvatarUrl: string | null;
+}): Promise<{ avatarUrl: string; userId: string }> {
+  const supabase = getSupabaseClient();
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session?.user.id) {
+    throw new ApiError('Sign in again before uploading a profile image.', 401);
+  }
+
+  const extensions: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+  const extension = extensions[input.mimeType];
+  if (!extension) throw new ApiError('Choose a JPEG, PNG, or WebP image.', 400);
+
+  let imageData: ArrayBuffer;
+  try {
+    const response = await fetch(input.uri);
+    if (!response.ok) throw new Error(`Unable to read selected image (${response.status}).`);
+    imageData = await response.arrayBuffer();
+  } catch (error: unknown) {
+    throw new ApiError(
+      error instanceof Error ? `Unable to read selected image: ${error.message}` : 'Unable to read selected image.',
+      0,
+    );
+  }
+
+  if (imageData.byteLength === 0 || imageData.byteLength > 5 * 1024 * 1024) {
+    throw new ApiError('Profile images must be larger than 0 bytes and 5 MB or smaller.', 400);
+  }
+
+  const userId = session.user.id;
+  const objectName = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}.${extension}`;
+  const objectPath = `${userId}/${objectName}`;
+  const storage = supabase.storage.from('profile-avatars');
+  const { error: uploadError } = await storage.upload(objectPath, imageData, {
+    contentType: input.mimeType,
+    cacheControl: '3600',
+    upsert: false,
+  });
+  if (uploadError) {
+    throw new ApiError(`Unable to upload profile image: ${uploadError.message}`, 400);
+  }
+
+  const avatarUrl = storage.getPublicUrl(objectPath).data.publicUrl;
+  const { error: profileError } = await supabase.rpc('mobile_update_profile_avatar', {
+    p_avatar_url: avatarUrl,
+    p_object_path: objectPath,
+  });
+  if (profileError) {
+    const { error: cleanupError } = await storage.remove([objectPath]);
+    if (cleanupError) console.error('Unable to remove uploaded avatar after profile update failed:', cleanupError);
+    throw new ApiError(`Unable to save profile image: ${profileError.message}`, 400);
+  }
+
+  const previousPath = getOwnedProfileAvatarPath(input.currentAvatarUrl, userId);
+  if (previousPath && previousPath !== objectPath) {
+    const { error: removeError } = await storage.remove([previousPath]);
+    if (removeError) console.error('Unable to remove previous profile avatar:', removeError);
+  }
+
+  return { avatarUrl, userId };
+}
+
+function getOwnedProfileAvatarPath(avatarUrl: string | null, userId: string): string | null {
+  if (!avatarUrl || !process.env.EXPO_PUBLIC_SUPABASE_URL) return null;
+  try {
+    const avatar = new URL(avatarUrl);
+    const supabaseUrl = new URL(process.env.EXPO_PUBLIC_SUPABASE_URL);
+    const prefix = `/storage/v1/object/public/profile-avatars/${userId}/`;
+    if (avatar.origin !== supabaseUrl.origin || !avatar.pathname.startsWith(prefix)) return null;
+    const fileName = decodeURIComponent(avatar.pathname.slice(prefix.length));
+    if (!/^[A-Za-z0-9_-]{1,80}\.(jpg|png|webp)$/.test(fileName)) return null;
+    return `${userId}/${fileName}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function getThemePreference(): Promise<ThemePreference> {
   const profile = await getManagerProfile();
   if (!profile) throw new ApiError('Profile data was returned in an unexpected format.', 502);

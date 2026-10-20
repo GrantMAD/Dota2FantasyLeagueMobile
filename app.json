@@ -27,6 +27,13 @@
       "expo-router",
       "expo-secure-store",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Fantasy Dota 2 to access selected photos so you can update your profile image.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-notifications",
         {
           "defaultChannel": "default",
