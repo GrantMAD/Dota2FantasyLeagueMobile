@@ -81,7 +81,6 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
   const [activeTab, setActiveTab] = useState<'in' | 'out'>('in');
 
   useEffect(() => {
-    // All setState calls must be inside the callback, never in the effect body.
     if (!deadlineMs) return;
     const timer = setInterval(() => {
       const remaining = Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000));
@@ -91,18 +90,12 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
     return () => clearInterval(timer);
   }, [deadlineMs]);
 
-  // Derive display value at render time so it is always fresh even before the
-  // first interval tick fires (e.g. after a data refresh or on initial mount).
-  const displayTimeRemaining = deadlineMs
-    ? Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000))
-    : timeRemaining;
-
   if (!data) {
     return null;
   }
 
-  const isLocked = gameweek ? gameweek.is_locked || displayTimeRemaining <= 0 : false;
-  const isApproaching = gameweek ? !isLocked && displayTimeRemaining < 24 * 3600 : false;
+  const isLocked = gameweek ? gameweek.is_locked || timeRemaining <= 0 : false;
+  const isApproaching = gameweek ? !isLocked && timeRemaining < 24 * 3600 : false;
   const {
     label: badgeLabel,
     badgeContainerStyle,
@@ -190,7 +183,7 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
                 : 'text-white'
             }`}
           >
-            {isLocked ? 'LOCKED' : formatCountdown(displayTimeRemaining)}
+            {isLocked ? 'LOCKED' : formatCountdown(timeRemaining)}
           </Text>
         </View>
       ) : null}
