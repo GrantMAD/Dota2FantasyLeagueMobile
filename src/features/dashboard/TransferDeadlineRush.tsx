@@ -70,22 +70,33 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
   const is_rush_active = data?.is_rush_active ?? false;
   const total_transfers_in_window = data?.total_transfers_in_window ?? 0;
 
-  const [timeRemaining, setTimeRemaining] = useState<number>(
-    gameweek?.seconds_remaining ?? 0
+  // Derive an absolute deadline timestamp so we can compute remaining seconds
+  // from Date.now() inside the interval callback — this avoids calling setState
+  // synchronously in an effect body, which triggers the react-hooks/set-state-in-effect rule.
+  const deadlineMs = gameweek?.deadline ? new Date(gameweek.deadline).getTime() : null;
+
+  const [timeRemaining, setTimeRemaining] = useState<number>(() =>
+    deadlineMs ? Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000)) : 0
   );
   const [activeTab, setActiveTab] = useState<'in' | 'out'>('in');
 
   useEffect(() => {
-    setTimeRemaining(gameweek?.seconds_remaining ?? 0);
-  }, [gameweek?.seconds_remaining]);
-
-  useEffect(() => {
-    if (timeRemaining <= 0) return;
+    if (!deadlineMs) {
+      setTimeRemaining(0);
+      return;
+    }
+    // Compute an accurate initial value when the deadline changes (e.g. after a data refresh).
+    const tick = () => {
+      const remaining = Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000));
+      setTimeRemaining(remaining);
+      return remaining;
+    };
+    tick();
     const timer = setInterval(() => {
-      setTimeRemaining((prev) => Math.max(0, prev - 1));
+      if (tick() <= 0) clearInterval(timer);
     }, 1000);
     return () => clearInterval(timer);
-  }, [timeRemaining]);
+  }, [deadlineMs]);
 
   if (!data) {
     return null;
