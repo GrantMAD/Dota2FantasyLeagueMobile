@@ -19,7 +19,7 @@ import {
 import { createLeague, getLeagueActivity, getLeagues, joinLeague } from '../src/features/leagues/api';
 import { getLeaderboard } from '../src/features/leaderboard/api';
 import { getAnalytics } from '../src/features/analytics/api';
-import { getDashboardWhatsNew } from '../src/features/dashboard/api';
+import { getDashboardWhatsNew, getTransferRush } from '../src/features/dashboard/api';
 import { getSeasonRecaps } from '../src/features/season-recap/api';
 import {
   getPremiumWaitlistStatus,
@@ -419,6 +419,55 @@ describe('mobile data access', () => {
     await expect(getDashboardWhatsNew()).rejects.toMatchObject({
       name: 'ApiError',
       status: 502,
+    });
+  });
+
+  it('loads transfer rush data successfully via mobile_get_transfer_rush RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: {
+        gameweek: {
+          id: 5,
+          gameweek_number: 2,
+          deadline: '2026-10-26T12:00:00Z',
+          status: 'upcoming',
+          is_locked: false,
+          seconds_remaining: 3600,
+        },
+        window_minutes: 60,
+        total_transfers_in_window: 12,
+        transfers_per_minute: 0.2,
+        top_transferred_in: [
+          {
+            id: 501,
+            name: 'Wang Chunyu',
+            in_game_name: 'Ame',
+            team_name: 'Xtreme Gaming',
+            team_logo_url: null,
+            role: 'Carry',
+            current_price: 6.0,
+            transfer_count: 8,
+          },
+        ],
+        top_transferred_out: [],
+        activity_pulses: [
+          {
+            id: 'top-in-milestone',
+            type: 'milestone',
+            message: 'Surging demand: 8 managers transferred in Ame.',
+            timestamp: '2026-10-25T19:00:00Z',
+          },
+        ],
+        is_rush_active: true,
+      },
+      error: null,
+    });
+
+    const res = await getTransferRush(60);
+    expect(res.gameweek?.gameweek_number).toBe(2);
+    expect(res.top_transferred_in[0].in_game_name).toBe('Ame');
+    expect(res.is_rush_active).toBe(true);
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_transfer_rush', {
+      p_window_minutes: 60,
     });
   });
 

@@ -138,3 +138,117 @@ export async function getDashboardWhatsNew(): Promise<DashboardWhatsNew> {
     updates: body.updates.map(parseUpdate),
   };
 }
+
+export interface MobileTransferRushPlayer {
+  id: number;
+  name: string;
+  in_game_name: string | null;
+  team_name: string | null;
+  team_logo_url: string | null;
+  role: string | null;
+  current_price: number;
+  transfer_count: number;
+}
+
+export interface MobileTransferRushPulse {
+  id: string;
+  type: 'milestone' | 'velocity' | 'swap';
+  message: string;
+  timestamp: string;
+  highlight_player_name?: string;
+}
+
+export interface MobileTransferRushData {
+  gameweek: {
+    id: number;
+    gameweek_number: number;
+    deadline: string | null;
+    status: string;
+    is_locked: boolean;
+    seconds_remaining: number;
+  } | null;
+  window_minutes: number;
+  total_transfers_in_window: number;
+  transfers_per_minute: number;
+  top_transferred_in: MobileTransferRushPlayer[];
+  top_transferred_out: MobileTransferRushPlayer[];
+  activity_pulses: MobileTransferRushPulse[];
+  is_rush_active: boolean;
+}
+
+function parseTransferRushPlayer(value: unknown): MobileTransferRushPlayer {
+  if (!isRecord(value) || typeof value.id !== 'number' || typeof value.name !== 'string') {
+    throw new ApiError('Transfer rush player returned in an unexpected format.', 502);
+  }
+  return {
+    id: value.id,
+    name: value.name,
+    in_game_name: typeof value.in_game_name === 'string' ? value.in_game_name : null,
+    team_name: typeof value.team_name === 'string' ? value.team_name : null,
+    team_logo_url: typeof value.team_logo_url === 'string' ? value.team_logo_url : null,
+    role: typeof value.role === 'string' ? value.role : null,
+    current_price: typeof value.current_price === 'number' ? value.current_price : 5.0,
+    transfer_count: typeof value.transfer_count === 'number' ? value.transfer_count : 0,
+  };
+}
+
+function parseTransferRushPulse(value: unknown): MobileTransferRushPulse {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.message !== 'string') {
+    throw new ApiError('Transfer rush pulse returned in an unexpected format.', 502);
+  }
+  return {
+    id: value.id,
+    type: value.type === 'velocity' ? 'velocity' : value.type === 'swap' ? 'swap' : 'milestone',
+    message: value.message,
+    timestamp: typeof value.timestamp === 'string' ? value.timestamp : new Date().toISOString(),
+    highlight_player_name:
+      typeof value.highlight_player_name === 'string' ? value.highlight_player_name : undefined,
+  };
+}
+
+export async function getTransferRush(windowMinutes = 60): Promise<MobileTransferRushData> {
+  const { data: body, error } = await getSupabaseClient().rpc('mobile_get_transfer_rush', {
+    p_window_minutes: windowMinutes,
+  });
+
+  if (error) {
+    throw new ApiError(`Unable to load transfer rush: ${error.message}`, 500);
+  }
+
+  if (
+    !isRecord(body) ||
+    !Array.isArray(body.top_transferred_in) ||
+    !Array.isArray(body.top_transferred_out) ||
+    !Array.isArray(body.activity_pulses)
+  ) {
+    throw new ApiError('Transfer rush data was returned in an unexpected format.', 502);
+  }
+
+  let gameweek: MobileTransferRushData['gameweek'] = null;
+  if (isRecord(body.gameweek)) {
+    gameweek = {
+      id: typeof body.gameweek.id === 'number' ? body.gameweek.id : 0,
+      gameweek_number:
+        typeof body.gameweek.gameweek_number === 'number' ? body.gameweek.gameweek_number : 1,
+      deadline: typeof body.gameweek.deadline === 'string' ? body.gameweek.deadline : null,
+      status: typeof body.gameweek.status === 'string' ? body.gameweek.status : 'upcoming',
+      is_locked: Boolean(body.gameweek.is_locked),
+      seconds_remaining:
+        typeof body.gameweek.seconds_remaining === 'number' ? body.gameweek.seconds_remaining : 0,
+    };
+  }
+
+  return {
+    gameweek,
+    window_minutes: typeof body.window_minutes === 'number' ? body.window_minutes : windowMinutes,
+    total_transfers_in_window:
+      typeof body.total_transfers_in_window === 'number' ? body.total_transfers_in_window : 0,
+    transfers_per_minute:
+      typeof body.transfers_per_minute === 'number' ? body.transfers_per_minute : 0,
+    top_transferred_in: body.top_transferred_in.map(parseTransferRushPlayer),
+    top_transferred_out: body.top_transferred_out.map(parseTransferRushPlayer),
+    activity_pulses: body.activity_pulses.map(parseTransferRushPulse),
+    is_rush_active: Boolean(body.is_rush_active),
+  };
+}
+

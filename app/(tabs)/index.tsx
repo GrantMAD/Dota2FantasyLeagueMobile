@@ -8,9 +8,10 @@ import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getManagerProfile } from '@/src/features/account/api';
-import { getDashboardWhatsNew } from '@/src/features/dashboard/api';
+import { getDashboardWhatsNew, getTransferRush } from '@/src/features/dashboard/api';
 import { DashboardLiveMatches } from '@/src/features/dashboard/DashboardLiveMatches';
 import { GettingStartedChecklist } from '@/src/features/dashboard/GettingStartedChecklist';
+import { TransferDeadlineRush } from '@/src/features/dashboard/TransferDeadlineRush';
 import { PersonalGoalsProgress } from '@/src/features/fantasy/PersonalGoalsProgress';
 import { getMatches } from '@/src/features/competition/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
@@ -49,6 +50,13 @@ export default function HomeScreen() {
     queryFn: () => getMatches('live'),
     staleTime: 30_000,
     refetchInterval: 60_000,
+  });
+  const transferRushQuery = useQuery({
+    queryKey: ['transfer-rush'],
+    queryFn: () => getTransferRush(60),
+    enabled: Boolean(session),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
   const myLeagues = (leaguesQuery.data ?? [])
     .filter((league) => league.standings.some((standing) => standing.userId === session?.user.id))
@@ -117,9 +125,10 @@ export default function HomeScreen() {
                 leaguesQuery.refetch(),
                 whatsNewQuery.refetch(),
                 liveMatchesQuery.refetch(),
+                transferRushQuery.refetch(),
               ]);
             }}
-            refreshing={query.isRefetching || liveMatchesQuery.isRefetching}
+            refreshing={query.isRefetching || liveMatchesQuery.isRefetching || transferRushQuery.isRefetching}
             tintColor="#14b8a6"
           />
         }
@@ -144,6 +153,38 @@ export default function HomeScreen() {
             hasCompleteLineup={hasCompleteLineup}
             hasLeague={myLeagues.length > 0}
           />
+        ) : null}
+
+        {/* Transfer Deadline Rush Widget */}
+        {transferRushQuery.isPending ? (
+          <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
+            <View className="flex-row items-center gap-2.5">
+              <View className="h-9 w-9 rounded-xl bg-slate-800" />
+              <View className="gap-1.5">
+                <View className="h-4 w-40 rounded bg-slate-800" />
+                <View className="h-3 w-28 rounded bg-slate-800" />
+              </View>
+            </View>
+            <View className="h-10 rounded-xl bg-slate-800" />
+          </View>
+        ) : transferRushQuery.isError ? (
+          <View accessibilityRole="alert" className="gap-2 rounded-2xl border border-red-900/70 bg-red-950/50 p-4">
+            <Text className="text-sm font-semibold text-red-200">Transfer Deadline Rush unavailable</Text>
+            <Text className="text-xs leading-5 text-red-300">
+              {transferRushQuery.error instanceof Error
+                ? transferRushQuery.error.message
+                : 'Could not load transfer activity.'}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              className="min-h-9 justify-center self-start"
+              onPress={() => void transferRushQuery.refetch()}
+            >
+              <Text className="text-xs font-semibold text-white">Try again</Text>
+            </Pressable>
+          </View>
+        ) : transferRushQuery.data ? (
+          <TransferDeadlineRush data={transferRushQuery.data} />
         ) : null}
 
         <View className="gap-4 overflow-hidden rounded-2xl border border-cyan-500/50 bg-cyan-950/30 p-5">
