@@ -71,8 +71,8 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
   const total_transfers_in_window = data?.total_transfers_in_window ?? 0;
 
   // Derive an absolute deadline timestamp so we can compute remaining seconds
-  // from Date.now() inside the interval callback — this avoids calling setState
-  // synchronously in an effect body, which triggers the react-hooks/set-state-in-effect rule.
+  // from Date.now() inside the interval callback only — the linter disallows
+  // any synchronous setState call in an effect body.
   const deadlineMs = gameweek?.deadline ? new Date(gameweek.deadline).getTime() : null;
 
   const [timeRemaining, setTimeRemaining] = useState<number>(() =>
@@ -81,29 +81,28 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
   const [activeTab, setActiveTab] = useState<'in' | 'out'>('in');
 
   useEffect(() => {
-    if (!deadlineMs) {
-      setTimeRemaining(0);
-      return;
-    }
-    // Compute an accurate initial value when the deadline changes (e.g. after a data refresh).
-    const tick = () => {
+    // All setState calls must be inside the callback, never in the effect body.
+    if (!deadlineMs) return;
+    const timer = setInterval(() => {
       const remaining = Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000));
       setTimeRemaining(remaining);
-      return remaining;
-    };
-    tick();
-    const timer = setInterval(() => {
-      if (tick() <= 0) clearInterval(timer);
+      if (remaining <= 0) clearInterval(timer);
     }, 1000);
     return () => clearInterval(timer);
   }, [deadlineMs]);
+
+  // Derive display value at render time so it is always fresh even before the
+  // first interval tick fires (e.g. after a data refresh or on initial mount).
+  const displayTimeRemaining = deadlineMs
+    ? Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000))
+    : timeRemaining;
 
   if (!data) {
     return null;
   }
 
-  const isLocked = gameweek ? gameweek.is_locked || timeRemaining <= 0 : false;
-  const isApproaching = gameweek ? !isLocked && timeRemaining < 24 * 3600 : false;
+  const isLocked = gameweek ? gameweek.is_locked || displayTimeRemaining <= 0 : false;
+  const isApproaching = gameweek ? !isLocked && displayTimeRemaining < 24 * 3600 : false;
   const {
     label: badgeLabel,
     badgeContainerStyle,
@@ -191,7 +190,7 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
                 : 'text-white'
             }`}
           >
-            {isLocked ? 'LOCKED' : formatCountdown(timeRemaining)}
+            {isLocked ? 'LOCKED' : formatCountdown(displayTimeRemaining)}
           </Text>
         </View>
       ) : null}
