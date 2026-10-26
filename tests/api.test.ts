@@ -1330,6 +1330,37 @@ describe('mobile data access', () => {
     expect(matchesNotificationCategory(invitation, 'scoring')).toBe(false);
   });
 
+  it('routes issue report status notifications to the matching report and Support category', () => {
+    const issueUpdate = {
+      id: 95,
+      type: 'issue_report_status',
+      title: 'Issue report updated',
+      message: 'Your report has been resolved.',
+      is_read: false,
+      created_at: '2026-10-26T10:00:00.000Z',
+      metadata: { issue_report_id: 42 },
+    };
+
+    expect(notificationCategoryForType(issueUpdate.type)).toBe('support');
+    expect(matchesNotificationCategory(issueUpdate, 'support')).toBe(true);
+    expect(notificationActionFor(issueUpdate)).toEqual({
+      label: 'View issue report',
+      href: { pathname: '/report-issue', params: { reportId: '42' } },
+    });
+  });
+
+  it('opens the issue reports screen when a status alert has no valid report ID', () => {
+    expect(notificationActionFor({
+      id: 96,
+      type: 'issue_report_status',
+      title: 'Issue report updated',
+      message: 'Your report status changed.',
+      is_read: false,
+      created_at: '2026-10-26T10:00:00.000Z',
+      metadata: { issue_report_id: '../admin' },
+    })).toEqual({ label: 'View issue reports', href: '/report-issue' });
+  });
+
   it('routes notification actions to the associated player or league when metadata IDs are valid', () => {
     const base = {
       id: 93,

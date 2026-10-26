@@ -82,6 +82,15 @@ export default function MoreScreen() {
             <Text className="mt-1 text-sm text-slate-400">Deadlines, scoring, market, and league updates</Text>
           </Pressable>
         </Link>
+        <Link href={{ pathname: '/report-issue', params: { pageUrl: '/more' } }} asChild>
+          <Pressable
+            accessibilityRole="button"
+            className="min-h-16 justify-center rounded-xl border border-slate-700 bg-slate-900 px-4"
+          >
+            <Text className="font-semibold text-white">Report an issue</Text>
+            <Text className="mt-1 text-sm text-slate-400">Report a bug, error, or interface problem</Text>
+          </Pressable>
+        </Link>
         <Link href="/learn" asChild>
           <Pressable
             accessibilityRole="button"

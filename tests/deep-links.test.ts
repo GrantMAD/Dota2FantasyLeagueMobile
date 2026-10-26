@@ -7,6 +7,7 @@ describe('manager deep-link routing', () => {
     '/matches',
     '/season-recap',
     '/notifications',
+    '/report-issue',
   ])('preserves the supported static destination %s', (path) => {
     expect(managerReturnRoute(path)).toBe(path);
   });

@@ -1,7 +1,7 @@
 import { ApiError } from '@/src/lib/errors';
 import { getSupabaseClient } from '@/src/lib/supabase';
 
-export type NotificationCategory = 'all' | 'unread' | 'deadline' | 'market' | 'scoring' | 'league';
+export type NotificationCategory = 'all' | 'unread' | 'deadline' | 'market' | 'scoring' | 'league' | 'support';
 
 export interface ManagerNotification {
   id: number;
@@ -25,6 +25,8 @@ export type NotificationAction = {
     | '/squad-planner'
     | '/gameweeks'
     | '/leagues'
+    | '/report-issue'
+    | { pathname: '/report-issue'; params: { reportId: string } }
     | { pathname: '/league/[id]'; params: { id: string } }
     | { pathname: '/player/[id]'; params: { id: string } }
     | { pathname: '/match/[id]'; params: { id: string } }
@@ -123,6 +125,8 @@ export function notificationCategoryForType(type: string): Exclude<NotificationC
     case 'h2h_result':
     case 'league_invite':
       return 'league';
+    case 'issue_report_status':
+      return 'support';
     default:
       return null;
   }
@@ -136,6 +140,15 @@ function metadataId(metadata: Record<string, unknown> | null, key: string): stri
 }
 
 export function notificationActionFor(notification: ManagerNotification): NotificationAction {
+  if (notification.type === 'issue_report_status') {
+    const reportId = metadataId(notification.metadata, 'issue_report_id');
+    if (reportId) {
+      return {
+        label: 'View issue report',
+        href: { pathname: '/report-issue', params: { reportId } },
+      };
+    }
+  }
   const matchId = metadataId(notification.metadata, 'match_id');
   if (matchId) {
     return { label: 'View match', href: { pathname: '/match/[id]', params: { id: matchId } } };
@@ -148,6 +161,7 @@ export function notificationActionFor(notification: ManagerNotification): Notifi
     };
   }
   const category = notificationCategoryForType(notification.type);
+  if (category === 'support') return { label: 'View issue reports', href: '/report-issue' };
   if (category === 'deadline') return { label: 'Review my squad', href: '/team' };
   if (category === 'market') {
     const playerId = metadataId(notification.metadata, 'player_id');

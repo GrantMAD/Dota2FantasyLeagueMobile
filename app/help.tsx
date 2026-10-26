@@ -83,6 +83,18 @@ export default function HelpScreen() {
             </Pressable>
           </Link>
         </View>
+
+        <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <Text className="text-lg font-bold text-white">Found a problem?</Text>
+          <Text className="text-sm leading-5 text-slate-400">
+            Report a bug, error, or interface issue and follow updates from the support team.
+          </Text>
+          <Link href={{ pathname: '/report-issue', params: { pageUrl: '/help' } }} asChild>
+            <Pressable accessibilityRole="button" className="min-h-11 justify-center">
+              <Text className="font-semibold text-brand-300">Report an issue →</Text>
+            </Pressable>
+          </Link>
+        </View>
       </ScrollView>
     </Screen>
   );

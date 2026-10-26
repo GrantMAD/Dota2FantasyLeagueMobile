@@ -15,6 +15,7 @@ const staticRoutes: Record<string, Href> = {
   '/matches': '/matches',
   '/notifications': '/notifications',
   '/profile': '/profile',
+  '/report-issue': '/report-issue',
   '/rules': '/rules',
   '/season-recap': '/season-recap',
   '/squad-planner': '/squad-planner',

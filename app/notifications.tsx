@@ -24,6 +24,7 @@ const categories: { key: NotificationCategory; label: string }[] = [
   { key: 'market', label: 'Market' },
   { key: 'scoring', label: 'Scoring' },
   { key: 'league', label: 'Leagues' },
+  { key: 'support', label: 'Support' },
 ];
 
 function relativeTime(value: string): string {

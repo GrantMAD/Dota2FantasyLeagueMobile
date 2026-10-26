@@ -45,6 +45,7 @@ const searchDestinations: { label: string; description: string; href: Href }[] =
   { label: 'Learn', description: 'Fantasy learning center', href: '/learn' },
   { label: 'Rules', description: 'Official rules and scoring', href: '/rules' },
   { label: 'Help', description: 'Frequently asked questions', href: '/help' },
+  { label: 'Report an issue', description: 'Submit a bug, error, or UI problem', href: '/report-issue' },
   { label: 'Profile', description: 'Manager identity and account settings', href: '/profile' },
   { label: 'Premium Tools', description: 'Planned advanced fantasy tools', href: '/premium' },
 ];

@@ -137,7 +137,12 @@ describe('TransferDeadlineRush Component', () => {
     const data: MobileTransferRushData = {
       ...baseData,
       is_rush_active: false,
-      gameweek: { ...baseData.gameweek!, is_locked: false, seconds_remaining: 200000 },
+      gameweek: {
+        ...baseData.gameweek!,
+        deadline: new Date(Date.now() + 200000 * 1000).toISOString(),
+        is_locked: false,
+        seconds_remaining: 200000,
+      },
     };
     const { getByText } = render(<TransferDeadlineRush data={data} />);
     expect(getByText('Market Open')).toBeTruthy();

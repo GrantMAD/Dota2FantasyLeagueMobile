@@ -29,7 +29,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Fantasy Dota 2 to access selected photos so you can update your profile image.",
+          "photosPermission": "Allow Fantasy Dota 2 to access selected photos so you can attach a report screenshot or update your profile image.",
           "microphonePermission": false
         }
       ],
