@@ -28,6 +28,15 @@ export default function MoreScreen() {
       <ScrollView className="flex-1" contentContainerClassName="gap-3 px-6 py-8">
         <Text className="text-2xl font-bold text-white">More</Text>
         <Text className="mt-2 text-slate-400">Open planning tools, notifications, learning resources, and account settings.</Text>
+        <Link href="/friends" asChild>
+          <Pressable
+            accessibilityRole="button"
+            className="min-h-16 justify-center rounded-xl border border-slate-700 bg-slate-900 px-4"
+          >
+            <Text className="font-semibold text-white">Friends</Text>
+            <Text className="mt-1 text-sm text-slate-400">Follow managers and view their fantasy activity</Text>
+          </Pressable>
+        </Link>
         <Link href="/gameweeks" asChild>
           <Pressable
             accessibilityRole="button"

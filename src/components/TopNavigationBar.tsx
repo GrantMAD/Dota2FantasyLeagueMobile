@@ -38,6 +38,7 @@ const searchDestinations: { label: string; description: string; href: Href }[] =
   { label: 'Gameweeks', description: 'Deadlines and fixtures', href: '/gameweeks' },
   { label: 'Squad Planner', description: 'Availability and upcoming fixtures', href: '/squad-planner' },
   { label: 'Leagues', description: 'Your leagues and standings', href: '/leagues' },
+  { label: 'Friends', description: 'Follow managers and view their fantasy activity', href: '/friends' },
   { label: 'Leaderboard', description: 'Global manager rankings', href: '/leaderboard' },
   { label: 'Analytics', description: 'Performance and market insights', href: '/analytics' },
   { label: 'Season Recap', description: 'Review your season', href: '/season-recap' },
@@ -55,6 +56,7 @@ const profileMenuItems: {
   href: Href;
   icon: ComponentProps<typeof SymbolView>['name'];
 }[] = [
+  { label: 'Friends', href: '/friends', icon: { ios: 'person.2', android: 'group', web: 'group' } },
   { label: 'Gameweeks', href: '/gameweeks', icon: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' } },
   { label: 'Squad Planner', href: '/squad-planner', icon: { ios: 'calendar.badge.clock', android: 'event_note', web: 'event_note' } },
   { label: 'Global Leaderboard', href: '/leaderboard', icon: { ios: 'list.number', android: 'leaderboard', web: 'leaderboard' } },
