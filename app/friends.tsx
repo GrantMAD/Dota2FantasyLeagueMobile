@@ -281,9 +281,14 @@ export default function FriendsScreen() {
         </View>
 
         <View className="gap-3">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-lg font-bold text-slate-50">Following</Text>
-            <Text className="text-sm text-slate-400">{following.length} managers</Text>
+          <View>
+            <View className="flex-row items-center justify-between">
+              <Text className="text-lg font-bold text-slate-50">Following</Text>
+              <Text className="text-sm text-slate-400">{following.length} managers</Text>
+            </View>
+            <Text className="mt-1 text-xs text-slate-400">
+              Click any friend below to view their season points, global rank, and gameweek history.
+            </Text>
           </View>
           {followingQuery.isLoading ? (
             <ActivityIndicator accessibilityLabel="Loading followed managers" color="#14b8a6" />

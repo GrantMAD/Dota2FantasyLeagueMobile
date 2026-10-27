@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ScreenScrollView } from '@/src/components/ScreenScrollView';
 import { SymbolView } from 'expo-symbols';
@@ -9,6 +10,7 @@ import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getManagerProfile } from '@/src/features/account/api';
 import { getDashboardWhatsNew, getTransferRush } from '@/src/features/dashboard/api';
+import { getFriendActivity, type FriendActivity } from '@/src/features/friends/api';
 import { DashboardLiveMatches } from '@/src/features/dashboard/DashboardLiveMatches';
 import { GettingStartedChecklist } from '@/src/features/dashboard/GettingStartedChecklist';
 import { TransferDeadlineRush } from '@/src/features/dashboard/TransferDeadlineRush';
@@ -50,6 +52,14 @@ export default function HomeScreen() {
     queryFn: () => getMatches('live'),
     staleTime: 30_000,
     refetchInterval: 60_000,
+  });
+  const [whatsNewTab, setWhatsNewTab] = useState<'all' | 'friends' | 'squad' | 'tournaments'>('all');
+  const friendActivityQuery = useQuery({
+    queryKey: ['friend-activity-feed', 'dashboard'],
+    queryFn: () => getFriendActivity(null),
+    enabled: Boolean(session),
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
   });
   const transferRushQuery = useQuery({
     queryKey: ['transfer-rush'],
@@ -124,11 +134,12 @@ export default function HomeScreen() {
                 query.refetch(),
                 leaguesQuery.refetch(),
                 whatsNewQuery.refetch(),
+                friendActivityQuery.refetch(),
                 liveMatchesQuery.refetch(),
                 transferRushQuery.refetch(),
               ]);
             }}
-            refreshing={query.isRefetching || liveMatchesQuery.isRefetching || transferRushQuery.isRefetching}
+            refreshing={query.isRefetching || liveMatchesQuery.isRefetching || transferRushQuery.isRefetching || friendActivityQuery.isRefetching}
             tintColor="#14b8a6"
           />
         }
@@ -246,28 +257,146 @@ export default function HomeScreen() {
                 </Link>
               ) : null}
 
-              {whatsNewQuery.data.events.length || whatsNewQuery.data.updates.length ? (
-                <View className="gap-2">
-                  <Text className="text-[10px] font-bold uppercase tracking-[1.5px] text-cyan-100/80">Recent updates</Text>
-                  {whatsNewQuery.data.events.slice(0, 3).map((event) => (
-                    <Link key={event.id} href={`/tournament/${event.id}`} asChild>
-                      <Pressable className="flex-row items-start gap-3 rounded-xl border border-slate-700/70 bg-slate-950/40 p-3">
-                        <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={17} tintColor="#67e8f9" />
+              {/* Filter Tabs */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerClassName="flex-row items-center gap-2 py-1"
+              >
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: whatsNewTab === 'all' }}
+                  onPress={() => setWhatsNewTab('all')}
+                  className={`flex-row items-center gap-1.5 rounded-full px-3 py-1.5 ${
+                    whatsNewTab === 'all' ? 'bg-cyan-500' : 'bg-slate-800'
+                  }`}
+                >
+                  <Text className={`text-xs font-semibold ${whatsNewTab === 'all' ? 'text-slate-950 font-bold' : 'text-slate-300'}`}>
+                    All
+                  </Text>
+                  <View className={`rounded-full px-1.5 py-0.2 ${whatsNewTab === 'all' ? 'bg-slate-950/20' : 'bg-slate-700'}`}>
+                    <Text className={`text-[10px] font-bold ${whatsNewTab === 'all' ? 'text-slate-950' : 'text-slate-300'}`}>
+                      {(friendActivityQuery.data?.activities?.length ?? 0) +
+                        whatsNewQuery.data.updates.length +
+                        whatsNewQuery.data.events.length}
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: whatsNewTab === 'friends' }}
+                  onPress={() => setWhatsNewTab('friends')}
+                  className={`flex-row items-center gap-1.5 rounded-full px-3 py-1.5 ${
+                    whatsNewTab === 'friends' ? 'bg-teal-500' : 'bg-slate-800'
+                  }`}
+                >
+                  <SymbolView name={{ ios: 'person.2.fill', android: 'group', web: 'group' }} size={13} tintColor={whatsNewTab === 'friends' ? '#022c22' : '#2dd4bf'} />
+                  <Text className={`text-xs font-semibold ${whatsNewTab === 'friends' ? 'text-slate-950 font-bold' : 'text-slate-300'}`}>
+                    Friends
+                  </Text>
+                  <View className={`rounded-full px-1.5 py-0.2 ${whatsNewTab === 'friends' ? 'bg-slate-950/20' : 'bg-slate-700'}`}>
+                    <Text className={`text-[10px] font-bold ${whatsNewTab === 'friends' ? 'text-slate-950' : 'text-slate-300'}`}>
+                      {friendActivityQuery.data?.activities?.length ?? 0}
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: whatsNewTab === 'squad' }}
+                  onPress={() => setWhatsNewTab('squad')}
+                  className={`flex-row items-center gap-1.5 rounded-full px-3 py-1.5 ${
+                    whatsNewTab === 'squad' ? 'bg-emerald-500' : 'bg-slate-800'
+                  }`}
+                >
+                  <SymbolView name={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }} size={13} tintColor={whatsNewTab === 'squad' ? '#022c22' : '#34d399'} />
+                  <Text className={`text-xs font-semibold ${whatsNewTab === 'squad' ? 'text-slate-950 font-bold' : 'text-slate-300'}`}>
+                    Squad Alerts
+                  </Text>
+                  <View className={`rounded-full px-1.5 py-0.2 ${whatsNewTab === 'squad' ? 'bg-slate-950/20' : 'bg-slate-700'}`}>
+                    <Text className={`text-[10px] font-bold ${whatsNewTab === 'squad' ? 'text-slate-950' : 'text-slate-300'}`}>
+                      {whatsNewQuery.data.updates.length}
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: whatsNewTab === 'tournaments' }}
+                  onPress={() => setWhatsNewTab('tournaments')}
+                  className={`flex-row items-center gap-1.5 rounded-full px-3 py-1.5 ${
+                    whatsNewTab === 'tournaments' ? 'bg-amber-500' : 'bg-slate-800'
+                  }`}
+                >
+                  <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={13} tintColor={whatsNewTab === 'tournaments' ? '#451a03' : '#f59e0b'} />
+                  <Text className={`text-xs font-semibold ${whatsNewTab === 'tournaments' ? 'text-slate-950 font-bold' : 'text-slate-300'}`}>
+                    Tournaments
+                  </Text>
+                  <View className={`rounded-full px-1.5 py-0.2 ${whatsNewTab === 'tournaments' ? 'bg-slate-950/20' : 'bg-slate-700'}`}>
+                    <Text className={`text-[10px] font-bold ${whatsNewTab === 'tournaments' ? 'text-slate-950' : 'text-slate-300'}`}>
+                      {whatsNewQuery.data.events.length}
+                    </Text>
+                  </View>
+                </Pressable>
+              </ScrollView>
+
+              {/* Feed items */}
+              <View className="gap-2">
+                {/* Friend moves */}
+                {(whatsNewTab === 'all' || whatsNewTab === 'friends') &&
+                  friendActivityQuery.data?.activities?.slice(0, 5).map((activity) => (
+                    <Link key={`f-${activity.activity_id}`} href="/friends" asChild>
+                      <Pressable className="flex-row items-start gap-3 rounded-xl border border-teal-500/30 bg-teal-950/20 p-3">
+                        <SymbolView
+                          name={activity.activity_type === 'transfer'
+                            ? { ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }
+                            : activity.activity_type === 'chip'
+                              ? { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }
+                              : activity.activity_type === 'lineup'
+                                ? { ios: 'list.clipboard.fill', android: 'assignment', web: 'assignment' }
+                                : { ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }}
+                          size={17}
+                          tintColor="#2dd4bf"
+                        />
                         <View className="flex-1 gap-1">
-                          <Text className="text-[10px] font-bold uppercase tracking-wider text-cyan-200">Tournament active</Text>
-                          <Text className="font-semibold text-white">{event.title}</Text>
-                          <Text className="text-xs leading-5 text-slate-400">
-                            {[event.tier, `${event.seriesCount} series`, `${event.matchCount} matches`,
-                              ...(event.bestOfFormats.length ? [`Bo${event.bestOfFormats.join(' / Bo')}`] : [])]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </Text>
+                          <View className="flex-row items-center gap-1.5">
+                            <Text className="text-[10px] font-bold uppercase tracking-wider text-teal-300">Friend Move</Text>
+                            <Text className="text-xs text-slate-500">·</Text>
+                            <Text className="text-xs font-bold text-slate-200">
+                              {activity.display_name?.trim() || activity.username}
+                            </Text>
+                          </View>
+                          <Text className="font-semibold text-white">{activity.title}</Text>
+                          {activity.activity_type === 'transfer' && (activity.players_in?.length || activity.players_out?.length) ? (
+                            <View className="flex-row flex-wrap gap-1.5 mt-0.5">
+                              {activity.players_in?.map((p) => (
+                                <Text key={`in-${p}`} className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                                  +{p}
+                                </Text>
+                              ))}
+                              {activity.players_out?.map((p) => (
+                                <Text key={`out-${p}`} className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
+                                  -{p}
+                                </Text>
+                              ))}
+                            </View>
+                          ) : null}
+                          {activity.activity_type === 'gameweek_score' && activity.gameweek_points !== null ? (
+                            <Text className="text-xs font-semibold text-teal-300">
+                              {activity.gameweek_points.toLocaleString()} pts scored
+                              {activity.gameweek_rank ? ` · Rank #${activity.gameweek_rank.toLocaleString()}` : ''}
+                            </Text>
+                          ) : null}
                         </View>
-                        <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                        <Text className="pt-1 font-bold text-teal-200">›</Text>
                       </Pressable>
                     </Link>
                   ))}
-                  {whatsNewQuery.data.updates.map((update) => (
+
+                {/* Squad updates */}
+                {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
+                  whatsNewQuery.data.updates.map((update) => (
                     <Link key={`${update.kind}-${update.id}`} href={`/player/${update.playerId}`} asChild>
                       <Pressable className="flex-row items-start gap-3 rounded-xl border border-slate-700/70 bg-slate-950/40 p-3">
                         <SymbolView
@@ -290,20 +419,69 @@ export default function HomeScreen() {
                       </Pressable>
                     </Link>
                   ))}
-                </View>
-              ) : null}
 
-              {!whatsNewQuery.data.gameweek &&
-              whatsNewQuery.data.events.length === 0 &&
-              whatsNewQuery.data.updates.length === 0 ? (
-                <Text className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3 text-sm leading-5 text-slate-300">
-                  No new events or squad updates right now.
-                </Text>
-              ) : null}
+                {/* Tournaments */}
+                {(whatsNewTab === 'all' || whatsNewTab === 'tournaments') &&
+                  whatsNewQuery.data.events.slice(0, 3).map((event) => (
+                    <Link key={event.id} href={`/tournament/${event.id}`} asChild>
+                      <Pressable className="flex-row items-start gap-3 rounded-xl border border-slate-700/70 bg-slate-950/40 p-3">
+                        <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={17} tintColor="#67e8f9" />
+                        <View className="flex-1 gap-1">
+                          <Text className="text-[10px] font-bold uppercase tracking-wider text-cyan-200">Tournament active</Text>
+                          <Text className="font-semibold text-white">{event.title}</Text>
+                          <Text className="text-xs leading-5 text-slate-400">
+                            {[event.tier, `${event.seriesCount} series`, `${event.matchCount} matches`,
+                              ...(event.bestOfFormats.length ? [`Bo${event.bestOfFormats.join(' / Bo')}`] : [])]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </Text>
+                        </View>
+                        <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                      </Pressable>
+                    </Link>
+                  ))}
 
-              <Link href="/notifications" asChild>
-                <Pressable accessibilityRole="button" className="min-h-10 flex-row items-center justify-center rounded-lg border border-cyan-500/30 bg-cyan-500/10">
-                  <Text className="text-sm font-semibold text-cyan-200">View all notifications</Text>
+                {/* Empty states for selected tab */}
+                {whatsNewTab === 'friends' && (friendActivityQuery.data?.activities?.length ?? 0) === 0 ? (
+                  <View className="rounded-xl border border-dashed border-slate-700 bg-slate-950/30 p-4 items-center">
+                    <Text className="text-sm font-semibold text-slate-300">No friend activity yet</Text>
+                    <Text className="mt-1 text-xs text-center text-slate-400">
+                      Follow managers on the Friends page to see their transfers and scores here.
+                    </Text>
+                    <Link href="/friends" asChild>
+                      <Pressable className="mt-3 rounded-lg bg-teal-500 px-3 py-1.5">
+                        <Text className="text-xs font-bold text-slate-950">Find Friends</Text>
+                      </Pressable>
+                    </Link>
+                  </View>
+                ) : null}
+
+                {whatsNewTab === 'squad' && whatsNewQuery.data.updates.length === 0 ? (
+                  <Text className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3 text-sm leading-5 text-slate-300 text-center">
+                    No squad alerts right now.
+                  </Text>
+                ) : null}
+
+                {whatsNewTab === 'tournaments' && whatsNewQuery.data.events.length === 0 ? (
+                  <Text className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3 text-sm leading-5 text-slate-300 text-center">
+                    No active tournaments right now.
+                  </Text>
+                ) : null}
+
+                {whatsNewTab === 'all' &&
+                !whatsNewQuery.data.gameweek &&
+                whatsNewQuery.data.events.length === 0 &&
+                whatsNewQuery.data.updates.length === 0 &&
+                (friendActivityQuery.data?.activities?.length ?? 0) === 0 ? (
+                  <Text className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3 text-sm leading-5 text-slate-300">
+                    No new events or updates right now.
+                  </Text>
+                ) : null}
+              </View>
+
+              <Link href="/friends" asChild>
+                <Pressable accessibilityRole="button" className="min-h-10 flex-row items-center justify-center rounded-lg border border-teal-500/30 bg-teal-500/10">
+                  <Text className="text-sm font-semibold text-teal-200">Open Friends Hub ›</Text>
                 </Pressable>
               </Link>
             </View>
