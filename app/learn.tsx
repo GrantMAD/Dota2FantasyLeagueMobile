@@ -6,7 +6,7 @@ import { Screen } from '@/src/components/Screen';
 const quickRules = [
   { label: 'Squad size', value: '8 players' },
   { label: 'Starting roles', value: '5 positions' },
-  { label: 'Starting budget', value: '$100.0M' },
+  { label: 'Starting budget', value: '$45.0M' },
   { label: 'Captain bonus', value: '2.0× points' },
   { label: 'Free transfers', value: '1 per gameweek' },
   { label: 'Lock window', value: '30 minutes' },

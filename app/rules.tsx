@@ -65,7 +65,7 @@ export default function RulesScreen() {
         <RuleSection title="Squad structure">
           <View className="flex-row flex-wrap gap-2">
             {[
-              ['Budget', '$100.0M'],
+              ['Budget', '$45.0M'],
               ['Squad', '8 players'],
               ['Starting lineup', '5 roles'],
               ['Optional bench', 'Up to 3'],
