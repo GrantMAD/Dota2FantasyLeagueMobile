@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView as HorizontalScrollView, Text, TextInput, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { getMatchesPage, getTournaments } from '@/src/features/competition/api';
@@ -26,6 +26,12 @@ function formatDate(value: string): string {
 
 export default function MatchesScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ gameweekId?: string | string[] }>();
+  const rawGameweekId = Array.isArray(params.gameweekId) ? params.gameweekId[0] : params.gameweekId;
+  const parsedGameweekId = Number(rawGameweekId);
+  const gameweekId = Number.isSafeInteger(parsedGameweekId) && parsedGameweekId > 0
+    ? parsedGameweekId
+    : undefined;
   const [filter, setFilter] = useState<MatchFilter>('all');
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
@@ -48,8 +54,14 @@ export default function MatchesScreen() {
     staleTime: 5 * 60_000,
   });
   const query = useQuery({
-    queryKey: ['matches', filter, search, tournamentId, page],
-    queryFn: () => getMatchesPage({ status: filter, search, tournamentId: tournamentId ?? undefined, page }),
+    queryKey: ['matches', filter, search, tournamentId, gameweekId, page],
+    queryFn: () => getMatchesPage({
+      status: filter,
+      search,
+      tournamentId: tournamentId ?? undefined,
+      gameweekId,
+      page,
+    }),
     staleTime: 30_000,
   });
   const totalPages = query.data ? Math.max(1, Math.ceil(query.data.total / query.data.limit)) : 1;
@@ -74,6 +86,17 @@ export default function MatchesScreen() {
             <DataFreshnessBadge page="matches" />
           </View>
         </View>
+        {gameweekId ? (
+          <View className="flex-row items-center justify-between gap-3 rounded-xl border border-cyan-800 bg-cyan-950/40 px-4 py-3">
+            <Text className="flex-1 text-sm font-medium text-cyan-100">Showing fixtures for Gameweek {gameweekId}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.replace('/matches')}
+            >
+              <Text className="font-semibold text-cyan-300">Clear</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <TextInput
           accessibilityLabel="Search matches"
           value={searchDraft}

@@ -1,13 +1,16 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView as NativeScrollView, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import { SymbolView } from 'expo-symbols';
 import { Screen } from '@/src/components/Screen';
+import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { getUpcomingFixturesForTeams } from '@/src/features/fantasy/api';
 import type { FantasyPlayer, TeamFixture } from '@/src/features/fantasy/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { useAuth } from '@/src/lib/auth';
+import { useMobileTheme } from '@/src/lib/theme';
 
 function playerName(player: FantasyPlayer): string {
   return player.in_game_name || player.name;
@@ -26,6 +29,27 @@ function formatDate(value: string): string {
       });
 }
 
+function formatDeadline(value: string | null): string {
+      if (!value) return 'Deadline not announced';
+      const deadline = new Date(value);
+      if (Number.isNaN(deadline.getTime())) return 'Deadline not announced';
+      const remaining = deadline.getTime() - Date.now();
+      const formatted = deadline.toLocaleString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      if (remaining <= 0) return `${formatted} (passed)`;
+      const hours = Math.floor(remaining / 3_600_000);
+      const days = Math.floor(hours / 24);
+      const timeLeft = days > 0
+        ? `${days}d ${hours % 24}h remaining`
+        : `${hours}h ${Math.floor((remaining % 3_600_000) / 60_000)}m remaining`;
+      return `${formatted} · ${timeLeft}`;
+}
+
 function slotLabel(slot: string | undefined): string {
   if (!slot) return 'Not in lineup';
   return slot.split('_').map((part) =>
@@ -34,18 +58,30 @@ function slotLabel(slot: string | undefined): string {
 }
 
 export default function SquadPlannerScreen() {
+  const router = useRouter();
   const { session } = useAuth();
   const [selectedGameweekId, setSelectedGameweekId] = useState<number | undefined>();
+  const [isGameweekPickerVisible, setIsGameweekPickerVisible] = useState(false);
+  const { theme } = useMobileTheme();
   const contextQuery = useFantasyContext();
   const planningGameweeks = useMemo(() => {
     const gameweeks = contextQuery.data?.availableGameweeks ?? [];
     const currentGameweek = contextQuery.data?.gameweek;
-    return currentGameweek && !gameweeks.some((gameweek) => gameweek.id === currentGameweek.id)
+    const withCurrentGameweek = currentGameweek && !gameweeks.some((gameweek) => gameweek.id === currentGameweek.id)
       ? [...gameweeks, currentGameweek]
       : gameweeks;
+    return [...withCurrentGameweek].sort((a, b) => {
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (b.status === 'active' && a.status !== 'active') return 1;
+      return a.gameweekNumber - b.gameweekNumber;
+    });
   }, [contextQuery.data?.availableGameweeks, contextQuery.data?.gameweek]);
+  const defaultPlanningGameweek = planningGameweeks.find((gameweek) => gameweek.status === 'active')
+    ?? planningGameweeks.find((gameweek) => gameweek.id === contextQuery.data?.gameweek?.id)
+    ?? planningGameweeks[0]
+    ?? null;
   const activeGameweekId = selectedGameweekId
-    ?? contextQuery.data?.gameweek?.id
+    ?? defaultPlanningGameweek?.id
     ?? contextQuery.data?.defaultGameweekId
     ?? undefined;
   const lineupContextQuery = useFantasyContext(activeGameweekId);
@@ -61,8 +97,8 @@ export default function SquadPlannerScreen() {
     [players]
   );
   const fixtureQuery = useQuery({
-    queryKey: ['squad-fixtures', session?.user.id, teamIds, activeGameweekId],
-    queryFn: () => getUpcomingFixturesForTeams(teamIds, activeGameweekId),
+    queryKey: ['squad-fixtures', session?.user.id, teamIds],
+    queryFn: () => getUpcomingFixturesForTeams(teamIds),
     enabled: Boolean(session?.user.id && contextQuery.data && teamIds.length > 0),
     staleTime: 60_000,
   });
@@ -146,34 +182,53 @@ export default function SquadPlannerScreen() {
                 {selectedGameweek?.isLocked
                   ? 'The current lineup is locked.'
                   : selectedGameweek?.deadline
-                    ? `Deadline ${formatDate(selectedGameweek.deadline)}`
+                    ? formatDeadline(selectedGameweek.deadline)
                     : 'No upcoming deadline is available.'}
               </Text>
+              <View className="flex-row flex-wrap gap-2 border-t border-slate-800 pt-3">
+                <Pressable
+                  accessibilityRole="button"
+                  className="min-h-10 justify-center rounded-lg bg-cyan-500 px-4"
+                  onPress={() => router.push('/(tabs)/team?tab=lineup')}
+                >
+                  <Text className="font-semibold text-slate-950">
+                    {selectedGameweek?.isLocked ? 'View lineup' : 'Set lineup'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  className="min-h-10 justify-center rounded-lg border border-slate-700 bg-slate-950/60 px-4"
+                  onPress={() => {
+                    if (selectedGameweek) {
+                      router.push({ pathname: '/matches', params: { gameweekId: String(selectedGameweek.id) } });
+                    } else {
+                      router.push('/matches');
+                    }
+                  }}
+                >
+                  <Text className="font-medium text-slate-200">Gameweek fixtures</Text>
+                </Pressable>
+              </View>
               {planningGameweeks.length > 1 ? (
                 <View className="gap-2 border-t border-slate-800 pt-3">
                   <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Plan another open gameweek</Text>
-                  <View className="flex-row flex-wrap gap-2">
-                    {planningGameweeks.map((gameweek) => (
-                      <Pressable
-                        key={gameweek.id}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: gameweek.id === activeGameweekId }}
-                        disabled={lineupContextQuery.isFetching}
-                        className={`min-h-10 justify-center rounded-full border px-3 ${
-                          gameweek.id === activeGameweekId
-                            ? 'border-brand-500 bg-brand-500/15'
-                            : 'border-slate-700 bg-slate-950/60'
-                        }`}
-                        onPress={() => setSelectedGameweekId(gameweek.id)}
-                      >
-                        <Text className={`text-sm font-semibold ${
-                          gameweek.id === activeGameweekId ? 'text-brand-300' : 'text-slate-300'
-                        }`}>
-                          GW {gameweek.gameweekNumber}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: isGameweekPickerVisible }}
+                    accessibilityLabel={`Selected gameweek ${selectedGameweek?.gameweekNumber ?? 'unavailable'}. Choose planning gameweek`}
+                    disabled={lineupContextQuery.isFetching}
+                    className="min-h-12 flex-row items-center justify-between rounded-xl border border-slate-700 bg-slate-950/60 px-4"
+                    onPress={() => setIsGameweekPickerVisible(true)}
+                  >
+                    <Text className="font-semibold text-white">
+                      {selectedGameweek ? `Gameweek ${selectedGameweek.gameweekNumber}` : 'Select gameweek'}
+                    </Text>
+                    <SymbolView
+                      name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
+                      size={20}
+                      tintColor={theme === 'dark' ? '#2dd4bf' : '#0f766e'}
+                    />
+                  </Pressable>
                   {lineupContextQuery.isFetching ? (
                     <Text accessibilityLiveRegion="polite" className="text-xs text-slate-400">
                       Loading selected gameweek lineup and fixtures…
@@ -193,17 +248,23 @@ export default function SquadPlannerScreen() {
                   ) : null}
                 </View>
               ) : null}
+            </View>
+
+            <View className="gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Squad status</Text>
+              <Text className="text-2xl font-bold text-white">{players.length} players</Text>
               <Text className={`${unavailableCount ? 'text-amber-300' : 'text-emerald-300'} text-sm`}>
                 {unavailableCount
-                  ? `${unavailableCount} player${unavailableCount === 1 ? '' : 's'} unavailable or without a confirmed availability status`
+                  ? `${unavailableCount} unavailable or status unconfirmed`
                   : 'All players currently marked available'}
               </Text>
+              <Text className="text-xs text-slate-400">Review the latest lineup status before the deadline.</Text>
             </View>
 
             <View className="gap-3">
               <View>
                 <Text className="text-lg font-bold text-white">My squad availability</Text>
-                <Text className="mt-1 text-sm text-slate-400">Player status, lineup role, and fixture count.</Text>
+                <Text className="mt-1 text-sm text-slate-400">Role, status, and upcoming fixtures for your owned players.</Text>
               </View>
               {players.map((player) => {
                 const lineupEntry = lineupByPlayer.get(player.id);
@@ -216,12 +277,19 @@ export default function SquadPlannerScreen() {
                 return (
                   <View key={player.id} className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
                     <View className="flex-row items-start justify-between gap-3">
-                      <View className="flex-1">
-                        <Text className="font-semibold text-white">{playerName(player)}</Text>
-                        <Text className="mt-1 text-xs text-slate-400">
+                      <Pressable
+                        accessibilityRole="link"
+                        className="min-w-0 flex-1 flex-row items-center gap-3"
+                        onPress={() => router.push({ pathname: '/player/[id]', params: { id: String(player.id) } })}
+                      >
+                        <PlayerAvatar uri={player.profile_image_url} label={playerName(player)} size={42} />
+                        <View className="min-w-0 flex-1">
+                          <Text numberOfLines={1} className="font-semibold text-white">{playerName(player)}</Text>
+                          <Text numberOfLines={1} className="mt-1 text-xs text-slate-400">
                           {player.professional_teams?.name ?? 'Free agent'} · {player.primary_role ?? 'Role unassigned'}
-                        </Text>
-                      </View>
+                          </Text>
+                        </View>
+                      </Pressable>
                       <View className={`rounded-full px-2.5 py-1 ${isAvailable ? 'bg-emerald-500/15' : 'bg-amber-500/15'}`}>
                         <Text className={`text-xs font-medium ${isAvailable ? 'text-emerald-300' : 'text-amber-200'}`}>
                           {player.availability_status ?? 'Unknown'}
@@ -236,6 +304,9 @@ export default function SquadPlannerScreen() {
                       {lineupEntry?.is_captain ? <Text className="text-xs font-medium text-amber-300">Captain</Text> : null}
                       {lineupEntry?.is_vice_captain ? <Text className="text-xs font-medium text-amber-200">Vice-captain</Text> : null}
                       <Text className="text-xs text-slate-400">
+                        {player.current_price > 0 ? `$${player.current_price.toFixed(1)}M` : 'Price unavailable'}
+                      </Text>
+                      <Text className="text-xs text-slate-400">
                         {fixturesUnavailable
                           ? 'Fixtures unavailable'
                           : `${fixtures.length} upcoming fixture${fixtures.length === 1 ? '' : 's'}`}
@@ -249,9 +320,7 @@ export default function SquadPlannerScreen() {
             <View className="gap-3">
               <View>
                 <Text className="text-lg font-bold text-white">Upcoming squad fixtures</Text>
-                <Text className="mt-1 text-sm text-slate-400">
-                  Scheduled matches for your teams in Gameweek {selectedGameweek?.gameweekNumber ?? '—'}.
-                </Text>
+                <Text className="mt-1 text-sm text-slate-400">Next scheduled matches for teams represented in your squad.</Text>
               </View>
               {fixtureQuery.data?.failedTeamIds.length ? (
                 <View accessibilityRole="alert" className="gap-3 rounded-xl border border-amber-800 bg-amber-950/70 p-4">
@@ -322,6 +391,109 @@ export default function SquadPlannerScreen() {
           </>
         )}
       </ScrollView>
+      {planningGameweeks.length > 1 ? (
+        <Modal
+          accessibilityViewIsModal
+          animationType="fade"
+          onRequestClose={() => setIsGameweekPickerVisible(false)}
+          presentationStyle="overFullScreen"
+          statusBarTranslucent
+          transparent
+          visible={isGameweekPickerVisible}
+        >
+          <View
+            className="flex-1 justify-center px-5"
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              backgroundColor: theme === 'dark' ? 'rgba(2, 6, 23, 0.82)' : 'rgba(15, 23, 42, 0.55)',
+            }}
+          >
+            <View
+              className="gap-3 rounded-2xl border p-4"
+              style={{
+                maxHeight: '70%',
+                borderColor: theme === 'dark' ? '#334155' : '#cbd5e1',
+                backgroundColor: theme === 'dark' ? '#020617' : '#ffffff',
+              }}
+            >
+              <View className="flex-row items-center justify-between">
+                <Text className="text-lg font-bold" style={{ color: theme === 'dark' ? '#f8fafc' : '#0f172a' }}>
+                  Select gameweek
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  className="min-h-10 justify-center px-2"
+                  onPress={() => setIsGameweekPickerVisible(false)}
+                >
+                  <Text className="font-semibold" style={{ color: theme === 'dark' ? '#5eead4' : '#0f766e' }}>
+                    Close
+                  </Text>
+                </Pressable>
+              </View>
+              <NativeScrollView
+                style={{ flexGrow: 0 }}
+                contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {planningGameweeks.map((gameweek) => {
+                  const isSelected = gameweek.id === activeGameweekId;
+                  const isActive = gameweek.status === 'active';
+                  return (
+                    <Pressable
+                      key={gameweek.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
+                      accessibilityLabel={`Gameweek ${gameweek.gameweekNumber}${isActive ? ', active' : ''}`}
+                      className="min-h-14 flex-row items-center justify-between rounded-xl border px-4 py-2"
+                      style={{
+                        borderColor: isSelected
+                          ? theme === 'dark' ? '#14b8a6' : '#0f766e'
+                          : theme === 'dark' ? '#334155' : '#cbd5e1',
+                        backgroundColor: isSelected
+                          ? theme === 'dark' ? 'rgba(20, 184, 166, 0.16)' : '#ccfbf1'
+                          : theme === 'dark' ? '#0f172a' : '#f8fafc',
+                      }}
+                      onPress={() => {
+                        setSelectedGameweekId(
+                          gameweek.id === defaultPlanningGameweek?.id ? undefined : gameweek.id
+                        );
+                        setIsGameweekPickerVisible(false);
+                      }}
+                    >
+                      <View>
+                        <Text
+                          className="text-sm font-bold"
+                          style={{
+                            color: isSelected
+                              ? theme === 'dark' ? '#5eead4' : '#115e59'
+                              : theme === 'dark' ? '#f8fafc' : '#0f172a',
+                          }}
+                        >
+                          Gameweek {gameweek.gameweekNumber}
+                        </Text>
+                        {isActive ? (
+                          <Text className="mt-1 text-xs font-semibold" style={{ color: theme === 'dark' ? '#6ee7b7' : '#047857' }}>
+                            Active gameweek
+                          </Text>
+                        ) : null}
+                      </View>
+                      {isSelected ? (
+                        <Text className="text-xs font-semibold" style={{ color: theme === 'dark' ? '#5eead4' : '#0f766e' }}>
+                          Selected
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </NativeScrollView>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </Screen>
   );
 }

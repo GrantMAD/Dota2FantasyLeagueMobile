@@ -172,19 +172,34 @@ function parseTeamFixture(value: unknown): TeamFixture {
 }
 
 export async function getUpcomingTeamFixtures(teamId: number, gameweekId?: number): Promise<TeamFixture[]> {
-  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_matches', {
-    p_status: 'scheduled',
-    p_gameweek_id: gameweekId ?? null,
-    p_team_id: teamId,
-    p_tournament_id: null,
-    p_limit: 100,
-  });
-  if (error) throw new ApiError(`Unable to load team fixtures: ${error.message}`, 500);
-  if (!isRecord(result) || !Array.isArray(result.matches)) {
-    throw new ApiError('Fixture data was returned in an unexpected format.', 502);
-  }
+  const limit = 100;
+  const fetchPage = async (page: number): Promise<{ matches: unknown[]; total: number }> => {
+    const { data: result, error } = await getSupabaseClient().rpc('mobile_get_matches', {
+      p_status: 'scheduled',
+      p_gameweek_id: gameweekId ?? null,
+      p_team_id: teamId,
+      p_tournament_id: null,
+      p_page: page,
+      p_limit: limit,
+    });
+    if (error) throw new ApiError(`Unable to load team fixtures: ${error.message}`, 500);
+    if (
+      !isRecord(result) ||
+      !Array.isArray(result.matches) ||
+      !Number.isInteger(result.total)
+    ) {
+      throw new ApiError('Fixture data was returned in an unexpected format.', 502);
+    }
+    return { matches: result.matches, total: Number(result.total) };
+  };
+  const firstPage = await fetchPage(1);
+  const totalPages = Math.max(1, Math.ceil(firstPage.total / limit));
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) => fetchPage(index + 2))
+  );
   const now = Date.now();
-  return result.matches
+  return [firstPage, ...remainingPages]
+    .flatMap((page) => page.matches)
     .map(parseTeamFixture)
     .filter((match) => {
       const scheduled = new Date(match.scheduled_time).getTime();

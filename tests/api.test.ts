@@ -596,6 +596,7 @@ describe('mobile data access', () => {
 
   it('parses player team details and upcoming scheduled fixtures for the squad planner', async () => {
     mobileFantasyContextRpc.mockResolvedValue({ data: {
+      total: 1,
       matches: [{
         id: 31,
         status: 'scheduled',
@@ -621,6 +622,44 @@ describe('mobile data access', () => {
       p_gameweek_id: 7,
       p_team_id: 4,
       p_tournament_id: null,
+      p_page: 1,
+      p_limit: 100,
+    });
+  });
+
+  it('loads all upcoming pages when no specific gameweek is selected', async () => {
+    const makeFixture = (id: number) => ({
+      id,
+      status: 'scheduled',
+      scheduled_time: new Date(Date.now() + 60_000 * id).toISOString(),
+      team_a_id: 4,
+      team_b_id: 5,
+      radiant_team: { name: 'Radiant' },
+      dire_team: { name: 'Dire' },
+      tournaments: null,
+    });
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({
+        data: { total: 101, matches: Array.from({ length: 100 }, (_, index) => makeFixture(index + 1)) },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: { total: 101, matches: [makeFixture(101)] }, error: null });
+
+    await expect(getUpcomingTeamFixtures(4)).resolves.toHaveLength(101);
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(1, 'mobile_get_matches', {
+      p_status: 'scheduled',
+      p_gameweek_id: null,
+      p_team_id: 4,
+      p_tournament_id: null,
+      p_page: 1,
+      p_limit: 100,
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(2, 'mobile_get_matches', {
+      p_status: 'scheduled',
+      p_gameweek_id: null,
+      p_team_id: 4,
+      p_tournament_id: null,
+      p_page: 2,
       p_limit: 100,
     });
   });
@@ -628,6 +667,7 @@ describe('mobile data access', () => {
   it('keeps successful squad fixtures and identifies teams whose fixture request failed', async () => {
     mobileFantasyContextRpc
       .mockResolvedValueOnce({ data: {
+        total: 1,
         matches: [{
           id: 31,
           status: 'scheduled',
