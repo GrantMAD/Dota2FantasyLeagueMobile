@@ -171,10 +171,10 @@ function parseTeamFixture(value: unknown): TeamFixture {
   };
 }
 
-export async function getUpcomingTeamFixtures(teamId: number): Promise<TeamFixture[]> {
+export async function getUpcomingTeamFixtures(teamId: number, gameweekId?: number): Promise<TeamFixture[]> {
   const { data: result, error } = await getSupabaseClient().rpc('mobile_get_matches', {
     p_status: 'scheduled',
-    p_gameweek_id: null,
+    p_gameweek_id: gameweekId ?? null,
     p_team_id: teamId,
     p_tournament_id: null,
     p_limit: 100,
@@ -195,12 +195,13 @@ export async function getUpcomingTeamFixtures(teamId: number): Promise<TeamFixtu
 
 export async function getUpcomingFixturesForTeams(
   teamIds: number[],
+  gameweekId?: number,
 ): Promise<{ fixtures: TeamFixture[]; failedTeamIds: number[] }> {
   const uniqueTeamIds = [...new Set(teamIds)];
   const results = await Promise.allSettled(
     uniqueTeamIds.map(async (teamId) => ({
       teamId,
-      fixtures: await getUpcomingTeamFixtures(teamId),
+      fixtures: await getUpcomingTeamFixtures(teamId, gameweekId),
     })),
   );
   const byMatchId = new Map<number, TeamFixture>();

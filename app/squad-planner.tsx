@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Link } from 'expo-router';
@@ -35,7 +35,23 @@ function slotLabel(slot: string | undefined): string {
 
 export default function SquadPlannerScreen() {
   const { session } = useAuth();
+  const [selectedGameweekId, setSelectedGameweekId] = useState<number | undefined>();
   const contextQuery = useFantasyContext();
+  const planningGameweeks = useMemo(() => {
+    const gameweeks = contextQuery.data?.availableGameweeks ?? [];
+    const currentGameweek = contextQuery.data?.gameweek;
+    return currentGameweek && !gameweeks.some((gameweek) => gameweek.id === currentGameweek.id)
+      ? [...gameweeks, currentGameweek]
+      : gameweeks;
+  }, [contextQuery.data?.availableGameweeks, contextQuery.data?.gameweek]);
+  const activeGameweekId = selectedGameweekId
+    ?? contextQuery.data?.gameweek?.id
+    ?? contextQuery.data?.defaultGameweekId
+    ?? undefined;
+  const lineupContextQuery = useFantasyContext(activeGameweekId);
+  const selectedGameweek = planningGameweeks.find((gameweek) => gameweek.id === activeGameweekId)
+    ?? contextQuery.data?.gameweek
+    ?? null;
   const players = useMemo(
     () => contextQuery.data?.ownedPlayers ?? [],
     [contextQuery.data?.ownedPlayers]
@@ -45,14 +61,14 @@ export default function SquadPlannerScreen() {
     [players]
   );
   const fixtureQuery = useQuery({
-    queryKey: ['squad-fixtures', session?.user.id, teamIds],
-    queryFn: () => getUpcomingFixturesForTeams(teamIds),
+    queryKey: ['squad-fixtures', session?.user.id, teamIds, activeGameweekId],
+    queryFn: () => getUpcomingFixturesForTeams(teamIds, activeGameweekId),
     enabled: Boolean(session?.user.id && contextQuery.data && teamIds.length > 0),
     staleTime: 60_000,
   });
   const lineupByPlayer = useMemo(
-    () => new Map((contextQuery.data?.lineup ?? []).map((entry) => [entry.player_id, entry])),
-    [contextQuery.data?.lineup]
+    () => new Map((lineupContextQuery.data?.lineup ?? []).map((entry) => [entry.player_id, entry])),
+    [lineupContextQuery.data?.lineup]
   );
   const fixturesByTeam = useMemo(() => {
     const result = new Map<number, TeamFixture[]>();
@@ -67,10 +83,10 @@ export default function SquadPlannerScreen() {
     return result;
   }, [fixtureQuery.data]);
   const unavailableCount = players.filter((player) => player.availability_status !== 'available').length;
-  const refreshing = contextQuery.isRefetching || fixtureQuery.isRefetching;
+  const refreshing = contextQuery.isRefetching || lineupContextQuery.isRefetching || fixtureQuery.isRefetching;
 
   async function refresh() {
-    await Promise.all([contextQuery.refetch(), fixtureQuery.refetch()]);
+    await Promise.all([contextQuery.refetch(), lineupContextQuery.refetch(), fixtureQuery.refetch()]);
   }
 
   return (
@@ -122,17 +138,61 @@ export default function SquadPlannerScreen() {
             <View className="gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Planning window</Text>
               <Text className="text-2xl font-bold text-white">
-                {contextQuery.data?.gameweek
-                  ? `Gameweek ${contextQuery.data.gameweek.gameweekNumber}`
+                {selectedGameweek
+                  ? `Gameweek ${selectedGameweek.gameweekNumber}`
                   : 'No active gameweek'}
               </Text>
               <Text className="text-sm text-slate-300">
-                {contextQuery.data?.gameweek?.isLocked
+                {selectedGameweek?.isLocked
                   ? 'The current lineup is locked.'
-                  : contextQuery.data?.gameweek?.deadline
-                    ? `Deadline ${formatDate(contextQuery.data.gameweek.deadline)}`
+                  : selectedGameweek?.deadline
+                    ? `Deadline ${formatDate(selectedGameweek.deadline)}`
                     : 'No upcoming deadline is available.'}
               </Text>
+              {planningGameweeks.length > 1 ? (
+                <View className="gap-2 border-t border-slate-800 pt-3">
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Plan another open gameweek</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {planningGameweeks.map((gameweek) => (
+                      <Pressable
+                        key={gameweek.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: gameweek.id === activeGameweekId }}
+                        disabled={lineupContextQuery.isFetching}
+                        className={`min-h-10 justify-center rounded-full border px-3 ${
+                          gameweek.id === activeGameweekId
+                            ? 'border-brand-500 bg-brand-500/15'
+                            : 'border-slate-700 bg-slate-950/60'
+                        }`}
+                        onPress={() => setSelectedGameweekId(gameweek.id)}
+                      >
+                        <Text className={`text-sm font-semibold ${
+                          gameweek.id === activeGameweekId ? 'text-brand-300' : 'text-slate-300'
+                        }`}>
+                          GW {gameweek.gameweekNumber}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {lineupContextQuery.isFetching ? (
+                    <Text accessibilityLiveRegion="polite" className="text-xs text-slate-400">
+                      Loading selected gameweek lineup and fixtures…
+                    </Text>
+                  ) : null}
+                  {lineupContextQuery.isError ? (
+                    <View accessibilityRole="alert" className="gap-2">
+                      <Text className="text-xs leading-5 text-rose-200">
+                        {lineupContextQuery.error instanceof Error
+                          ? lineupContextQuery.error.message
+                          : 'Unable to load the selected gameweek lineup.'}
+                      </Text>
+                      <Pressable accessibilityRole="button" onPress={() => void lineupContextQuery.refetch()}>
+                        <Text className="text-sm font-semibold text-white">Retry gameweek</Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
               <Text className={`${unavailableCount ? 'text-amber-300' : 'text-emerald-300'} text-sm`}>
                 {unavailableCount
                   ? `${unavailableCount} player${unavailableCount === 1 ? '' : 's'} unavailable or without a confirmed availability status`
@@ -189,7 +249,9 @@ export default function SquadPlannerScreen() {
             <View className="gap-3">
               <View>
                 <Text className="text-lg font-bold text-white">Upcoming squad fixtures</Text>
-                <Text className="mt-1 text-sm text-slate-400">Scheduled matches for teams represented in your squad.</Text>
+                <Text className="mt-1 text-sm text-slate-400">
+                  Scheduled matches for your teams in Gameweek {selectedGameweek?.gameweekNumber ?? '—'}.
+                </Text>
               </View>
               {fixtureQuery.data?.failedTeamIds.length ? (
                 <View accessibilityRole="alert" className="gap-3 rounded-xl border border-amber-800 bg-amber-950/70 p-4">

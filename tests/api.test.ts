@@ -1,7 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getTransferHistoryAnalytics, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup, updateGoals } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
-import { getGameweeks } from '../src/features/gameweeks/api';
+import { getGameweekHistory, getGameweeks } from '../src/features/gameweeks/api';
 import {
   aggregateLatestGameweekScoreBreakdown,
   getPlayerDetail,
@@ -533,9 +533,18 @@ describe('mobile data access', () => {
         status: 'closed',
         match_count: 4,
         tournaments: [{ id: 8, name: 'Autumn Cup', slug: 'autumn-cup' }],
-        flags: [{ flag: 'double', team_id: 2 }],
-        top_scorer: { name: 'Player One', in_game_name: 'One', total_points: 18 },
+        flags: [{ id: 11, flag: 'double', team_id: 2, team_name: 'Radiant' }],
+        top_scorer: {
+          id: 19,
+          name: 'Player One',
+          in_game_name: 'One',
+          primary_role: 'carry',
+          profile_image_url: 'https://images.example.test/player.png',
+          total_points: 18,
+          matches_played: 2,
+        },
         user_score: 42,
+        global_average: 38.5,
       }],
     }, error: null });
 
@@ -545,10 +554,44 @@ describe('mobile data access', () => {
       status: 'closed',
       match_count: 4,
       tournaments: [{ id: 8, name: 'Autumn Cup' }],
-      flags: [{ flag: 'double' }],
+      flags: [{ id: 11, flag: 'double', team_id: 2, team_name: 'Radiant' }],
       user_score: 42,
+      global_average: 38.5,
+      top_scorer: { id: 19, total_points: 18, matches_played: 2 },
     }]);
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_gameweeks');
+  });
+
+  it('loads and validates historical lineup and score data for a gameweek', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: {
+        gameweek: { id: 7, number: 3 },
+        managerScore: 42,
+        globalAverage: 38.5,
+        starters: [{
+          id: 19,
+          name: 'Player One',
+          role: 'Carry',
+          points: 18,
+          profileImageUrl: 'https://images.example.test/player.png',
+          isCaptain: true,
+          isViceCaptain: false,
+        }],
+        bench: [],
+      },
+      error: null,
+    });
+
+    await expect(getGameweekHistory(7)).resolves.toMatchObject({
+      gameweek: { id: 7, number: 3 },
+      managerScore: 42,
+      globalAverage: 38.5,
+      starters: [{ id: 19, points: 18, isCaptain: true }],
+      bench: [],
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_gameweek_history', {
+      p_gameweek_id: 7,
+    });
   });
 
   it('parses player team details and upcoming scheduled fixtures for the squad planner', async () => {
@@ -565,7 +608,7 @@ describe('mobile data access', () => {
       }],
     }, error: null });
 
-    await expect(getUpcomingTeamFixtures(4)).resolves.toMatchObject([{
+    await expect(getUpcomingTeamFixtures(4, 7)).resolves.toMatchObject([{
       id: 31,
       team_a_id: 4,
       team_b_id: 5,
@@ -575,7 +618,7 @@ describe('mobile data access', () => {
     }]);
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_matches', {
       p_status: 'scheduled',
-      p_gameweek_id: null,
+      p_gameweek_id: 7,
       p_team_id: 4,
       p_tournament_id: null,
       p_limit: 100,

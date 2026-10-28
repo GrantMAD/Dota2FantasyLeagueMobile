@@ -145,13 +145,20 @@ function TransferInsightCard({ title, insight, positive, hasTransfers, loading, 
 export default function TeamScreen() {
   const { theme } = useMobileTheme();
   const lineupPlanIconTint = theme === 'dark' ? '#2dd4bf' : '#0f766e';
-  const params = useLocalSearchParams<{ quickAddPlayerId?: string; quickAddPlayerName?: string }>();
+  const params = useLocalSearchParams<{
+    quickAddPlayerId?: string;
+    quickAddPlayerName?: string;
+    tab?: string;
+  }>();
   const parsedQuickAddId = Number(params.quickAddPlayerId);
   const quickAddPlayerId = Number.isSafeInteger(parsedQuickAddId) && parsedQuickAddId > 0
     ? parsedQuickAddId
     : undefined;
   const quickAddPlayerName = typeof params.quickAddPlayerName === 'string'
     ? params.quickAddPlayerName
+    : undefined;
+  const requestedTab = params.tab === 'lineup' || params.tab === 'transfers' || params.tab === 'history' || params.tab === 'squad'
+    ? params.tab
     : undefined;
   const query = useFantasyContext();
   const [selectedGameweekId, setSelectedGameweekId] = useState<number | undefined>();
@@ -167,7 +174,7 @@ export default function TeamScreen() {
     ? tabSelection.tab
     : quickAddKey && (query.data?.ownedPlayers.length ?? 0) >= 8
       ? 'transfers'
-      : 'squad';
+    : requestedTab ?? 'squad';
   const lineupContext = selectedGameweekId === undefined ? query.data : lineupQuery.data;
   const defaultGameweekId = query.data?.defaultGameweekId ?? query.data?.gameweek?.id ?? null;
   const lineupGameweeks = useMemo(() => {
