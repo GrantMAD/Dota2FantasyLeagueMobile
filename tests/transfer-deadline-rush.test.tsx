@@ -70,7 +70,7 @@ describe('TransferDeadlineRush Component', () => {
     gameweek: {
       id: 10,
       gameweek_number: 3,
-      deadline: '2026-10-27T18:00:00Z',
+      deadline: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       status: 'upcoming',
       is_locked: false,
       seconds_remaining: 3600,
