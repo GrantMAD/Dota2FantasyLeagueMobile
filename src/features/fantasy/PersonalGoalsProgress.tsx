@@ -121,21 +121,6 @@ export function PersonalGoalsProgress({
             </View>
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={hasGoals ? 'Edit personal goals' : 'Set personal goals'}
-            className="flex-row items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 active:bg-slate-700"
-            onPress={openModal}
-          >
-            <SymbolView
-              name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
-              size={13}
-              tintColor="#94a3b8"
-            />
-            <Text className="text-xs font-semibold text-slate-300">
-              {hasGoals ? 'Edit' : 'Set Goals'}
-            </Text>
-          </Pressable>
         </View>
 
         {!hasGoals ? (
@@ -147,18 +132,6 @@ export function PersonalGoalsProgress({
             <Text className="mt-1 text-center text-xs text-slate-400">
               Set target points or a leaderboard rank to stay motivated and track your progress.
             </Text>
-            <Pressable
-              accessibilityRole="button"
-              className="mt-3 flex-row items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-3 py-2"
-              onPress={openModal}
-            >
-              <SymbolView
-                name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
-                size={15}
-                tintColor="#67e8f9"
-              />
-              <Text className="text-xs font-bold text-cyan-200">Set Season Goals</Text>
-            </Pressable>
           </View>
         ) : (
           /* Goals Display State */
@@ -278,6 +251,22 @@ export function PersonalGoalsProgress({
             ) : null}
           </View>
         )}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={hasGoals ? 'Edit personal goals' : 'Set personal goals'}
+          className="flex-row items-center gap-1 self-end rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 active:bg-slate-700"
+          onPress={openModal}
+        >
+          <SymbolView
+            name={{ ios: 'pencil', android: 'edit', web: 'edit' }}
+            size={13}
+            tintColor="#94a3b8"
+          />
+          <Text className="text-xs font-semibold text-slate-300">
+            {hasGoals ? 'Edit' : 'Set Goals'}
+          </Text>
+        </Pressable>
       </View>
 
       {/* Goal Setting Modal */}

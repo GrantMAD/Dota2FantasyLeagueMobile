@@ -8,6 +8,7 @@ import {
   type TransferPriceHistory,
   type TransferScoreHistory,
 } from './transfer-history-analytics';
+import { parseDashboardPointsBreakdown, type DashboardPointsBreakdown } from './points-breakdown';
 
 export interface FantasyPlayer {
   id: number;
@@ -272,6 +273,7 @@ export async function getFantasyContext(gameweekId?: number): Promise<FantasyCon
               isLocked: false,
             }));
         }
+
       } catch {
         // Fallback to empty if gameweeks RPC fails
       }
@@ -402,6 +404,33 @@ export async function getFantasyContext(gameweekId?: number): Promise<FantasyCon
     lineup: value.lineup.map(parseLineupEntry),
     ownedPlayers: value.ownedPlayers.map(parsePlayer),
   };
+}
+
+export interface DashboardSquadSummary {
+  activeSquadCount: number;
+  squadName: string | null;
+}
+
+export async function getDashboardSquadSummary(): Promise<DashboardSquadSummary> {
+  const { data, error } = await getSupabaseClient().rpc('mobile_get_dashboard_squad_summary');
+  if (error) throw new ApiError(`Unable to load your squad summary: ${error.message}`, 500);
+  if (
+    !isRecord(data) ||
+    !Number.isInteger(data.activeSquadCount) ||
+    (data.squadName !== null && typeof data.squadName !== 'string')
+  ) {
+    throw new ApiError('Squad summary was returned in an unexpected format.', 502);
+  }
+  return {
+    activeSquadCount: Number(data.activeSquadCount),
+    squadName: data.squadName,
+  };
+}
+
+export async function getDashboardPointsBreakdown(): Promise<DashboardPointsBreakdown> {
+  const { data, error } = await getSupabaseClient().rpc('mobile_get_points_breakdown');
+  if (error) throw new ApiError(`Unable to load your points breakdown: ${error.message}`, 500);
+  return parseDashboardPointsBreakdown(data);
 }
 
 export interface SaveLineupPayload {

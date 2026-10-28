@@ -251,4 +251,3 @@ export async function getTransferRush(windowMinutes = 60): Promise<MobileTransfe
     is_rush_active: Boolean(body.is_rush_active),
   };
 }
-

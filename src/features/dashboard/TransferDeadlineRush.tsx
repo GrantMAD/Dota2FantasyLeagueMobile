@@ -116,10 +116,10 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
       }`}
     >
       {/* Header with Title and Status */}
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-2.5">
+      <View>
+        <View className="flex-row items-start gap-2.5">
           <View
-            className={`h-9 w-9 items-center justify-center rounded-xl ${
+            className={`h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
               is_rush_active ? 'bg-amber-500/20' : 'bg-teal-500/15'
             }`}
           >
@@ -133,10 +133,10 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
               tintColor={is_rush_active ? '#fbbf24' : '#2dd4bf'}
             />
           </View>
-          <View>
-            <View className="flex-row items-center gap-2">
-              <Text className="text-base font-bold text-white">Transfer Deadline Rush</Text>
-              <View className={`rounded-full border px-2 py-0.5 ${badgeContainerStyle}`}>
+          <View className="min-w-0 flex-1">
+            <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
+              <Text className="shrink text-base font-bold text-white">Transfer Deadline Rush</Text>
+              <View className={`shrink-0 rounded-full border px-2 py-0.5 ${badgeContainerStyle}`}>
                 <Text className={`text-[10px] font-bold uppercase tracking-wider ${badgeTextStyle}`}>
                   {badgeLabel}
                 </Text>
@@ -150,11 +150,6 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
           </View>
         </View>
 
-        <Link href="/team" asChild>
-          <Pressable accessibilityRole="button" className="min-h-10 justify-center px-1">
-            <Text className="text-xs font-semibold text-teal-300">Transfers ›</Text>
-          </Pressable>
-        </Link>
       </View>
 
       {/* Countdown Timer Strip */}
@@ -196,12 +191,12 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
             size={14}
             tintColor="#2dd4bf"
           />
-          <Text className="flex-1 text-xs text-slate-300" numberOfLines={1}>
+          <Text className="min-w-0 flex-1 text-xs text-slate-300">
             <Text className="font-semibold text-slate-200">Market Pulse: </Text>
             {activity_pulses[0].message}
           </Text>
           {total_transfers_in_window > 0 && (
-            <View className="rounded-md bg-slate-800/80 px-1.5 py-0.5">
+            <View className="shrink-0 rounded-md bg-slate-800/80 px-1.5 py-0.5">
               <Text className="text-[10px] font-semibold text-slate-400">
                 {total_transfers_in_window} moves/hr
               </Text>
@@ -306,6 +301,15 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
           ))}
         </View>
       )}
+
+      <Link href="/team" asChild>
+        <Pressable
+          accessibilityRole="button"
+          className="min-h-10 items-center justify-center rounded-xl border border-teal-500/30 bg-teal-500/10"
+        >
+          <Text className="text-xs font-semibold text-teal-300">Transfers ›</Text>
+        </Pressable>
+      </Link>
     </View>
   );
 }

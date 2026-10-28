@@ -1,24 +1,27 @@
 import { useState } from 'react';
+import type { ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ScreenScrollView } from '@/src/components/ScreenScrollView';
 import { SymbolView } from 'expo-symbols';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'expo-router';
-import { MetricCard } from '@/src/components/MetricCard';
+import { Link, useRouter } from 'expo-router';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getManagerProfile } from '@/src/features/account/api';
 import { getDashboardWhatsNew, getTransferRush } from '@/src/features/dashboard/api';
-import { getFriendActivity, type FriendActivity } from '@/src/features/friends/api';
+import { DashboardPointsModal } from '@/src/features/dashboard/DashboardPointsModal';
+import { getFriendActivity } from '@/src/features/friends/api';
 import { DashboardLiveMatches } from '@/src/features/dashboard/DashboardLiveMatches';
 import { GettingStartedChecklist } from '@/src/features/dashboard/GettingStartedChecklist';
 import { TransferDeadlineRush } from '@/src/features/dashboard/TransferDeadlineRush';
 import { PersonalGoalsProgress } from '@/src/features/fantasy/PersonalGoalsProgress';
 import { getMatches } from '@/src/features/competition/api';
+import { getDashboardSquadSummary, type FantasyLineupEntry } from '@/src/features/fantasy/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { getLeagues } from '@/src/features/leagues/api';
 import { useAuth } from '@/src/lib/auth';
+import { useMobileTheme } from '@/src/lib/theme';
 
 function formatMetric(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—';
@@ -27,8 +30,12 @@ function formatMetric(value: number | null | undefined): string {
 const STARTER_SLOT_ORDER = ['carry', 'mid', 'offlane', 'support', 'hard_support'];
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const { theme } = useMobileTheme();
+  const isDark = theme === 'dark';
   const query = useFantasyContext();
   const { session } = useAuth();
+  const [pointsBreakdownOpen, setPointsBreakdownOpen] = useState(false);
   const profileQuery = useQuery({
     queryKey: ['manager-profile'],
     queryFn: getManagerProfile,
@@ -40,6 +47,12 @@ export default function HomeScreen() {
     queryFn: getLeagues,
     staleTime: 60_000,
   });
+  const squadSummaryQuery = useQuery({
+    queryKey: ['dashboard-squad-summary', session?.user.id],
+    queryFn: getDashboardSquadSummary,
+    enabled: Boolean(session),
+    staleTime: 60_000,
+  });
   const whatsNewQuery = useQuery({
     queryKey: ['dashboard-whats-new'],
     queryFn: getDashboardWhatsNew,
@@ -47,6 +60,7 @@ export default function HomeScreen() {
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
   });
+  const dashboardUpdates = whatsNewQuery.data?.updates ?? [];
   const liveMatchesQuery = useQuery({
     queryKey: ['dashboard-live-matches'],
     queryFn: () => getMatches('live'),
@@ -74,6 +88,8 @@ export default function HomeScreen() {
   const starters = (query.data?.lineup ?? [])
     .filter((entry) => entry.is_starter)
     .sort((a, b) => STARTER_SLOT_ORDER.indexOf(a.slot) - STARTER_SLOT_ORDER.indexOf(b.slot));
+  const captain = query.data?.lineup.find((entry) => entry.is_captain) ?? null;
+  const viceCaptain = query.data?.lineup.find((entry) => entry.is_vice_captain) ?? null;
   const squadSize = query.data?.ownedPlayers.length ?? 0;
   const hasSquad = squadSize > 0;
   const hasCompleteLineup = starters.length === 5 && starters.some((entry) => entry.is_captain);
@@ -96,13 +112,17 @@ export default function HomeScreen() {
                 : 'Check your starters and captain before the deadline.',
             href: '/team' as const,
           },
-          ...(query.data.freeTransfers > 0
-            ? [{
+          query.data.freeTransfers > 0
+            ? {
                 title: `Use ${query.data.freeTransfers} free transfer${query.data.freeTransfers === 1 ? '' : 's'}`,
                 description: 'Improve your squad without a transfer penalty.',
                 href: '/team' as const,
-              }]
-            : []),
+              }
+            : {
+                title: 'Scout the transfer market',
+                description: 'Find players who can strengthen your squad.',
+                href: '/team' as const,
+              },
           {
             title: myLeagues.length ? 'Check your league standings' : 'Join a league',
             description: myLeagues.length
@@ -133,6 +153,7 @@ export default function HomeScreen() {
               void Promise.all([
                 query.refetch(),
                 leaguesQuery.refetch(),
+                squadSummaryQuery.refetch(),
                 whatsNewQuery.refetch(),
                 friendActivityQuery.refetch(),
                 liveMatchesQuery.refetch(),
@@ -149,11 +170,103 @@ export default function HomeScreen() {
           <Text className="mt-2 text-3xl font-bold text-white">
             {displayName ? `Welcome back, ${displayName}` : 'Your dashboard'}
           </Text>
-          <Text className="mt-1 text-sm text-slate-400">Your fantasy team, at a glance.</Text>
+          <Text className="mt-1 text-sm text-slate-400">
+            Manage your fantasy squads and compete with players worldwide.
+          </Text>
           <View className="mt-3">
             <DataFreshnessBadge page="dashboard" />
           </View>
+          <Link href="/team" asChild>
+            <Pressable accessibilityRole="button" className="mt-4 min-h-11 items-center justify-center self-start rounded-xl bg-brand-500 px-5">
+              <Text className="font-bold text-white">Manage Squad</Text>
+            </Pressable>
+          </Link>
         </View>
+
+        {query.data ? (
+          <View className="gap-3">
+            <View className="flex-row gap-3">
+              <HomeStatCard
+                label="Active Squads"
+                value={squadSummaryQuery.isPending ? '…' : formatMetric(squadSummaryQuery.data?.activeSquadCount)}
+                detail="Manage your squads"
+                icon={{ ios: 'shield.fill', android: 'shield', web: 'shield' }}
+                tint="#22d3ee"
+                onPress={() => router.push('/team')}
+              />
+              <HomeStatCard
+                label="Squad Value"
+                value={`${query.data.ownedPlayers.reduce((total, player) => total + player.current_price, 0).toFixed(1)}M`}
+                detail="Current player prices"
+                icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
+                tint="#34d399"
+                onPress={() => router.push('/team')}
+              />
+            </View>
+            <View className="flex-row gap-3">
+              <HomeStatCard
+                label="Bank Balance"
+                value={typeof query.data.budget === 'number' && Number.isFinite(query.data.budget) ? `${query.data.budget.toFixed(1)}M` : '—'}
+                detail="Available funds"
+                icon={{ ios: 'dollarsign.circle.fill', android: 'paid', web: 'paid' }}
+                tint="#fbbf24"
+                onPress={() => router.push('/team')}
+              />
+              <HomeStatCard
+                label="Total Points"
+                value={formatMetric(query.data.totalPoints)}
+                detail="Tap for breakdown"
+                icon={{ ios: 'star.fill', android: 'star', web: 'star' }}
+                tint="#f59e0b"
+                onPress={() => setPointsBreakdownOpen(true)}
+              />
+            </View>
+            <View className="flex-row gap-3">
+              <HomeStatCard
+                label="Global Rank"
+                value={formatMetric(query.data.globalRank)}
+                detail="View standings"
+                icon={{ ios: 'globe', android: 'public', web: 'public' }}
+                tint="#2dd4bf"
+                onPress={() => router.push('/leaderboard')}
+              />
+              <HomeStatCard
+                label="Free Transfers"
+                value={formatMetric(query.data.freeTransfers)}
+                detail="Manage transfers"
+                icon={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
+                tint="#fb923c"
+                onPress={() => router.push('/team')}
+              />
+            </View>
+            {squadSummaryQuery.isError ? (
+              <View accessibilityRole="alert" className="flex-row items-center justify-between gap-3 rounded-xl border border-red-900/70 bg-red-950/40 px-3 py-2">
+                <Text className="flex-1 text-xs text-red-200">
+                  {squadSummaryQuery.error instanceof Error
+                    ? squadSummaryQuery.error.message
+                    : 'Squad summary unavailable.'}
+                </Text>
+                <Pressable accessibilityRole="button" onPress={() => void squadSummaryQuery.refetch()}>
+                  <Text className="font-semibold text-white">Retry</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : query.isPending ? (
+          <View accessibilityLabel="Loading dashboard statistics" className="gap-3">
+            {[0, 1, 2].map((row) => (
+              <View key={row} className="flex-row gap-3">
+                {[0, 1].map((card) => (
+                  <View key={card} className="h-32 flex-1 rounded-2xl border border-slate-800 bg-slate-900 p-3">
+                    <View className="mb-3 h-9 w-9 rounded-xl bg-slate-800" />
+                    <View className="h-3 w-24 rounded bg-slate-800" />
+                    <View className="mt-2 h-6 w-16 rounded bg-slate-800" />
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {query.data?.fantasySeasonId !== null &&
         query.data?.fantasySeasonId !== undefined &&
@@ -166,39 +279,7 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        {/* Transfer Deadline Rush Widget */}
-        {transferRushQuery.isPending ? (
-          <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
-            <View className="flex-row items-center gap-2.5">
-              <View className="h-9 w-9 rounded-xl bg-slate-800" />
-              <View className="gap-1.5">
-                <View className="h-4 w-40 rounded bg-slate-800" />
-                <View className="h-3 w-28 rounded bg-slate-800" />
-              </View>
-            </View>
-            <View className="h-10 rounded-xl bg-slate-800" />
-          </View>
-        ) : transferRushQuery.isError ? (
-          <View accessibilityRole="alert" className="gap-2 rounded-2xl border border-red-900/70 bg-red-950/50 p-4">
-            <Text className="text-sm font-semibold text-red-200">Transfer Deadline Rush unavailable</Text>
-            <Text className="text-xs leading-5 text-red-300">
-              {transferRushQuery.error instanceof Error
-                ? transferRushQuery.error.message
-                : 'Could not load transfer activity.'}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              className="min-h-9 justify-center self-start"
-              onPress={() => void transferRushQuery.refetch()}
-            >
-              <Text className="text-xs font-semibold text-white">Try again</Text>
-            </Pressable>
-          </View>
-        ) : transferRushQuery.data ? (
-          <TransferDeadlineRush data={transferRushQuery.data} />
-        ) : null}
-
-        <View className="gap-4 overflow-hidden rounded-2xl border border-cyan-500/50 bg-cyan-950/30 p-5">
+        <View className="gap-4 px-1 py-2">
           <View className="flex-row items-center gap-3">
             <View className="h-10 w-10 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-400/15">
               <SymbolView
@@ -208,8 +289,8 @@ export default function HomeScreen() {
               />
             </View>
             <View className="flex-1">
-              <Text className="text-lg font-bold text-white">What’s New</Text>
-              <Text className="mt-0.5 text-xs text-slate-300">Live updates across Fantasy Dota 2</Text>
+              <Text className="text-lg font-bold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>What’s New</Text>
+              <Text className="mt-0.5 text-xs" style={{ color: isDark ? '#cbd5e1' : '#475569' }}>Live updates across Fantasy Dota 2</Text>
             </View>
             <View className="flex-row items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5">
               <View className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -277,7 +358,7 @@ export default function HomeScreen() {
                   <View className={`rounded-full px-1.5 py-0.2 ${whatsNewTab === 'all' ? 'bg-slate-950/20' : 'bg-slate-700'}`}>
                     <Text className={`text-[10px] font-bold ${whatsNewTab === 'all' ? 'text-slate-950' : 'text-slate-300'}`}>
                       {(friendActivityQuery.data?.activities?.length ?? 0) +
-                        whatsNewQuery.data.updates.length +
+                        dashboardUpdates.length +
                         whatsNewQuery.data.events.length}
                     </Text>
                   </View>
@@ -316,7 +397,7 @@ export default function HomeScreen() {
                   </Text>
                   <View className={`rounded-full px-1.5 py-0.2 ${whatsNewTab === 'squad' ? 'bg-slate-950/20' : 'bg-slate-700'}`}>
                     <Text className={`text-[10px] font-bold ${whatsNewTab === 'squad' ? 'text-slate-950' : 'text-slate-300'}`}>
-                      {whatsNewQuery.data.updates.length}
+                      {dashboardUpdates.length}
                     </Text>
                   </View>
                 </Pressable>
@@ -347,7 +428,14 @@ export default function HomeScreen() {
                 {(whatsNewTab === 'all' || whatsNewTab === 'friends') &&
                   friendActivityQuery.data?.activities?.slice(0, 5).map((activity) => (
                     <Link key={`f-${activity.activity_id}`} href="/friends" asChild>
-                      <Pressable className="flex-row items-start gap-3 rounded-xl border border-teal-500/30 bg-teal-950/20 p-3">
+                      <Pressable
+                        className="flex-row items-start gap-3 rounded-xl p-3"
+                        style={{
+                          borderLeftWidth: 3,
+                          borderLeftColor: '#14b8a6',
+                          backgroundColor: isDark ? 'rgba(20, 184, 166, 0.08)' : 'rgba(13, 148, 136, 0.07)',
+                        }}
+                      >
                         <SymbolView
                           name={activity.activity_type === 'transfer'
                             ? { ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }
@@ -367,7 +455,7 @@ export default function HomeScreen() {
                               {activity.display_name?.trim() || activity.username}
                             </Text>
                           </View>
-                          <Text className="font-semibold text-white">{activity.title}</Text>
+                          <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{activity.title}</Text>
                           {activity.activity_type === 'transfer' && (activity.players_in?.length || activity.players_out?.length) ? (
                             <View className="flex-row flex-wrap gap-1.5 mt-0.5">
                               {activity.players_in?.map((p) => (
@@ -396,23 +484,32 @@ export default function HomeScreen() {
 
                 {/* Squad updates */}
                 {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
-                  whatsNewQuery.data.updates.map((update) => (
+                  dashboardUpdates.map((update) => (
                     <Link key={`${update.kind}-${update.id}`} href={`/player/${update.playerId}`} asChild>
-                      <Pressable className="flex-row items-start gap-3 rounded-xl border border-slate-700/70 bg-slate-950/40 p-3">
+                      <Pressable
+                        className="flex-row items-start gap-3 rounded-xl p-3"
+                        style={{
+                          borderLeftWidth: 3,
+                          borderLeftColor: update.kind === 'availability' ? '#f43f5e' : '#10b981',
+                          backgroundColor: update.kind === 'availability'
+                            ? (isDark ? 'rgba(244, 63, 94, 0.08)' : 'rgba(225, 29, 72, 0.06)')
+                            : (isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(5, 150, 105, 0.06)'),
+                        }}
+                      >
                         <SymbolView
                           name={update.kind === 'availability'
                             ? { ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }
                             : { ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
                           size={17}
-                          tintColor={update.kind === 'availability' ? '#fbbf24' : '#34d399'}
+                          tintColor={update.kind === 'availability' ? '#fb7185' : '#34d399'}
                         />
                         <View className="flex-1 gap-1">
                           <Text className={`text-[10px] font-bold uppercase tracking-wider ${
-                            update.kind === 'availability' ? 'text-amber-200' : 'text-emerald-200'
+                            update.kind === 'availability' ? 'text-rose-300' : 'text-emerald-300'
                           }`}>
                             {update.kind === 'availability' ? 'Squad availability' : 'Player price'}
                           </Text>
-                          <Text className="font-semibold text-white">{update.title}</Text>
+                          <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{update.title}</Text>
                           <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
                         </View>
                         <Text className="pt-1 font-bold text-cyan-200">›</Text>
@@ -424,12 +521,19 @@ export default function HomeScreen() {
                 {(whatsNewTab === 'all' || whatsNewTab === 'tournaments') &&
                   whatsNewQuery.data.events.slice(0, 3).map((event) => (
                     <Link key={event.id} href={`/tournament/${event.id}`} asChild>
-                      <Pressable className="flex-row items-start gap-3 rounded-xl border border-slate-700/70 bg-slate-950/40 p-3">
-                        <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={17} tintColor="#67e8f9" />
+                      <Pressable
+                        className="flex-row items-start gap-3 rounded-xl p-3"
+                        style={{
+                          borderLeftWidth: 3,
+                          borderLeftColor: '#f59e0b',
+                          backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+                        }}
+                      >
+                        <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={17} tintColor="#fbbf24" />
                         <View className="flex-1 gap-1">
-                          <Text className="text-[10px] font-bold uppercase tracking-wider text-cyan-200">Tournament active</Text>
-                          <Text className="font-semibold text-white">{event.title}</Text>
-                          <Text className="text-xs leading-5 text-slate-400">
+                          <Text className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Tournament active</Text>
+                          <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{event.title}</Text>
+                          <Text className="text-xs leading-5" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
                             {[event.tier, `${event.seriesCount} series`, `${event.matchCount} matches`,
                               ...(event.bestOfFormats.length ? [`Bo${event.bestOfFormats.join(' / Bo')}`] : [])]
                               .filter(Boolean)
@@ -456,7 +560,7 @@ export default function HomeScreen() {
                   </View>
                 ) : null}
 
-                {whatsNewTab === 'squad' && whatsNewQuery.data.updates.length === 0 ? (
+                {whatsNewTab === 'squad' && dashboardUpdates.length === 0 ? (
                   <Text className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3 text-sm leading-5 text-slate-300 text-center">
                     No squad alerts right now.
                   </Text>
@@ -471,7 +575,7 @@ export default function HomeScreen() {
                 {whatsNewTab === 'all' &&
                 !whatsNewQuery.data.gameweek &&
                 whatsNewQuery.data.events.length === 0 &&
-                whatsNewQuery.data.updates.length === 0 &&
+                dashboardUpdates.length === 0 &&
                 (friendActivityQuery.data?.activities?.length ?? 0) === 0 ? (
                   <Text className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3 text-sm leading-5 text-slate-300">
                     No new events or updates right now.
@@ -487,6 +591,38 @@ export default function HomeScreen() {
             </View>
           ) : null}
         </View>
+
+        {/* Keep deadline urgency after the activity feed, matching the web dashboard hierarchy. */}
+        {transferRushQuery.isPending ? (
+          <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
+            <View className="flex-row items-center gap-2.5">
+              <View className="h-9 w-9 rounded-xl bg-slate-800" />
+              <View className="gap-1.5">
+                <View className="h-4 w-40 rounded bg-slate-800" />
+                <View className="h-3 w-28 rounded bg-slate-800" />
+              </View>
+            </View>
+            <View className="h-10 rounded-xl bg-slate-800" />
+          </View>
+        ) : transferRushQuery.isError ? (
+          <View accessibilityRole="alert" className="gap-2 rounded-2xl border border-red-900/70 bg-red-950/50 p-4">
+            <Text className="text-sm font-semibold text-red-200">Transfer Deadline Rush unavailable</Text>
+            <Text className="text-xs leading-5 text-red-300">
+              {transferRushQuery.error instanceof Error
+                ? transferRushQuery.error.message
+                : 'Could not load transfer activity.'}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              className="min-h-9 justify-center self-start"
+              onPress={() => void transferRushQuery.refetch()}
+            >
+              <Text className="text-xs font-semibold text-white">Try again</Text>
+            </Pressable>
+          </View>
+        ) : transferRushQuery.data ? (
+          <TransferDeadlineRush data={transferRushQuery.data} />
+        ) : null}
 
         {query.isPending ? (
           <View accessibilityLabel="Loading fantasy dashboard" className="gap-3">
@@ -519,38 +655,6 @@ export default function HomeScreen() {
               targetRank={query.data.targetRank}
             />
 
-            <View className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <Text className="text-sm font-medium text-slate-400">Season points</Text>
-              <Text className="mt-2 text-4xl font-bold text-white">{formatMetric(query.data.totalPoints)}</Text>
-              <Text className="mt-2 text-sm text-slate-400">
-                {query.data.gameweek ? `Gameweek ${query.data.gameweek.gameweekNumber}` : 'Fantasy season'}
-              </Text>
-            </View>
-            <View className="flex-row gap-3">
-              <MetricCard
-                label="Budget"
-                value={typeof query.data.budget === 'number' && Number.isFinite(query.data.budget) ? `${query.data.budget.toFixed(1)}M` : '—'}
-                detail="Available funds"
-              />
-              <MetricCard label="Free transfers" value={formatMetric(query.data.freeTransfers)} />
-            </View>
-            <View className="flex-row gap-3">
-              <MetricCard label="Global rank" value={formatMetric(query.data.globalRank)} />
-              <MetricCard label="Squad" value={formatMetric(query.data.ownedPlayers.length)} detail="Players owned" />
-            </View>
-            <MetricCard
-              label="Squad value"
-              value={`${query.data.ownedPlayers.reduce((total, player) => total + player.current_price, 0).toFixed(1)}M`}
-              detail="Current player prices"
-            />
-            {query.data.gameweek?.deadline ? (
-              <View className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                <Text className="text-xs font-medium uppercase tracking-wider text-slate-400">Gameweek deadline</Text>
-                <Text className="mt-2 text-base font-semibold text-white">
-                  {new Date(query.data.gameweek.deadline).toLocaleString()}
-                </Text>
-              </View>
-            ) : null}
             {/* Live Matches In Progress */}
             {liveMatchesQuery.data && liveMatchesQuery.data.length > 0 ? (
               <DashboardLiveMatches
@@ -565,18 +669,29 @@ export default function HomeScreen() {
 
             {hasSquad ? (
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                <View className="flex-row items-center justify-between">
-                  <View>
-                    <Text className="text-lg font-bold text-white">Starting Five</Text>
-                    <Text className="mt-1 text-xs text-slate-400">
-                      {starters.length} of 5 starters · Tap a player for score details
+                <View className="min-w-0">
+                    <Text className="text-lg font-bold text-white">
+                      {squadSummaryQuery.data?.squadName || 'Active Squad'}
                     </Text>
-                  </View>
+                    <Text className="mt-1 text-xs leading-5 text-slate-400">
+                      Gameweek {query.data.gameweek?.gameweekNumber ?? 1} · {starters.length}/5 starters set · Tap a player for score details
+                    </Text>
+                </View>
+                <View className="flex-row gap-2">
                   <Link href="/team" asChild>
-                    <Pressable accessibilityRole="button" className="min-h-10 justify-center px-2">
-                      <Text className="text-sm font-semibold text-brand-300">My Team ›</Text>
+                    <Pressable accessibilityRole="button" className="min-h-10 flex-1 items-center justify-center rounded-lg bg-brand-500 px-3">
+                      <Text className="text-xs font-bold text-white">Edit Lineup</Text>
                     </Pressable>
                   </Link>
+                  <Link href="/team" asChild>
+                    <Pressable accessibilityRole="button" className="min-h-10 flex-1 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 px-3">
+                      <Text className="text-xs font-semibold text-slate-200">Full Squad</Text>
+                    </Pressable>
+                  </Link>
+                </View>
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Starting Five</Text>
+                  <Text className="text-[11px] text-slate-400">Tap a player for score details</Text>
                 </View>
                 {starters.length ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3 pb-1">
@@ -624,6 +739,13 @@ export default function HomeScreen() {
                     Your starting lineup is not set yet. Complete it on My Team.
                   </Text>
                 )}
+                <View className="gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-amber-200">Leadership</Text>
+                  <View className="flex-row gap-3">
+                    <LeadershipEntry label="Captain · 2×" entry={captain} />
+                    <LeadershipEntry label="Vice-captain" entry={viceCaptain} />
+                  </View>
+                </View>
               </View>
             ) : (
               <View className="gap-3 rounded-2xl border border-dashed border-brand-500/50 bg-brand-950/30 p-5">
@@ -725,6 +847,64 @@ export default function HomeScreen() {
 
         {query.isRefetching ? <ActivityIndicator accessibilityLabel="Updating dashboard" color="#14b8a6" /> : null}
       </ScreenScrollView>
+      <DashboardPointsModal
+        visible={pointsBreakdownOpen}
+        onClose={() => setPointsBreakdownOpen(false)}
+      />
     </Screen>
+  );
+}
+
+function HomeStatCard({
+  label,
+  value,
+  detail,
+  icon,
+  tint,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: ComponentProps<typeof SymbolView>['name'];
+  tint: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`${label}: ${value}. ${detail}`}
+      accessibilityRole="button"
+      className="min-h-32 flex-1 justify-between overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-3"
+      onPress={onPress}
+    >
+      <View>
+        <View className="mb-3 self-start rounded-xl border border-slate-700 bg-slate-800 p-2">
+          <SymbolView name={icon} size={19} tintColor={tint} />
+        </View>
+        <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</Text>
+        <Text className="mt-1 text-xl font-black text-white">{value}</Text>
+      </View>
+      <Text numberOfLines={1} className="mt-2 text-[10px] font-medium text-slate-400">{detail}</Text>
+    </Pressable>
+  );
+}
+
+function LeadershipEntry({
+  label,
+  entry,
+}: {
+  label: string;
+  entry: FantasyLineupEntry | null;
+}) {
+  const player = entry?.professional_players;
+  const name = player?.in_game_name || player?.name;
+  return (
+    <View className="min-h-20 flex-1 justify-center rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+      <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Text>
+      <Text numberOfLines={1} className="mt-1 font-semibold text-white">{name ?? 'Not set'}</Text>
+      {player?.professional_teams?.name ? (
+        <Text numberOfLines={1} className="mt-0.5 text-xs text-slate-400">{player.professional_teams.name}</Text>
+      ) : null}
+    </View>
   );
 }
