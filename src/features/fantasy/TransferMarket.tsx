@@ -1,8 +1,10 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import type { FantasyContext, FantasyPlayer, MarketPlayer, TransferSuggestion } from './api';
 import { getPlayerMarket, getTransferHistory, getTransferSuggestions, processTransfer } from './api';
+import { getProfessionalTeams } from '@/src/features/players/api';
 import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { useMobileTheme } from '@/src/lib/theme';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
@@ -36,8 +38,13 @@ export function TransferMarket({
   quickAddPlayerName,
 }: TransferMarketProps) {
   const queryClient = useQueryClient();
-  const { colors } = useMobileTheme();
+  const { colors, theme } = useMobileTheme();
+  const isDark = theme === 'dark';
   const [search, setSearch] = useState('');
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+  const [isTeamPickerVisible, setIsTeamPickerVisible] = useState(false);
+  const [sortBy, setSortBy] = useState<'price' | 'points' | 'ownership'>('price');
+  const [sortDescending, setSortDescending] = useState(true);
   const [selectedOutId, setSelectedOutId] = useState<number | null>(null);
   const [selectionOverride, setSelectionOverride] = useState<{
     quickAddId: number | undefined;
@@ -56,11 +63,20 @@ export function TransferMarket({
   const selectedOut = context.ownedPlayers.find((player) => player.id === selectedOutId) ?? null;
 
   const marketQuery = useQuery({
-    queryKey: ['player-market', deferredSearch],
-    queryFn: () => getPlayerMarket(deferredSearch),
-    enabled: context.ownedPlayers.length > 0,
+    queryKey: ['player-market', deferredSearch, selectedTeamId],
+    queryFn: () => getPlayerMarket(deferredSearch, selectedTeamId),
+    enabled: context.ownedPlayers.length > 0 && selectedTeamId !== null,
     staleTime: 60_000,
   });
+  const professionalTeamsQuery = useQuery({
+    queryKey: ['professional-teams'],
+    queryFn: getProfessionalTeams,
+    enabled: context.ownedPlayers.length > 0,
+    staleTime: 5 * 60_000,
+  });
+  const selectedTeamName = selectedTeamId === null
+    ? 'Choose a team'
+    : professionalTeamsQuery.data?.find((team) => team.id === selectedTeamId)?.name ?? 'Select a team';
   const suggestionsQuery = useQuery({
     queryKey: ['transfer-suggestions', context.fantasySeasonId, context.ownedPlayers.map((player) => player.id).join(',')],
     queryFn: getTransferSuggestions,
@@ -70,9 +86,9 @@ export function TransferMarket({
   const activeQuickAddPlayerId = suggestedSelection?.playerInId ?? quickAddPlayerId;
   const activeQuickAddPlayerName = suggestedSelection?.playerInName ?? quickAddPlayerName;
   const quickAddQuery = useQuery({
-    queryKey: ['player-market-quick-add', activeQuickAddPlayerId, activeQuickAddPlayerName],
-    queryFn: () => getPlayerMarket(activeQuickAddPlayerName ?? ''),
-    enabled: Boolean(activeQuickAddPlayerId && activeQuickAddPlayerName),
+    queryKey: ['player-market-quick-add', activeQuickAddPlayerId, activeQuickAddPlayerName, selectedTeamId],
+    queryFn: () => getPlayerMarket(activeQuickAddPlayerName ?? '', selectedTeamId),
+    enabled: Boolean(activeQuickAddPlayerId && activeQuickAddPlayerName && selectedTeamId !== null),
     staleTime: 60_000,
   });
   const historyQuery = useQuery({
@@ -100,12 +116,14 @@ export function TransferMarket({
     },
   });
 
-  const quickAddPlayer = quickAddQuery.data?.find((player) => player.id === activeQuickAddPlayerId) ?? null;
-  const incomingPlayers = (marketQuery.data ?? []).filter((player) => {
+  const quickAddPlayer = selectedTeamId === null
+    ? null
+    : quickAddQuery.data?.find((player) => player.id === activeQuickAddPlayerId) ?? null;
+  const incomingPlayers = (selectedTeamId === null ? [] : marketQuery.data ?? []).filter((player) => {
     if (ownedIds.has(player.id) || player.availability_status !== 'available') return false;
     return !selectedOut || matchesRole(player, selectedOut);
   });
-  const visibleIncomingPlayers = [
+  const visibleIncomingPlayers = selectedTeamId === null ? [] : [
     ...(quickAddPlayer &&
       !ownedIds.has(quickAddPlayer.id) &&
       quickAddPlayer.availability_status === 'available' &&
@@ -113,6 +131,26 @@ export function TransferMarket({
       ? [quickAddPlayer]
       : []),
     ...incomingPlayers.filter((player) => player.id !== quickAddPlayer?.id),
+  ];
+  const sortedIncomingPlayers = [
+    ...visibleIncomingPlayers.filter((player) => player.id === quickAddPlayer?.id),
+    ...visibleIncomingPlayers
+      .filter((player) => player.id !== quickAddPlayer?.id)
+      .sort((left, right) => {
+        const leftValue = sortBy === 'price'
+          ? left.current_price
+          : sortBy === 'points'
+            ? left.recent_points
+            : left.ownership_percentage;
+        const rightValue = sortBy === 'price'
+          ? right.current_price
+          : sortBy === 'points'
+            ? right.recent_points
+            : right.ownership_percentage;
+        const difference = (rightValue ?? -Infinity) - (leftValue ?? -Infinity);
+        return (sortDescending ? difference : -difference) ||
+          playerName(left).localeCompare(playerName(right));
+      }),
   ];
   const quickAddIsSelectable = Boolean(
     quickAddPlayer &&
@@ -158,11 +196,20 @@ export function TransferMarket({
 
   return (
     <View className="gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-      <View>
-        <Text className="text-lg font-bold text-white">Transfer market</Text>
-        <Text className="mt-1 text-sm leading-5 text-slate-400">
-          Choose one player to sell and an available player in the same role. The server calculates your budget and transfer penalty.
-        </Text>
+      <View className="flex-row items-start gap-3">
+        <View className="h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10">
+          <SymbolView
+            name={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
+            size={20}
+            tintColor={isDark ? '#34d399' : '#047857'}
+          />
+        </View>
+        <View className="min-w-0 flex-1">
+          <Text className="text-lg font-bold text-slate-50">Transfer market</Text>
+          <Text className="mt-1 text-sm leading-5 text-slate-400">
+            Choose one player to sell and an available player in the same role. The server calculates your budget and transfer penalty.
+          </Text>
+        </View>
       </View>
 
       {context.gameweek?.isLocked ? (
@@ -179,14 +226,23 @@ export function TransferMarket({
             Suggestions are advisory; the transfer server checks the final transaction.
           </Text>
         </View>
-        {suggestionsQuery.isPending ? (
+        {selectedTeamId === null ? (
+          <Text className="text-sm leading-5 text-slate-400">
+            Choose a professional team below to view transfer recommendations.
+          </Text>
+        ) : suggestionsQuery.isPending ? (
           <ActivityIndicator accessibilityLabel="Loading transfer suggestions" color="#14b8a6" />
         ) : suggestionsQuery.isError ? (
-          <Text accessibilityRole="alert" className="text-sm text-red-300">
-            {suggestionsQuery.error instanceof Error
-              ? suggestionsQuery.error.message
-              : 'Transfer suggestions could not be loaded.'}
-          </Text>
+          <View className="gap-2">
+            <Text accessibilityRole="alert" className="text-sm text-red-300">
+              {suggestionsQuery.error instanceof Error
+                ? suggestionsQuery.error.message
+                : 'Transfer suggestions could not be loaded.'}
+            </Text>
+            <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void suggestionsQuery.refetch()}>
+              <Text className="font-semibold text-white">Try again</Text>
+            </Pressable>
+          </View>
         ) : suggestionsQuery.data?.recommendations.length ? (
           suggestionsQuery.data.recommendations.map((suggestion) => (
             <View
@@ -277,9 +333,10 @@ export function TransferMarket({
             <Pressable
               key={player.id}
               accessibilityRole="button"
+              accessibilityLabel={`Sell ${playerName(player)}, ${player.primary_role ?? 'role unavailable'}, ${player.current_price.toFixed(1)} million`}
               accessibilityState={{ selected }}
-              className={`min-h-14 justify-center rounded-xl border px-3 ${
-                selected ? 'border-brand-500 bg-brand-500/10' : 'border-slate-800 bg-slate-950'
+              className={`min-h-20 flex-row items-center gap-3 rounded-xl border p-3 ${
+                selected ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-950'
               }`}
               disabled={context.gameweek?.isLocked || transferMutation.isPending}
               onPress={() => {
@@ -296,10 +353,55 @@ export function TransferMarket({
                 transferMutation.reset();
               }}
             >
-              <Text className="font-semibold text-white">{playerName(player)}</Text>
-              <Text className="mt-1 text-xs text-slate-400">
-                {player.primary_role ?? 'Role unavailable'} · {player.current_price.toFixed(1)}
-              </Text>
+              <View className="h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-slate-600 bg-slate-800">
+                {player.profile_image_url ? (
+                  <Image
+                    accessibilityLabel={`${playerName(player)} avatar`}
+                    source={{ uri: player.profile_image_url }}
+                    className="h-12 w-12"
+                  />
+                ) : (
+                  <Text className="text-base font-bold text-slate-200">
+                    {playerName(player).slice(0, 1).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View className="min-w-0 flex-1">
+                <View className="flex-row items-center justify-between gap-2">
+                  <Text className="min-w-0 flex-1 font-semibold text-slate-50" numberOfLines={1}>
+                    {playerName(player)}
+                  </Text>
+                  {selected ? (
+                    <View className="rounded-full bg-brand-500/20 px-2 py-1">
+                      <Text className="text-[10px] font-semibold text-brand-300">Selected</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {player.professional_teams?.name ? (
+                  <Text className="mt-0.5 text-xs text-slate-400" numberOfLines={1}>
+                    {player.professional_teams.name}
+                  </Text>
+                ) : null}
+                <View className="mt-1.5 flex-row flex-wrap gap-1.5">
+                  <View className="rounded-full bg-cyan-500/10 px-2 py-0.5">
+                    <Text className="text-[10px] font-semibold text-cyan-300">
+                      {player.primary_role ?? 'Role unavailable'}
+                    </Text>
+                  </View>
+                  <View className="rounded-full bg-slate-800 px-2 py-0.5">
+                    <Text className="text-[10px] font-semibold text-slate-300">
+                      {player.current_price.toFixed(1)}M
+                    </Text>
+                  </View>
+                  {player.availability_status ? (
+                    <View className="rounded-full bg-emerald-500/10 px-2 py-0.5">
+                      <Text className="text-[10px] font-semibold text-emerald-300">
+                        {player.availability_status.replaceAll('_', ' ')}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
             </Pressable>
           );
         })}
@@ -323,25 +425,243 @@ export function TransferMarket({
           placeholderTextColor={colors.placeholder}
           value={search}
         />
-        {marketQuery.isPending ? (
+        <View className="gap-2">
+          <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            Filter by professional team
+          </Text>
+          {professionalTeamsQuery.isPending ? (
+            <ActivityIndicator accessibilityLabel="Loading professional teams" color="#14b8a6" />
+          ) : professionalTeamsQuery.isError ? (
+            <View className="gap-1">
+              <Text accessibilityRole="alert" className="text-sm text-red-300">
+                {professionalTeamsQuery.error instanceof Error
+                  ? professionalTeamsQuery.error.message
+                  : 'Professional teams could not be loaded.'}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                className="min-h-10 justify-center self-start"
+                onPress={() => void professionalTeamsQuery.refetch()}
+              >
+                <Text className="font-semibold text-white">Try again</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Filter by professional team"
+                accessibilityState={{ expanded: isTeamPickerVisible }}
+                className="min-h-12 flex-row items-center justify-between rounded-xl border border-slate-700 bg-slate-950 px-4"
+                onPress={() => setIsTeamPickerVisible(true)}
+              >
+                <Text className={`text-sm font-semibold ${selectedTeamId === null ? 'text-slate-300' : 'text-brand-300'}`}>
+                  {selectedTeamName}
+                </Text>
+                <SymbolView
+                  name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
+                  size={18}
+                  tintColor={isDark ? '#5eead4' : '#0f766e'}
+                />
+              </Pressable>
+              {selectedTeamId !== null ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear professional team filter"
+                  className="min-h-9 flex-row items-center justify-center self-start gap-1 rounded-lg border border-slate-700 bg-slate-900 px-3"
+                  style={{
+                    borderColor: isDark ? '#334155' : '#cbd5e1',
+                    backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+                  }}
+                  onPress={() => setSelectedTeamId(null)}
+                >
+                  <SymbolView
+                    name={{ ios: 'xmark', android: 'close', web: 'close' }}
+                    size={13}
+                    tintColor={isDark ? '#cbd5e1' : '#475569'}
+                  />
+                  <Text className="text-xs font-semibold" style={{ color: isDark ? '#cbd5e1' : '#334155' }}>
+                    Clear
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text className="text-xs text-slate-500">
+                  No team filter is applied until you choose one.
+                </Text>
+              )}
+              <Modal
+                accessibilityViewIsModal
+                animationType="fade"
+                onRequestClose={() => setIsTeamPickerVisible(false)}
+                presentationStyle="overFullScreen"
+                statusBarTranslucent
+                transparent
+                visible={isTeamPickerVisible}
+              >
+                <View
+                  className="flex-1 justify-center px-5"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: isDark ? 'rgba(2, 6, 23, 0.82)' : 'rgba(15, 23, 42, 0.55)',
+                  }}
+                >
+                  <View
+                    className="gap-3 rounded-2xl border p-4"
+                    style={{
+                      maxHeight: '70%',
+                      borderColor: isDark ? '#334155' : '#cbd5e1',
+                      backgroundColor: isDark ? '#020617' : '#ffffff',
+                    }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <Text
+                        className="text-lg font-bold"
+                        style={{ color: isDark ? '#f8fafc' : '#0f172a' }}
+                      >
+                        Select professional team
+                      </Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        className="min-h-10 justify-center px-2"
+                        onPress={() => setIsTeamPickerVisible(false)}
+                      >
+                        <Text className="font-semibold" style={{ color: isDark ? '#5eead4' : '#0f766e' }}>
+                          Close
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                      {(professionalTeamsQuery.data ?? []).map((team) => {
+                        const selected = team.id === selectedTeamId;
+                        return (
+                          <Pressable
+                            key={team.id ?? 'all-teams'}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            className="min-h-12 flex-row items-center justify-between rounded-xl border px-4"
+                            style={{
+                              borderColor: selected
+                                ? isDark ? '#14b8a6' : '#0f766e'
+                                : isDark ? '#334155' : '#cbd5e1',
+                              backgroundColor: selected
+                                ? isDark ? 'rgba(20, 184, 166, 0.16)' : '#ccfbf1'
+                                : isDark ? '#0f172a' : '#f8fafc',
+                            }}
+                            onPress={() => {
+                              setSelectedTeamId(team.id);
+                              setIsTeamPickerVisible(false);
+                            }}
+                          >
+                            <Text
+                              className="text-sm font-semibold"
+                              style={{
+                                color: selected
+                                  ? isDark ? '#5eead4' : '#115e59'
+                                  : isDark ? '#f8fafc' : '#0f172a',
+                              }}
+                            >
+                              {team.name}
+                            </Text>
+                            {selected ? (
+                              <SymbolView
+                                name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+                                size={18}
+                                tintColor={isDark ? '#5eead4' : '#0f766e'}
+                              />
+                            ) : null}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+              </Modal>
+            </>
+          )}
+        </View>
+        <View className="gap-2">
+          <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Sort by</Text>
+          <View className="flex-row gap-2">
+            {([
+              ['price', 'Price'],
+              ['points', 'Recent form'],
+              ['ownership', 'Ownership'],
+            ] as const).map(([key, label]) => {
+              const selected = sortBy === key;
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => {
+                    if (selected) setSortDescending((current) => !current);
+                    else {
+                      setSortBy(key);
+                      setSortDescending(true);
+                    }
+                  }}
+                  className={`min-h-10 flex-1 items-center justify-center rounded-full border px-2 ${
+                    selected ? 'border-amber-500/50 bg-amber-500/10' : 'border-slate-700 bg-slate-950'
+                  }`}
+                  style={{
+                    borderColor: selected ? (isDark ? '#f59e0b' : '#d97706') : (isDark ? '#334155' : '#cbd5e1'),
+                    backgroundColor: selected
+                      ? (isDark ? 'rgba(245, 158, 11, 0.1)' : '#fffbeb')
+                      : (isDark ? '#020617' : '#ffffff'),
+                  }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    className="text-xs font-medium"
+                    style={{ color: selected ? (isDark ? '#fde68a' : '#92400e') : (isDark ? '#94a3b8' : '#475569') }}
+                  >
+                    {label}{selected ? (sortDescending ? ' ↓' : ' ↑') : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+        {selectedTeamId === null ? (
+          <Text className="py-3 text-sm leading-5 text-slate-400">
+            Choose a professional team above to see eligible replacement players.
+          </Text>
+        ) : marketQuery.isPending ? (
           <ActivityIndicator accessibilityLabel="Loading players" color="#14b8a6" />
         ) : marketQuery.isError ? (
-          <Text accessibilityRole="alert" className="text-sm text-red-300">
-            {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
-          </Text>
+          <View className="gap-2">
+            <Text accessibilityRole="alert" className="text-sm text-red-300">
+              {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
+            </Text>
+            <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void marketQuery.refetch()}>
+              <Text className="font-semibold text-white">Try again</Text>
+            </Pressable>
+          </View>
         ) : visibleIncomingPlayers.length > 0 ? (
           <>
           {quickAddQuery.isError ? (
-            <Text accessibilityRole="alert" className="text-sm text-red-300">
-              {quickAddQuery.error instanceof Error ? quickAddQuery.error.message : 'Unable to load the selected player.'}
-            </Text>
+            <View className="gap-1">
+              <Text accessibilityRole="alert" className="text-sm text-red-300">
+                {quickAddQuery.error instanceof Error ? quickAddQuery.error.message : 'Unable to load the selected player.'}
+              </Text>
+              <Pressable accessibilityRole="button" onPress={() => void quickAddQuery.refetch()}>
+                <Text className="font-semibold text-white">Try again</Text>
+              </Pressable>
+            </View>
           ) : null}
           {quickAddPlayer && selectedOut && !matchesRole(quickAddPlayer, selectedOut) ? (
             <Text className="text-sm leading-5 text-amber-200">
               The selected player does not match the role of the player you are selling.
             </Text>
           ) : null}
-              {visibleIncomingPlayers.slice(0, 12).map((player) => {
+              {sortedIncomingPlayers.slice(0, 12).map((player) => {
                 const isQuickAdd = player.id === activeQuickAddPlayerId;
                 const selected = player.id === selectedIn?.id;
                 const ownPres = getOwnershipPresentation(player.ownership_percentage);
@@ -350,9 +670,15 @@ export function TransferMarket({
                     key={player.id}
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
-                    className={`min-h-14 justify-center rounded-xl border px-3 py-2.5 ${
-                      selected ? 'border-brand-500 bg-brand-500/10' : 'border-slate-800 bg-slate-950'
+                    className={`min-h-24 flex-row items-center gap-3 rounded-xl border p-3 ${
+                      selected ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-950'
                     }`}
+                    style={{
+                      borderColor: selected ? (isDark ? '#14b8a6' : '#0f766e') : (isDark ? '#334155' : '#cbd5e1'),
+                      backgroundColor: selected
+                        ? (isDark ? 'rgba(20, 184, 166, 0.14)' : '#f0fdfa')
+                        : (isDark ? '#020617' : '#ffffff'),
+                    }}
                     disabled={!selectedOut || context.gameweek?.isLocked || transferMutation.isPending}
                     onPress={() => {
                       if (isQuickAdd) {
@@ -368,24 +694,83 @@ export function TransferMarket({
                       transferMutation.reset();
                     }}
                   >
-                    <View className="flex-row items-center justify-between">
-                      <Text className="font-semibold text-white">{playerName(player)}</Text>
-                      {player.ownership_percentage != null ? (
-                        <View className={`rounded-full px-2 py-0.5 ${ownPres.badgeBg}`}>
-                          <Text className={`text-[10px] font-semibold ${ownPres.badgeText}`}>
-                            {`${player.ownership_percentage.toFixed(1)}%`}
+                    <View
+                      className="h-12 w-12 items-center justify-center overflow-hidden rounded-full border"
+                      style={{
+                        borderColor: isDark ? '#475569' : '#cbd5e1',
+                        backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
+                      }}
+                    >
+                      {player.profile_image_url ? (
+                        <Image
+                          accessibilityLabel={`${playerName(player)} avatar`}
+                          source={{ uri: player.profile_image_url }}
+                          className="h-12 w-12"
+                        />
+                      ) : (
+                        <Text className="text-base font-bold" style={{ color: isDark ? '#e2e8f0' : '#334155' }}>
+                          {playerName(player).slice(0, 1).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <View className="min-w-0 flex-1 gap-1.5">
+                      <View className="flex-row items-center justify-between gap-2">
+                        <Text
+                          className="min-w-0 flex-1 font-semibold"
+                          style={{ color: isDark ? '#f8fafc' : '#0f172a' }}
+                          numberOfLines={1}
+                        >
+                          {playerName(player)}
+                        </Text>
+                        {player.ownership_percentage != null ? (
+                          <View className={`rounded-full px-2 py-0.5 ${ownPres.badgeBg}`}>
+                            <Text className={`text-[10px] font-semibold ${ownPres.badgeText}`}>
+                              {`${player.ownership_percentage.toFixed(1)}%`}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      {player.professional_teams?.name ? (
+                        <Text className="text-xs" style={{ color: isDark ? '#94a3b8' : '#64748b' }} numberOfLines={1}>
+                          {player.professional_teams.name}
+                        </Text>
+                      ) : null}
+                      <View className="flex-row flex-wrap items-center gap-1.5">
+                        <View
+                          className="rounded-full px-2 py-0.5"
+                          style={{ backgroundColor: isDark ? 'rgba(6, 182, 212, 0.14)' : '#ecfeff' }}
+                        >
+                          <Text className="text-[10px] font-semibold" style={{ color: isDark ? '#67e8f9' : '#0e7490' }}>
+                            {player.primary_role ?? 'Role unavailable'}
                           </Text>
                         </View>
-                      ) : null}
-                    </View>
-                    {selected ? <Text className="mt-1 text-xs font-semibold text-brand-300">Selected as replacement</Text> : null}
-                    <View className="mt-1 flex-row items-center justify-between">
-                      <Text className="text-xs text-slate-400">
-                        {player.primary_role ?? 'Role unavailable'} · {player.current_price === null ? 'Price unavailable' : `${player.current_price.toFixed(1)}M`}
-                        {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
-                      </Text>
-                      {player.price_history && player.price_history.length > 0 ? (
-                        <PriceSparkline data={player.price_history} width={44} height={14} />
+                        <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }}>
+                          <Text className="text-[10px] font-semibold" style={{ color: isDark ? '#cbd5e1' : '#475569' }}>
+                            {player.current_price === null ? 'Price unavailable' : `${player.current_price.toFixed(1)}M`}
+                          </Text>
+                        </View>
+                        {player.recent_points !== null ? (
+                          <View
+                            className="rounded-full px-2 py-0.5"
+                            style={{ backgroundColor: isDark ? 'rgba(16, 185, 129, 0.14)' : '#ecfdf5' }}
+                          >
+                            <Text className="text-[10px] font-semibold" style={{ color: isDark ? '#6ee7b7' : '#047857' }}>
+                              Form {player.recent_points} pts
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      {selected || (player.price_history && player.price_history.length > 0) ? (
+                        <View className="flex-row items-center justify-between">
+                          {selected ? (
+                            <Text className="text-[10px] font-semibold text-brand-300">
+                              Selected as replacement
+                            </Text>
+                          ) : <View />}
+                          {player.price_history && player.price_history.length > 0 ? (
+                            <PriceSparkline data={player.price_history} width={48} height={15} />
+                          ) : null}
+                        </View>
                       ) : null}
                     </View>
                   </Pressable>
@@ -399,13 +784,18 @@ export function TransferMarket({
         )}
       </View>
 
-      {selectedOut &&
-      selectedIn &&
-      selectedIn.current_price !== null &&
-      selectedOut.current_price !== selectedIn.current_price ? (
-        <Text className="text-xs leading-5 text-slate-400">
-          Latest market price difference: {(selectedIn.current_price - selectedOut.current_price).toFixed(1)}. Final budget and penalties are confirmed by the server.
-        </Text>
+      {selectedOut && selectedIn && selectedIn.current_price !== null ? (
+        <View className="gap-1 rounded-xl border border-cyan-900/60 bg-cyan-950/30 p-3">
+          <Text className="text-sm font-semibold text-cyan-100">
+            Estimated bank after swap: {(context.budget + selectedOut.current_price - selectedIn.current_price).toFixed(1)}M
+          </Text>
+          <Text className="text-xs leading-5 text-slate-300">
+            {context.freeTransfers > 0
+              ? `${context.freeTransfers} free transfer${context.freeTransfers === 1 ? '' : 's'} available.`
+              : 'No free transfers remain; a transfer hit may apply.'}
+            {' '}The server confirms the final budget and any penalty before updating your squad.
+          </Text>
+        </View>
       ) : null}
       {transferMutation.error ? (
         <Text accessibilityRole="alert" className="text-sm leading-5 text-red-300">
@@ -436,9 +826,14 @@ export function TransferMarket({
         {historyQuery.isPending ? (
           <ActivityIndicator accessibilityLabel="Loading transfer history" className="mt-3" color="#14b8a6" />
         ) : historyQuery.isError ? (
-          <Text accessibilityRole="alert" className="mt-2 text-sm text-red-300">
-            {historyQuery.error instanceof Error ? historyQuery.error.message : 'Transfer history unavailable.'}
-          </Text>
+          <View className="mt-2 gap-2">
+            <Text accessibilityRole="alert" className="text-sm text-red-300">
+              {historyQuery.error instanceof Error ? historyQuery.error.message : 'Transfer history unavailable.'}
+            </Text>
+            <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void historyQuery.refetch()}>
+              <Text className="font-semibold text-white">Try again</Text>
+            </Pressable>
+          </View>
         ) : historyQuery.data?.length ? (
           <View className="mt-3 gap-3">
             {historyQuery.data.slice(0, 5).map((entry) => (

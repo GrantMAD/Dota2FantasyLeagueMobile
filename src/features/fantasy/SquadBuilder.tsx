@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
 import type { FantasyContext, FantasyPlayer, MarketPlayer } from './api';
 import { addPlayersToSquad, getPlayerMarket } from './api';
+import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { useMobileTheme } from '@/src/lib/theme';
+import { getOwnershipPresentation } from '@/src/lib/ownership';
 
 const SQUAD_MAX_SIZE = 8;
 
@@ -41,6 +43,7 @@ export function SquadBuilder({
   const queryClient = useQueryClient();
   const { colors } = useMobileTheme();
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [manuallySelectedPlayers, setManuallySelectedPlayers] = useState<Map<number, MarketPlayer>>(new Map());
   const [dismissedQuickAddId, setDismissedQuickAddId] = useState<number | null>(null);
   const deferredSearch = useDeferredValue(search);
@@ -112,7 +115,10 @@ export function SquadBuilder({
   );
   const visiblePlayers = [
     ...(quickAddPlayer ? [quickAddPlayer] : []),
-    ...availablePlayers.filter((player) => player.id !== quickAddPlayer?.id),
+    ...availablePlayers.filter((player) =>
+      player.id !== quickAddPlayer?.id &&
+      (roleFilter === 'all' || player.primary_role?.trim().toLowerCase().replaceAll(' ', '_') === roleFilter)
+    ),
   ];
 
   function confirmAddPlayers() {
@@ -153,6 +159,27 @@ export function SquadBuilder({
         placeholderTextColor={colors.placeholder}
         value={search}
       />
+
+      <View>
+        <Text className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Filter by role</Text>
+        <View className="flex-row flex-wrap gap-2">
+          {(['all', 'carry', 'mid', 'offlane', 'support', 'hard_support'] as const).map((role) => (
+            <Pressable
+              key={role}
+              accessibilityRole="button"
+              accessibilityState={{ selected: roleFilter === role }}
+              className={`min-h-9 justify-center rounded-full border px-3 ${
+                roleFilter === role ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-950'
+              }`}
+              onPress={() => setRoleFilter(role)}
+            >
+              <Text className={`text-xs font-medium ${roleFilter === role ? 'text-brand-300' : 'text-slate-400'}`}>
+                {role === 'all' ? 'All roles' : role.replaceAll('_', ' ')}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
 
       <View className="flex-row items-center justify-between">
         <Text className="text-sm text-slate-300">
@@ -210,6 +237,7 @@ export function SquadBuilder({
                 exceedsBudget ||
                 invalidFinalRoles
               );
+              const ownership = getOwnershipPresentation(player.ownership_percentage);
               return (
                 <Pressable
                   key={player.id}
@@ -233,18 +261,32 @@ export function SquadBuilder({
                     });
                   }}
                 >
-                  <Text className="font-semibold text-white">{playerName(player)}</Text>
+                  <View className="flex-row items-center justify-between gap-2">
+                    <Text className="flex-1 font-semibold text-white" numberOfLines={1}>{playerName(player)}</Text>
+                    {player.ownership_percentage != null ? (
+                      <Text className={`rounded-full px-2 py-1 text-[10px] font-semibold ${ownership.badgeBg} ${ownership.badgeText}`}>
+                        {player.ownership_percentage.toFixed(1)}% owned
+                      </Text>
+                    ) : null}
+                  </View>
                   {isSelected ? <Text className="mt-1 text-xs font-semibold text-brand-300">Selected for your squad</Text> : null}
                   <Text className="mt-1 text-xs text-slate-400">
                     {player.primary_role ?? 'Role unavailable'} ·{' '}
                     {player.current_price === null ? 'Price unavailable' : `${player.current_price.toFixed(1)}M`}
                     {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
                   </Text>
+                  {player.price_history?.length ? (
+                    <View className="mt-1 self-start">
+                      <PriceSparkline data={player.price_history} width={72} height={20} />
+                    </View>
+                  ) : null}
                 </Pressable>
               );
             })}
-          {availablePlayers.length === 0 ? (
-            <Text className="py-3 text-sm text-slate-400">No available players found.</Text>
+          {visiblePlayers.length === 0 ? (
+            <Text className="py-3 text-sm text-slate-400">
+              {availablePlayers.length ? 'No available players match this role filter.' : 'No available players found.'}
+            </Text>
           ) : null}
         </View>
       )}

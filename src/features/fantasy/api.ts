@@ -483,7 +483,9 @@ export interface MarketPlayer {
   name: string;
   in_game_name: string | null;
   primary_role: string | null;
+  profile_image_url: string | null;
   availability_status: string | null;
+  professional_teams: { id: number; name: string; logo_url: string | null } | null;
   current_price: number | null;
   ownership_percentage?: number | null;
   price_history?: number[] | null;
@@ -521,12 +523,20 @@ export interface TransferSuggestionResult {
 
 function parseMarketPlayer(value: unknown): MarketPlayer {
   const currentPrice = isRecord(value) ? value.current_price : undefined;
+  const rawTeam = isRecord(value) ? value.professional_teams : undefined;
+  const team = Array.isArray(rawTeam) ? rawTeam[0] ?? null : rawTeam;
   if (
     !isRecord(value) ||
     !Number.isInteger(value.id) ||
     typeof value.name !== 'string' ||
     (currentPrice !== null &&
-      (typeof currentPrice !== 'number' || !Number.isFinite(currentPrice)))
+      (typeof currentPrice !== 'number' || !Number.isFinite(currentPrice))) ||
+    (team !== null && team !== undefined && (
+      !isRecord(team) ||
+      !Number.isInteger(team.id) ||
+      typeof team.name !== 'string' ||
+      !(team.logo_url === null || typeof team.logo_url === 'string')
+    ))
   ) {
     throw new ApiError('Player market data was returned in an unexpected format.', 502);
   }
@@ -535,7 +545,15 @@ function parseMarketPlayer(value: unknown): MarketPlayer {
     name: value.name,
     in_game_name: typeof value.in_game_name === 'string' ? value.in_game_name : null,
     primary_role: typeof value.primary_role === 'string' ? value.primary_role : null,
+    profile_image_url: typeof value.profile_image_url === 'string' ? value.profile_image_url : null,
     availability_status: typeof value.availability_status === 'string' ? value.availability_status : null,
+    professional_teams: isRecord(team)
+      ? {
+          id: Number(team.id),
+          name: String(team.name),
+          logo_url: typeof team.logo_url === 'string' ? team.logo_url : null,
+        }
+      : null,
     current_price: currentPrice === null ? null : Number(currentPrice),
     ...(typeof value.ownership_percentage === 'number'
       ? { ownership_percentage: value.ownership_percentage }
@@ -550,10 +568,11 @@ function parseMarketPlayer(value: unknown): MarketPlayer {
   };
 }
 
-export async function getPlayerMarket(search: string): Promise<MarketPlayer[]> {
+export async function getPlayerMarket(search: string, teamId: number | null = null): Promise<MarketPlayer[]> {
   const { data: result, error } = await getSupabaseClient().rpc('mobile_get_player_market', {
     p_search: search.trim(),
     p_limit: 50,
+    ...(teamId === null ? {} : { p_team_id: teamId }),
   });
   if (error) throw new ApiError(`Unable to load the player market: ${error.message}`, 500);
   if (!isRecord(result) || !Array.isArray(result.data)) {

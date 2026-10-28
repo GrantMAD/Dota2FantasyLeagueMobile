@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, Alert, Modal, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, Text, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import type { FantasyContext, FantasyLineupEntry, FantasyPlayer } from './api';
 import { saveLineup } from './api';
@@ -77,6 +78,24 @@ function formatTimeUntilDeadline(deadline: string): string {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+function lineupSlotColors(slot: LineupSlot): string {
+  switch (slot) {
+    case 'carry':
+    case 'bench_1':
+      return 'border-amber-700/50 bg-amber-950/25';
+    case 'mid':
+    case 'bench_2':
+      return 'border-cyan-700/50 bg-cyan-950/25';
+    case 'offlane':
+      return 'border-emerald-700/50 bg-emerald-950/25';
+    case 'support':
+      return 'border-sky-700/50 bg-sky-950/25';
+    case 'hard_support':
+    case 'bench_3':
+      return 'border-brand-600/50 bg-brand-500/10';
+  }
+}
+
 interface LineupEditorProps {
   context: FantasyContext;
   userId: string;
@@ -84,7 +103,8 @@ interface LineupEditorProps {
 
 export function LineupEditor({ context, userId }: LineupEditorProps) {
   const queryClient = useQueryClient();
-  const { colors } = useMobileTheme();
+  const { colors, theme } = useMobileTheme();
+  const lineupIconTint = theme === 'dark' ? '#22d3ee' : '#0e7490';
   const [lineup, setLineup] = useState<FantasyLineupEntry[]>(context.lineup);
   const [dirty, setDirty] = useState(false);
   const [activeSlot, setActiveSlot] = useState<LineupSlot | null>(null);
@@ -206,13 +226,22 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
 
   return (
     <View className="gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-      <View>
-        <Text className="text-lg font-bold text-white">Gameweek lineup</Text>
-        <Text className="mt-1 text-sm text-slate-400">
-          {context.gameweek
-            ? `Gameweek ${context.gameweek.gameweekNumber}${context.gameweek.deadline ? ` · Deadline ${new Date(context.gameweek.deadline).toLocaleString()}` : ''}`
-            : 'No gameweek is available.'}
-        </Text>
+      <View className="flex-row items-start gap-3">
+        <View className="h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10">
+          <SymbolView
+            name={{ ios: 'list.bullet.rectangle.portrait', android: 'format_list_numbered', web: 'format_list_numbered' }}
+            size={20}
+            tintColor={lineupIconTint}
+          />
+        </View>
+        <View className="min-w-0 flex-1">
+          <Text className="text-lg font-bold text-slate-50">Gameweek lineup</Text>
+          <Text className="mt-1 text-sm leading-5 text-slate-400">
+            {context.gameweek
+              ? `Gameweek ${context.gameweek.gameweekNumber}${context.gameweek.deadline ? ` · Deadline ${new Date(context.gameweek.deadline).toLocaleString()}` : ''}`
+              : 'No gameweek is available.'}
+          </Text>
+        </View>
       </View>
 
       {isLocked ? (
@@ -233,14 +262,27 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
           const isStarter = STARTER_SLOTS.includes(slot as (typeof STARTER_SLOTS)[number]);
 
           return (
-            <View key={slot} className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+            <View key={slot} className={`rounded-xl border p-3 ${lineupSlotColors(slot)}`}>
               <View className="flex-row items-center justify-between gap-2">
-                <View className="flex-1">
+            <View className="h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-slate-500/40 bg-slate-900">
+              {player?.profile_image_url ? (
+                <Image
+                  accessibilityLabel={`${player.in_game_name || player.name} avatar`}
+                  source={{ uri: player.profile_image_url }}
+                  className="h-11 w-11"
+                />
+              ) : (
+                <Text className="text-sm font-bold text-slate-300">
+                  {(player?.in_game_name || player?.name || SLOT_LABELS[slot]).slice(0, 1).toUpperCase()}
+                </Text>
+              )}
+            </View>
+            <View className="min-w-0 flex-1">
                   <Text className="text-xs font-semibold uppercase tracking-wider text-brand-400">
                     {SLOT_LABELS[slot]}
                   </Text>
                   <View className="mt-1 flex-row flex-wrap items-center gap-2">
-                    <Text className="text-sm font-semibold text-white">
+                    <Text className="text-sm font-semibold text-slate-50">
                       {player?.in_game_name || player?.name || 'No player selected'}
                     </Text>
                     {entry?.is_captain ? (
@@ -276,7 +318,7 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
                   disabled={isLocked || mutation.isPending}
                   onPress={() => setActiveSlot(slot)}
                 >
-                  <Text className="text-sm font-semibold text-white">{player ? 'Change' : 'Choose'}</Text>
+                  <Text className="text-sm font-semibold text-slate-50">{player ? 'Change' : 'Choose'}</Text>
                 </Pressable>
               </View>
               {player && isStarter ? (
@@ -355,18 +397,33 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
                     key={player.id}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected }}
-                    className={`min-h-16 justify-center rounded-xl border px-4 ${
+                    className={`min-h-16 flex-row items-center gap-3 rounded-xl border px-3 ${
                       isSelected ? 'border-brand-500 bg-brand-500/10' : 'border-slate-800 bg-slate-900'
                     }`}
                     onPress={() => {
                       if (activeSlot) assignPlayer(activeSlot, player);
                     }}
                   >
-                    <Text className="font-semibold text-white">{player.in_game_name || player.name}</Text>
-                    <Text className="mt-1 text-xs text-slate-400">
-                      {player.primary_role ?? 'Role unavailable'} · {player.current_price.toFixed(1)}
-                      {assignedSlot && assignedSlot !== activeSlot ? ` · Currently ${SLOT_LABELS[assignedSlot as LineupSlot] ?? assignedSlot}` : ''}
-                    </Text>
+                    <View className="h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-500/40 bg-slate-800">
+                      {player.profile_image_url ? (
+                        <Image
+                          accessibilityLabel={`${player.in_game_name || player.name} avatar`}
+                          source={{ uri: player.profile_image_url }}
+                          className="h-10 w-10"
+                        />
+                      ) : (
+                        <Text className="text-sm font-bold text-slate-300">
+                          {(player.in_game_name || player.name).slice(0, 1).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <View className="min-w-0 flex-1">
+                      <Text className="font-semibold text-white">{player.in_game_name || player.name}</Text>
+                      <Text className="mt-1 text-xs text-slate-400">
+                        {player.primary_role ?? 'Role unavailable'} · {player.current_price.toFixed(1)}
+                        {assignedSlot && assignedSlot !== activeSlot ? ` · Currently ${SLOT_LABELS[assignedSlot as LineupSlot] ?? assignedSlot}` : ''}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}

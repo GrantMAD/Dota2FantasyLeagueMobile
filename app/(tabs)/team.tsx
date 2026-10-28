@@ -1,5 +1,15 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, LayoutChangeEvent, Pressable, RefreshControl, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  LayoutChangeEvent,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView as NativeScrollView,
+  Text,
+  View,
+} from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -12,10 +22,12 @@ import { SquadBuilder } from '@/src/features/fantasy/SquadBuilder';
 import { TransferMarket } from '@/src/features/fantasy/TransferMarket';
 import { WildcardPanel } from '@/src/features/fantasy/WildcardPanel';
 import { WildcardTransferBuilder } from '@/src/features/fantasy/WildcardTransferBuilder';
+import { SquadRosterView } from '@/src/features/fantasy/SquadRosterView';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
-import { getTransferHistoryAnalytics } from '@/src/features/fantasy/api';
+import { getTransferHistory, getTransferHistoryAnalytics } from '@/src/features/fantasy/api';
 import type { TransferInsight } from '@/src/features/fantasy/transfer-history-analytics';
 import { useAuth } from '@/src/lib/auth';
+import { useMobileTheme } from '@/src/lib/theme';
 
 function SquadValueChart({ data }: { data: { gameweekNumber: number; value: number | null }[] }) {
   const [width, setWidth] = useState(0);
@@ -131,6 +143,8 @@ function TransferInsightCard({ title, insight, positive, hasTransfers, loading, 
 }
 
 export default function TeamScreen() {
+  const { theme } = useMobileTheme();
+  const lineupPlanIconTint = theme === 'dark' ? '#2dd4bf' : '#0f766e';
   const params = useLocalSearchParams<{ quickAddPlayerId?: string; quickAddPlayerName?: string }>();
   const parsedQuickAddId = Number(params.quickAddPlayerId);
   const quickAddPlayerId = Number.isSafeInteger(parsedQuickAddId) && parsedQuickAddId > 0
@@ -141,19 +155,53 @@ export default function TeamScreen() {
     : undefined;
   const query = useFantasyContext();
   const [selectedGameweekId, setSelectedGameweekId] = useState<number | undefined>();
-  const [activeTab, setActiveTab] = useState<'squad' | 'history'>('squad');
+  const [isGameweekPickerVisible, setIsGameweekPickerVisible] = useState(false);
+  const [tabSelection, setTabSelection] = useState<{
+    tab: 'squad' | 'lineup' | 'transfers' | 'history';
+    quickAddKey: string | null;
+  } | null>(null);
   const lineupQuery = useFantasyContext(selectedGameweekId);
   const { session } = useAuth();
+  const quickAddKey = quickAddPlayerId ? `${quickAddPlayerId}:${quickAddPlayerName ?? ''}` : null;
+  const activeTab = tabSelection?.quickAddKey === quickAddKey
+    ? tabSelection.tab
+    : quickAddKey && (query.data?.ownedPlayers.length ?? 0) >= 8
+      ? 'transfers'
+      : 'squad';
   const lineupContext = selectedGameweekId === undefined ? query.data : lineupQuery.data;
   const defaultGameweekId = query.data?.defaultGameweekId ?? query.data?.gameweek?.id ?? null;
-  const lineupByPlayer = useMemo(
-    () => new Map((query.data?.lineup ?? []).map((entry) => [entry.player_id, entry])),
-    [query.data?.lineup]
-  );
+  const lineupGameweeks = useMemo(() => {
+    const gameweeks = query.data?.availableGameweeks ?? [];
+    const currentGameweek = query.data?.gameweek;
+    const withCurrentGameweek = currentGameweek &&
+      !gameweeks.some((gameweek) => gameweek.id === currentGameweek.id)
+      ? [...gameweeks, currentGameweek]
+      : gameweeks;
+    const activeGameweekId = currentGameweek?.id ?? query.data?.defaultGameweekId;
+    if (activeGameweekId === null || activeGameweekId === undefined) {
+      return withCurrentGameweek;
+    }
 
+    return [...withCurrentGameweek].sort((left, right) => {
+      if (left.id === activeGameweekId) return -1;
+      if (right.id === activeGameweekId) return 1;
+      return left.gameweekNumber - right.gameweekNumber;
+    });
+  }, [query.data?.availableGameweeks, query.data?.defaultGameweekId, query.data?.gameweek]);
+  const selectedLineupGameweek = lineupGameweeks.find(
+    (gameweek) => gameweek.id === (selectedGameweekId ?? defaultGameweekId)
+  ) ?? null;
+  const isCurrentLineupGameweek = (gameweekId: number, status: string) =>
+    gameweekId === (query.data?.gameweek?.id ?? defaultGameweekId) || status === 'active';
   const historyQuery = useQuery({
     queryKey: ['transfer-history-analytics', session?.user.id],
     queryFn: getTransferHistoryAnalytics,
+    enabled: Boolean(session?.user.id),
+    staleTime: 60_000,
+  });
+  const transferHistoryQuery = useQuery({
+    queryKey: ['transfer-history', session?.user.id],
+    queryFn: getTransferHistory,
     enabled: Boolean(session?.user.id),
     staleTime: 60_000,
   });
@@ -176,7 +224,7 @@ export default function TeamScreen() {
 
   // Transfer history summary calculations
   const historySummary = useMemo(() => {
-    const records = historyQuery.data?.transfers ?? [];
+    const records = transferHistoryQuery.data ?? [];
     let totalMoves = 0;
     let totalPenalty = 0;
     const gameweeks = new Set<number>();
@@ -197,7 +245,8 @@ export default function TeamScreen() {
       totalPenalty,
       totalGameweeks: gameweeks.size,
     };
-  }, [historyQuery.data?.transfers]);
+  }, [transferHistoryQuery.data]);
+  const historySummaryUnavailable = transferHistoryQuery.isPending || transferHistoryQuery.isError;
 
   return (
     <Screen>
@@ -211,8 +260,9 @@ export default function TeamScreen() {
               void query.refetch();
               if (selectedGameweekId !== undefined) void lineupQuery.refetch();
               void historyQuery.refetch();
+              void transferHistoryQuery.refetch();
             }}
-            refreshing={query.isRefetching}
+            refreshing={query.isRefetching || historyQuery.isRefetching || transferHistoryQuery.isRefetching}
             tintColor="#14b8a6"
           />
         }
@@ -291,56 +341,65 @@ export default function TeamScreen() {
               </View>
             </View>
 
-            {/* View Switcher Tabs: Squad vs Transfer History */}
-            <View className="flex-row border-b border-slate-800">
-              <Pressable
-                accessibilityRole="tab"
-                accessibilityState={{ selected: activeTab === 'squad' }}
-                className={`flex-1 items-center pb-3 border-b-2 ${
-                  activeTab === 'squad' ? 'border-brand-500' : 'border-transparent'
-                }`}
-                onPress={() => setActiveTab('squad')}
-              >
-                <Text className={`text-sm font-bold ${activeTab === 'squad' ? 'text-brand-300' : 'text-slate-400'}`}>
-                  My Squad ({query.data.ownedPlayers.length}/8)
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="tab"
-                accessibilityState={{ selected: activeTab === 'history' }}
-                className={`flex-1 items-center pb-3 border-b-2 ${
-                  activeTab === 'history' ? 'border-brand-500' : 'border-transparent'
-                }`}
-                onPress={() => setActiveTab('history')}
-              >
-                <Text className={`text-sm font-bold ${activeTab === 'history' ? 'text-brand-300' : 'text-slate-400'}`}>
-                  Transfer History
-                </Text>
-              </Pressable>
+            <View accessibilityRole="tablist" className="flex-row flex-wrap gap-2">
+              {([
+                ['squad', `Squad ${query.data.ownedPlayers.length}/8`],
+                ['lineup', 'Lineup'],
+                ['transfers', 'Transfers'],
+                ['history', 'History'],
+              ] as const).map(([tab, label]) => (
+                <Pressable
+                  key={tab}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: activeTab === tab }}
+                  className={`min-h-11 flex-1 min-w-[45%] items-center justify-center rounded-xl border px-3 ${
+                    activeTab === tab
+                      ? 'border-brand-500 bg-brand-500/15'
+                      : 'border-slate-700 bg-slate-950'
+                  }`}
+                  onPress={() => setTabSelection({ tab, quickAddKey })}
+                >
+                  <Text className={`text-sm font-bold ${activeTab === tab ? 'text-brand-300' : 'text-slate-400'}`}>
+                    {label}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
 
-            {activeTab === 'history' && !quickAddPlayerId ? (
+            {activeTab === 'history' ? (
               /* Enhanced Transfer History Timeline */
               <View className="gap-4">
                 {/* 4-Tile Summary */}
                 <View className="flex-row flex-wrap gap-2">
                   <View className="flex-1 min-w-[45%] rounded-xl border border-slate-800 bg-slate-900 p-3">
                     <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Transactions</Text>
-                    <Text className="mt-1 text-lg font-bold text-white">{historySummary.totalTransfers}</Text>
+                    <Text className="mt-1 text-lg font-bold text-white">
+                      {historySummaryUnavailable ? '—' : historySummary.totalTransfers}
+                    </Text>
                   </View>
                   <View className="flex-1 min-w-[45%] rounded-xl border border-slate-800 bg-slate-900 p-3">
                     <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total Moves</Text>
-                    <Text className="mt-1 text-lg font-bold text-cyan-400">{historySummary.totalMoves}</Text>
+                    <Text className="mt-1 text-lg font-bold text-cyan-400">
+                      {historySummaryUnavailable ? '—' : historySummary.totalMoves}
+                    </Text>
                   </View>
                   <View className="flex-1 min-w-[45%] rounded-xl border border-slate-800 bg-slate-900 p-3">
                     <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Penalties</Text>
-                    <Text className={`mt-1 text-lg font-bold ${historySummary.totalPenalty > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      {historySummary.totalPenalty > 0 ? `-${historySummary.totalPenalty} pts` : '0 pts'}
+                    <Text className={`mt-1 text-lg font-bold ${
+                      historySummaryUnavailable
+                        ? 'text-slate-400'
+                        : historySummary.totalPenalty > 0 ? 'text-rose-400' : 'text-emerald-400'
+                    }`}>
+                      {historySummaryUnavailable
+                        ? '—'
+                        : historySummary.totalPenalty > 0 ? `-${historySummary.totalPenalty} pts` : '0 pts'}
                     </Text>
                   </View>
                   <View className="flex-1 min-w-[45%] rounded-xl border border-slate-800 bg-slate-900 p-3">
                     <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Gameweeks</Text>
-                    <Text className="mt-1 text-lg font-bold text-amber-400">{historySummary.totalGameweeks}</Text>
+                    <Text className="mt-1 text-lg font-bold text-amber-400">
+                      {historySummaryUnavailable ? '—' : historySummary.totalGameweeks}
+                    </Text>
                   </View>
                 </View>
 
@@ -361,11 +420,26 @@ export default function TeamScreen() {
                         : `${historyQuery.data.analytics.netBudgetChange > 0 ? '+$' : historyQuery.data.analytics.netBudgetChange < 0 ? '-$' : '$'}${Math.abs(historyQuery.data.analytics.netBudgetChange).toFixed(1)}M`}
                     </Text>
                   </View>
-                  <Text className="text-xs text-slate-400">
-                    {historyQuery.isError
-                      ? 'Transfer budget analytics could not be loaded.'
-                      : `Based on ${historyQuery.data?.analytics.pricedTransactions ?? 0} of ${historyQuery.data?.analytics.totalTransactions ?? 0} fully priced transactions.`}
-                  </Text>
+                  {historyQuery.isError ? (
+                    <View className="gap-2">
+                      <Text accessibilityRole="alert" className="text-xs text-red-300">
+                        {historyQuery.error instanceof Error
+                          ? historyQuery.error.message
+                          : 'Transfer history analytics could not be loaded.'}
+                      </Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        className="min-h-10 justify-center self-start"
+                        onPress={() => void historyQuery.refetch()}
+                      >
+                        <Text className="font-semibold text-white">Retry analytics</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Text className="text-xs text-slate-400">
+                      Based on {historyQuery.data?.analytics.pricedTransactions ?? 0} of {historyQuery.data?.analytics.totalTransactions ?? 0} fully priced transactions.
+                    </Text>
+                  )}
                   <View className="border-t border-slate-800 pt-3">
                     <Text className="text-sm font-semibold text-white">Owned Squad Value</Text>
                     <Text className="mt-1 text-xs text-slate-400">
@@ -393,7 +467,7 @@ export default function TeamScreen() {
                     title="Best Transfer"
                     insight={historyQuery.data?.analytics.bestTransfer ?? null}
                     positive
-                    hasTransfers={Boolean(historyQuery.data?.transfers.length)}
+                    hasTransfers={Boolean(transferHistoryQuery.data?.length)}
                     loading={historyQuery.isPending}
                     error={historyQuery.isError}
                   />
@@ -401,23 +475,36 @@ export default function TeamScreen() {
                     title="Worst Transfer"
                     insight={historyQuery.data?.analytics.worstTransfer ?? null}
                     positive={false}
-                    hasTransfers={Boolean(historyQuery.data?.transfers.length)}
+                    hasTransfers={Boolean(transferHistoryQuery.data?.length)}
                     loading={historyQuery.isPending}
                     error={historyQuery.isError}
                   />
                 </View>
 
-                {historyQuery.isPending ? (
+                {transferHistoryQuery.isPending ? (
                   <ActivityIndicator accessibilityLabel="Loading transfer history" className="py-6" color="#14b8a6" />
-                ) : historyQuery.isError ? (
-                  <View className="rounded-xl border border-red-900 bg-red-950 p-4">
+                ) : transferHistoryQuery.isError ? (
+                  <View className="gap-2 rounded-xl border border-red-900 bg-red-950 p-4">
                     <Text className="text-sm text-red-200">
-                      {historyQuery.error instanceof Error ? historyQuery.error.message : 'Unable to load transfer history.'}
+                      {transferHistoryQuery.error instanceof Error
+                        ? transferHistoryQuery.error.message
+                        : 'Unable to load transfer history.'}
                     </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      className="min-h-10 justify-center self-start"
+                      onPress={() => void transferHistoryQuery.refetch()}
+                    >
+                      <Text className="font-semibold text-white">Try again</Text>
+                    </Pressable>
                   </View>
-                ) : historyQuery.data?.transfers.length ? (
+                ) : transferHistoryQuery.data?.length ? (
                   <View className="gap-3">
-                    {historyQuery.data.transfers.map((entry) => (
+                    {transferHistoryQuery.data.map((entry) => {
+                      const analyticsEntry = historyQuery.data?.transfers.find(
+                        (transfer) => transfer.id === entry.id
+                      );
+                      return (
                       <View key={entry.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
                         <View className="flex-row items-center justify-between border-b border-slate-800 pb-2">
                           <View className="flex-row items-center gap-2">
@@ -439,7 +526,9 @@ export default function TeamScreen() {
                           )}
                         </View>
                         <View className="pt-3 gap-2">
-                          {entry.moves.map((move, index) => (
+                          {entry.moves.map((move, index) => {
+                            const analyticsMove = analyticsEntry?.moves[index];
+                            return (
                             <View key={`${entry.id}-${index}`} className="gap-1">
                               <View className="flex-row items-center gap-2">
                                 <View className="flex-1 rounded-lg bg-rose-950/40 border border-rose-900/40 px-2.5 py-1.5">
@@ -455,25 +544,25 @@ export default function TeamScreen() {
                                 </View>
                               </View>
                               <Text className="text-[10px] text-slate-400">
-                                Budget impact: {move.budgetImpact === null
+                                Budget impact: {typeof analyticsMove?.budgetImpact !== 'number'
                                   ? 'unavailable'
-                                  : `${move.budgetImpact > 0 ? '+$' : move.budgetImpact < 0 ? '-$' : '$'}${Math.abs(move.budgetImpact).toFixed(1)}M`}
-                                {move.netPointsNextThreeGameweeks !== null
-                                  ? ` · Three-gameweek net: ${move.netPointsNextThreeGameweeks > 0 ? '+' : ''}${move.netPointsNextThreeGameweeks.toFixed(1)} pts`
+                                  : `${analyticsMove.budgetImpact > 0 ? '+$' : analyticsMove.budgetImpact < 0 ? '-$' : '$'}${Math.abs(analyticsMove.budgetImpact).toFixed(1)}M`}
+                                {typeof analyticsMove?.netPointsNextThreeGameweeks === 'number'
+                                  ? ` · Three-gameweek net: ${analyticsMove.netPointsNextThreeGameweeks > 0 ? '+' : ''}${analyticsMove.netPointsNextThreeGameweeks.toFixed(1)} pts`
                                   : ''}
                                 </Text>
                             </View>
-                          ))}
+                          );})}
                         </View>
                         <View className="mt-3 border-t border-slate-800 pt-2">
                           <Text className="text-xs text-slate-400">
-                            Transaction budget impact: {entry.budgetImpact === null
+                            Transaction budget impact: {typeof analyticsEntry?.budgetImpact !== 'number'
                               ? 'unavailable'
-                              : `${entry.budgetImpact > 0 ? '+$' : entry.budgetImpact < 0 ? '-$' : '$'}${Math.abs(entry.budgetImpact).toFixed(1)}M`}
+                              : `${analyticsEntry.budgetImpact > 0 ? '+$' : analyticsEntry.budgetImpact < 0 ? '-$' : '$'}${Math.abs(analyticsEntry.budgetImpact).toFixed(1)}M`}
                           </Text>
                         </View>
                       </View>
-                    ))}
+                    );})}
                   </View>
                 ) : (
                   <View className="rounded-2xl border border-dashed border-slate-800 p-8 items-center justify-center">
@@ -484,7 +573,7 @@ export default function TeamScreen() {
             ) : (
               /* Squad Management Tab */
               <>
-                {session?.user.id && query.data.ownedPlayers.length < 8 ? (
+                {activeTab === 'squad' && session?.user.id && query.data.ownedPlayers.length < 8 ? (
                   <SquadBuilder
                     context={query.data}
                     userId={session.user.id}
@@ -492,36 +581,211 @@ export default function TeamScreen() {
                     quickAddPlayerName={quickAddPlayerName}
                   />
                 ) : null}
-                {query.data.availableGameweeks.length > 1 ? (
-                  <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                    <View>
-                      <Text className="text-base font-semibold text-white">Plan a lineup</Text>
-                      <Text className="mt-1 text-sm text-slate-400">
-                        Choose the active or an upcoming gameweek. Each lineup is saved separately.
-                      </Text>
+                {activeTab === 'lineup' ? (
+                  <>
+                {lineupGameweeks.length > 0 ? (
+                  <View className="gap-4 rounded-2xl border border-brand-500/30 bg-brand-500/5 p-4">
+                    <View className="flex-row items-start gap-3">
+                      <View className="h-10 w-10 items-center justify-center rounded-xl border border-brand-500/30 bg-brand-500/15">
+                        <SymbolView
+                          name={{ ios: 'calendar.badge.clock', android: 'event', web: 'event' }}
+                          size={20}
+                          tintColor={lineupPlanIconTint}
+                        />
+                      </View>
+                      <View className="min-w-0 flex-1">
+                        <Text className="text-base font-bold text-slate-50">Plan a lineup</Text>
+                        <Text className="mt-1 text-sm leading-5 text-slate-400">
+                          Choose a gameweek to view or prepare its lineup. Each gameweek is saved separately.
+                        </Text>
+                      </View>
                     </View>
-                    <View className="flex-row flex-wrap gap-2">
-                      {query.data.availableGameweeks.map((gameweek) => {
-                        const isSelected = (selectedGameweekId ?? defaultGameweekId) === gameweek.id;
-                        return (
-                          <Pressable
-                            key={gameweek.id}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: isSelected }}
-                            className={`min-h-11 justify-center rounded-full border px-4 ${
-                              isSelected ? 'border-brand-500 bg-brand-500/20' : 'border-slate-700 bg-slate-950'
-                            }`}
-                            onPress={() => setSelectedGameweekId(
-                              gameweek.id === defaultGameweekId ? undefined : gameweek.id
-                            )}
-                          >
-                            <Text className={`text-sm font-semibold ${isSelected ? 'text-brand-400' : 'text-slate-200'}`}>
-                              Gameweek {gameweek.gameweekNumber}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Select gameweek for lineup"
+                      accessibilityState={{ expanded: isGameweekPickerVisible }}
+                      className="min-h-14 flex-row items-center justify-between rounded-xl border border-brand-500/40 bg-slate-950 px-4 py-3"
+                      onPress={() => setIsGameweekPickerVisible(true)}
+                    >
+                      <View>
+                        <Text className="text-sm font-bold text-slate-50">
+                          {selectedLineupGameweek
+                            ? `Gameweek ${selectedLineupGameweek.gameweekNumber}`
+                            : 'Choose a gameweek'}
+                        </Text>
+                        {selectedLineupGameweek ? (
+                          <View className="mt-1 flex-row flex-wrap gap-1">
+                            {isCurrentLineupGameweek(selectedLineupGameweek.id, selectedLineupGameweek.status) ? (
+                              <View className="rounded-full bg-emerald-500/15 px-2 py-0.5">
+                                <Text className="text-[10px] font-semibold text-emerald-300">Active</Text>
+                              </View>
+                            ) : null}
+                            {selectedLineupGameweek.isLocked ? (
+                              <View className="rounded-full bg-rose-500/15 px-2 py-0.5">
+                                <Text className="text-[10px] font-semibold text-rose-300">Locked</Text>
+                              </View>
+                            ) : !isCurrentLineupGameweek(selectedLineupGameweek.id, selectedLineupGameweek.status) ? (
+                              <View className="rounded-full bg-cyan-500/15 px-2 py-0.5">
+                                <Text className="text-[10px] font-semibold text-cyan-300">Plan ahead</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
+                      <SymbolView
+                        name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
+                        size={20}
+                        tintColor={lineupPlanIconTint}
+                      />
+                    </Pressable>
+                    <Modal
+                      accessibilityViewIsModal
+                      animationType="fade"
+                      onRequestClose={() => setIsGameweekPickerVisible(false)}
+                      presentationStyle="overFullScreen"
+                      statusBarTranslucent
+                      transparent
+                      visible={isGameweekPickerVisible}
+                    >
+                      <View
+                        className="flex-1 justify-center px-5"
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          right: 0,
+                          bottom: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          backgroundColor: theme === 'dark'
+                            ? 'rgba(2, 6, 23, 0.82)'
+                            : 'rgba(15, 23, 42, 0.55)',
+                        }}
+                      >
+                        <View
+                          className="gap-3 rounded-2xl border bg-slate-950 p-4"
+                          style={{
+                            maxHeight: '70%',
+                            borderColor: theme === 'dark' ? '#334155' : '#cbd5e1',
+                            backgroundColor: theme === 'dark' ? '#020617' : '#ffffff',
+                          }}
+                        >
+                          <View className="flex-row items-center justify-between">
+                            <Text
+                              className="text-lg font-bold"
+                              style={{ color: theme === 'dark' ? '#f8fafc' : '#0f172a' }}
+                            >
+                              Select gameweek
                             </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                            <Pressable
+                              accessibilityRole="button"
+                              className="min-h-10 justify-center px-2"
+                              onPress={() => setIsGameweekPickerVisible(false)}
+                            >
+                              <Text
+                                className="font-semibold"
+                                style={{ color: theme === 'dark' ? '#5eead4' : '#0f766e' }}
+                              >
+                                Close
+                              </Text>
+                            </Pressable>
+                          </View>
+                          <NativeScrollView
+                            style={{ flexGrow: 0 }}
+                            contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+                          >
+                            {lineupGameweeks.map((gameweek) => {
+                              const isSelected = (selectedGameweekId ?? defaultGameweekId) === gameweek.id;
+                              return (
+                                <Pressable
+                                  key={gameweek.id}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: isSelected }}
+                                  accessibilityLabel={`Gameweek ${gameweek.gameweekNumber}, ${
+                                    gameweek.isLocked ? 'lineup locked' : gameweek.status === 'active' ? 'current active gameweek' : 'planning ahead'
+                                  }`}
+                                  className="min-h-14 flex-row items-center justify-between rounded-xl border px-4 py-2"
+                                  style={{
+                                    borderColor: isSelected
+                                      ? theme === 'dark' ? '#14b8a6' : '#0f766e'
+                                      : theme === 'dark' ? '#334155' : '#cbd5e1',
+                                    backgroundColor: isSelected
+                                      ? theme === 'dark' ? 'rgba(20, 184, 166, 0.16)' : '#ccfbf1'
+                                      : theme === 'dark' ? '#0f172a' : '#f8fafc',
+                                  }}
+                                  onPress={() => {
+                                    setSelectedGameweekId(
+                                      gameweek.id === defaultGameweekId ? undefined : gameweek.id
+                                    );
+                                    setIsGameweekPickerVisible(false);
+                                  }}
+                                >
+                                  <View>
+                                    <Text
+                                      className="text-sm font-bold"
+                                      style={{
+                                        color: isSelected
+                                          ? theme === 'dark' ? '#5eead4' : '#115e59'
+                                          : theme === 'dark' ? '#f8fafc' : '#0f172a',
+                                      }}
+                                    >
+                                      Gameweek {gameweek.gameweekNumber}
+                                    </Text>
+                                    <View className="mt-1 flex-row flex-wrap gap-1">
+                                      {isCurrentLineupGameweek(gameweek.id, gameweek.status) ? (
+                                        <View
+                                          className="rounded-full px-2 py-0.5"
+                                          style={{ backgroundColor: theme === 'dark' ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5' }}
+                                        >
+                                          <Text
+                                            className="text-[10px] font-semibold"
+                                            style={{ color: theme === 'dark' ? '#6ee7b7' : '#047857' }}
+                                          >
+                                            Active
+                                          </Text>
+                                        </View>
+                                      ) : null}
+                                      {gameweek.isLocked ? (
+                                        <View
+                                          className="rounded-full px-2 py-0.5"
+                                          style={{ backgroundColor: theme === 'dark' ? 'rgba(244, 63, 94, 0.15)' : '#fff1f2' }}
+                                        >
+                                          <Text
+                                            className="text-[10px] font-semibold"
+                                            style={{ color: theme === 'dark' ? '#fda4af' : '#be123c' }}
+                                          >
+                                            Locked
+                                          </Text>
+                                        </View>
+                                      ) : !isCurrentLineupGameweek(gameweek.id, gameweek.status) ? (
+                                        <View
+                                          className="rounded-full px-2 py-0.5"
+                                          style={{ backgroundColor: theme === 'dark' ? 'rgba(6, 182, 212, 0.15)' : '#ecfeff' }}
+                                        >
+                                          <Text
+                                            className="text-[10px] font-semibold"
+                                            style={{ color: theme === 'dark' ? '#67e8f9' : '#0e7490' }}
+                                          >
+                                            Plan ahead
+                                          </Text>
+                                        </View>
+                                      ) : null}
+                                    </View>
+                                  </View>
+                                  {isSelected ? (
+                                    <SymbolView
+                                      name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+                                      size={18}
+                                      tintColor={lineupPlanIconTint}
+                                    />
+                                  ) : null}
+                                </Pressable>
+                              );
+                            })}
+                          </NativeScrollView>
+                        </View>
+                      </View>
+                    </Modal>
                   </View>
                 ) : null}
                 {session?.user.id ? (
@@ -550,6 +814,10 @@ export default function TeamScreen() {
                   ) : null
                 ) : null}
                 {session?.user.id ? <ChipActivationPanel context={query.data} userId={session.user.id} /> : null}
+                  </>
+                ) : null}
+                {activeTab === 'transfers' ? (
+                  <>
                 {session?.user.id ? <WildcardPanel context={query.data} userId={session.user.id} /> : null}
                 {session?.user.id && query.data.chips.wildcardUsedGameweekId === query.data.gameweek?.id ? (
                   <WildcardTransferBuilder
@@ -566,6 +834,10 @@ export default function TeamScreen() {
                     quickAddPlayerName={query.data.ownedPlayers.length >= 8 ? quickAddPlayerName : undefined}
                   />
                 ) : null}
+                  </>
+                ) : null}
+                {activeTab === 'squad' ? (
+                  <>
                 <View className="flex-row gap-3">
                   <View className="flex-1 rounded-2xl border border-slate-800 bg-slate-900 p-4">
                     <Text className="text-xs font-medium uppercase tracking-wider text-slate-400">Players</Text>
@@ -576,38 +848,12 @@ export default function TeamScreen() {
                     <Text className="mt-2 text-2xl font-bold text-white">{query.data.lineup.length}</Text>
                   </View>
                 </View>
-                <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Your squad</Text>
-                {query.data.ownedPlayers.map((player) => {
-                  const lineupEntry = lineupByPlayer.get(player.id);
-                  return (
-                    <View key={player.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                      <View className="flex-row items-start justify-between gap-3">
-                        <View className="flex-1">
-                          <Text className="text-base font-semibold text-white">{player.name}</Text>
-                          {player.in_game_name ? (
-                            <Text className="mt-1 text-sm text-slate-400">{player.in_game_name}</Text>
-                          ) : null}
-                          <Text className="mt-2 text-xs font-medium uppercase tracking-wider text-brand-400">
-                            {player.primary_role?.replaceAll('_', ' ') ?? 'Role unavailable'}
-                          </Text>
-                        </View>
-                        <Text className="text-sm font-semibold text-slate-200">{player.current_price.toFixed(1)}</Text>
-                      </View>
-                      <View className="mt-4 flex-row flex-wrap gap-2">
-                        {lineupEntry?.is_starter ? (
-                          <Badge label={lineupEntry.slot.replaceAll('_', ' ')} />
-                        ) : null}
-                        {lineupEntry?.is_captain ? <Badge label="Captain" highlighted /> : null}
-                        {lineupEntry?.is_vice_captain ? <Badge label="Vice-captain" highlighted /> : null}
-                        {!lineupEntry ? <Badge label="Not in current lineup" /> : null}
-                        {player.availability_status ? <Badge label={player.availability_status.replaceAll('_', ' ')} /> : null}
-                      </View>
-                      <Text className="mt-3 text-xs text-slate-400">
-                        Last gameweek {player.last_gw_points} pts · Recent average {player.recent_points} pts
-                      </Text>
-                    </View>
-                  );
-                })}
+                <View className="gap-2">
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Your squad</Text>
+                  <SquadRosterView players={query.data.ownedPlayers} lineup={query.data.lineup} />
+                </View>
+                  </>
+                ) : null}
               </>
             )}
           </>
@@ -632,13 +878,5 @@ export default function TeamScreen() {
         {query.isRefetching ? <ActivityIndicator accessibilityLabel="Updating squad" color="#14b8a6" /> : null}
       </ScrollView>
     </Screen>
-  );
-}
-
-function Badge({ label, highlighted = false }: { label: string; highlighted?: boolean }) {
-  return (
-    <View className={`rounded-full px-3 py-1 ${highlighted ? 'bg-brand-500/20' : 'bg-slate-800'}`}>
-      <Text className={`text-xs font-medium ${highlighted ? 'text-brand-400' : 'text-slate-300'}`}>{label}</Text>
-    </View>
   );
 }

@@ -1865,7 +1865,9 @@ describe('mobile data access', () => {
           name: 'Carry Player',
           in_game_name: 'Carry',
           primary_role: 'Carry',
+          profile_image_url: 'https://images.example.test/carry.png',
           availability_status: 'available',
+          professional_teams: { id: 8, name: 'Radiant', logo_url: null },
           current_price: 13.5,
           recent_points: 27.4,
         }],
@@ -1873,18 +1875,21 @@ describe('mobile data access', () => {
       error: null,
     });
 
-    await expect(getPlayerMarket(' carry ')).resolves.toEqual([{
+    await expect(getPlayerMarket(' carry ', 8)).resolves.toEqual([{
       id: 41,
       name: 'Carry Player',
       in_game_name: 'Carry',
       primary_role: 'Carry',
+      profile_image_url: 'https://images.example.test/carry.png',
       availability_status: 'available',
+      professional_teams: { id: 8, name: 'Radiant', logo_url: null },
       current_price: 13.5,
       recent_points: 27.4,
     }]);
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_player_market', {
       p_search: 'carry',
       p_limit: 50,
+      p_team_id: 8,
     });
     expect(fetch).not.toHaveBeenCalled();
   });

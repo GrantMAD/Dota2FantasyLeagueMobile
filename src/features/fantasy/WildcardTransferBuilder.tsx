@@ -33,6 +33,10 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
   const pairedOutIds = new Set(pairs.map((pair) => pair.playerOut.id));
   const pairedInIds = new Set(pairs.map((pair) => pair.playerIn.id));
   const selectedOut = context.ownedPlayers.find((player) => player.id === selectedOutId) ?? null;
+  const estimatedBankAfter = context.budget + pairs.reduce(
+    (balance, pair) => balance + pair.playerOut.current_price - (pair.playerIn.current_price ?? 0),
+    0,
+  );
 
   const marketQuery = useQuery({
     queryKey: ['player-market', deferredSearch],
@@ -170,9 +174,14 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
         {marketQuery.isPending ? (
           <ActivityIndicator accessibilityLabel="Loading replacement players" color="#14b8a6" />
         ) : marketQuery.isError ? (
-          <Text accessibilityRole="alert" className="text-sm text-red-300">
-            {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
-          </Text>
+          <View className="gap-2">
+            <Text accessibilityRole="alert" className="text-sm text-red-300">
+              {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
+            </Text>
+            <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void marketQuery.refetch()}>
+              <Text className="font-semibold text-white">Try again</Text>
+            </Pressable>
+          </View>
         ) : availableMarketPlayers.length > 0 ? (
           availableMarketPlayers.slice(0, 12).map((player) => (
             <Pressable
@@ -183,7 +192,12 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
               disabled={!selectedOut || context.gameweek?.isLocked || transferMutation.isPending}
               onPress={() => addPair(player)}
             >
-              <Text className="font-semibold text-white">{playerName(player)}</Text>
+              <View className="flex-row items-center justify-between gap-2">
+                <Text className="flex-1 font-semibold text-white" numberOfLines={1}>{playerName(player)}</Text>
+                {player.ownership_percentage != null ? (
+                  <Text className="text-[10px] font-medium text-cyan-300">{player.ownership_percentage.toFixed(1)}% owned</Text>
+                ) : null}
+              </View>
               <Text className="mt-1 text-xs text-slate-400">
                 {player.primary_role ?? 'Role unavailable'} · {player.current_price?.toFixed(1)}M
                 {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
@@ -206,13 +220,21 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
                 <Text className="text-sm text-slate-200">
                   {playerName(pair.playerOut)} → {playerName(pair.playerIn)}
                 </Text>
-                <Text className="mt-1 text-xs text-slate-400">{pair.playerOut.primary_role}</Text>
+                <Text className="mt-1 text-xs text-slate-400">
+                  {pair.playerOut.primary_role} · {pair.playerOut.current_price.toFixed(1)}M → {pair.playerIn.current_price?.toFixed(1)}M
+                </Text>
               </View>
               <Pressable accessibilityRole="button" onPress={() => removePair(pair.playerOut.id)}>
                 <Text className="px-2 py-2 text-sm font-semibold text-red-300">Remove</Text>
               </Pressable>
             </View>
           ))}
+          <Text className={`text-sm font-semibold ${estimatedBankAfter >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+            Estimated bank after swaps: {estimatedBankAfter.toFixed(1)}M
+          </Text>
+          <Text className="text-xs leading-5 text-slate-400">
+            Estimate uses current market prices. The server validates the final budget and confirms the zero-hit Wildcard outcome.
+          </Text>
         </View>
       ) : null}
 
@@ -245,9 +267,14 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
         {historyQuery.isPending ? (
           <ActivityIndicator accessibilityLabel="Loading transfer history" className="mt-3" color="#14b8a6" />
         ) : historyQuery.isError ? (
-          <Text accessibilityRole="alert" className="mt-2 text-sm text-red-300">
-            {historyQuery.error instanceof Error ? historyQuery.error.message : 'Transfer history unavailable.'}
-          </Text>
+          <View className="mt-2 gap-2">
+            <Text accessibilityRole="alert" className="text-sm text-red-300">
+              {historyQuery.error instanceof Error ? historyQuery.error.message : 'Transfer history unavailable.'}
+            </Text>
+            <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void historyQuery.refetch()}>
+              <Text className="font-semibold text-white">Try again</Text>
+            </Pressable>
+          </View>
         ) : historyQuery.data?.length ? (
           <View className="mt-3 gap-3">
             {historyQuery.data.slice(0, 5).map((entry) => (
