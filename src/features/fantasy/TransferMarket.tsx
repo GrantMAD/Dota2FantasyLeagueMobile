@@ -8,7 +8,7 @@ import { getPlayers, getProfessionalTeams } from '@/src/features/players/api';
 import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { useMobileTheme } from '@/src/lib/theme';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
-import { DifferentialScoutPanel, type DifferentialScoutPlayer } from '@/src/components/DifferentialScoutPanel';
+import { DifferentialScoutPanel } from '@/src/components/DifferentialScoutPanel';
 
 interface TransferMarketProps {
   context: FantasyContext;
@@ -74,9 +74,10 @@ export function TransferMarket({
     enabled: context.ownedPlayers.length > 0,
     staleTime: 60_000,
   });
+  const scoutPlayersList = scoutPlayersQuery.data?.players;
   const scoutCandidatePlayers: MarketPlayer[] = useMemo(() => {
-    if (!scoutPlayersQuery.data?.players?.length) return [];
-    return scoutPlayersQuery.data.players.map((p) => ({
+    if (!scoutPlayersList?.length) return [];
+    return scoutPlayersList.map((p) => ({
       id: p.id,
       name: p.name,
       in_game_name: p.in_game_name,
@@ -88,7 +89,7 @@ export function TransferMarket({
       ownership_percentage: p.ownership_percentage ?? null,
       recent_points: p.recent_points,
     } as MarketPlayer));
-  }, [scoutPlayersQuery.data?.players]);
+  }, [scoutPlayersList]);
   const professionalTeamsQuery = useQuery({
     queryKey: ['professional-teams'],
     queryFn: getProfessionalTeams,

@@ -106,7 +106,7 @@ export function DifferentialScoutPanel({
     return recommendations.filter((r) => r.recommendation_type === activeFilter);
   }, [recommendations, activeFilter]);
 
-  const filterTabs: Array<{ id: FilterType; label: string }> = [
+  const filterTabs: { id: FilterType; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'differential', label: 'Differentials (<15%)' },
     { id: 'high_ceiling', label: 'High Ceiling' },
