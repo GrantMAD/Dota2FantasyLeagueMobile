@@ -305,7 +305,10 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
           gameweekId: perf.gameweek_id,
           points: perf.total_points,
           price: perf.price,
-        }))
+        })),
+      {
+        role: directory.primary_role,
+      }
     ),
   };
 }

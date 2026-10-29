@@ -9,22 +9,24 @@ import { getPremiumWaitlistStatus, joinPremiumWaitlist, removePremiumWaitlistEnt
 import { useAuth } from '@/src/lib/auth';
 
 const features = [
-  ['Advanced Player Analytics', 'Role-adjusted form, consistency, volatility, and matchup context for eligible players.'],
-  ['Points Projections', 'Expected gameweek output based on fixtures, recent form, role, and historical performance.'],
-  ['Transfer Recommendations', 'Ranked candidates, differentials, value signals, and price momentum before the deadline.'],
-  ['Squad Optimiser', 'Find a strong eight-player squad within budget and role requirements.'],
-  ['Price Movement Alerts', 'Track players likely to rise or fall as ownership and transfer activity changes.'],
-  ['AI Fantasy Assistant', 'Data-backed recommendations based on live fantasy context.'],
+  ['Floor, Ceiling & Volatility Index', '10th and 90th percentile outcome ranges and volatility ratings so you never get caught out by boom-or-bust trap picks.'],
+  ['Weighted Points Projections', 'Dynamic projections factoring 3-gameweek form momentum, 5-week baselines, and position benchmarks.'],
+  ['Differential Scout & Recommendations', 'Uncover low-ownership (<15%) hidden gems outperforming their price bracket to climb past your league rivals.'],
+  ['Position Benchmark (+/- vs Role)', 'Accurately evaluate player value by measuring performance deltas against the average for their exact primary role.'],
+  ['Squad & Lineup Optimiser', 'Intelligent starter and captain suggestion engine targeting highest expected gameweek points output.'],
+  ['Price Movement & Deadline Alerts', 'Track players on the verge of price changes as ownership and transfer velocity peak before locks.'],
 ];
 
 const capabilities = [
   ['Squad building and transfers', true],
   ['Classic and H2H leagues', true],
-  ['Global leaderboard', true],
-  ['Basic player statistics', true],
-  ['Advanced analytics and projections', false],
-  ['Transfer recommendations', false],
-  ['Squad optimisation', false],
+  ['Global leaderboard & standings', true],
+  ['Basic match stats & box scores', true],
+  ['Floor, ceiling & volatility range', false],
+  ['Weighted Next GW projections', false],
+  ['Differential scout & AI transfers', false],
+  ['Role benchmark index (+/- vs position)', false],
+  ['Squad & lineup optimiser', false],
 ];
 
 export default function PremiumScreen() {

@@ -4,10 +4,11 @@ import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, Te
 import { SymbolView } from 'expo-symbols';
 import type { FantasyContext, FantasyPlayer, MarketPlayer, TransferSuggestion } from './api';
 import { getPlayerMarket, getTransferHistory, getTransferSuggestions, processTransfer } from './api';
-import { getProfessionalTeams } from '@/src/features/players/api';
+import { getPlayers, getProfessionalTeams } from '@/src/features/players/api';
 import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { useMobileTheme } from '@/src/lib/theme';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
+import { DifferentialScoutPanel, type DifferentialScoutPlayer } from '@/src/components/DifferentialScoutPanel';
 
 interface TransferMarketProps {
   context: FantasyContext;
@@ -52,14 +53,13 @@ export function TransferMarket({
   } | null>(null);
   const [suggestedSelection, setSuggestedSelection] = useState<TransferSuggestion | null>(null);
   const [dismissedQuickAddId, setDismissedQuickAddId] = useState<number | null>(null);
+  const [showDifferentialFeedback, setShowDifferentialFeedback] = useState(false);
   const deferredSearch = useDeferredValue(search);
   const ownedIds = useMemo(
     () => new Set(context.ownedPlayers.map((player) => player.id)),
     [context.ownedPlayers]
   );
-  const selectedInId = selectionOverride && selectionOverride.quickAddId === quickAddPlayerId
-    ? selectionOverride.playerId
-    : null;
+  const selectedInId = selectionOverride ? selectionOverride.playerId : null;
   const selectedOut = context.ownedPlayers.find((player) => player.id === selectedOutId) ?? null;
 
   const marketQuery = useQuery({
@@ -68,6 +68,27 @@ export function TransferMarket({
     enabled: context.ownedPlayers.length > 0 && selectedTeamId !== null,
     staleTime: 60_000,
   });
+  const scoutPlayersQuery = useQuery({
+    queryKey: ['scout-recommendations-players'],
+    queryFn: () => getPlayers({ search: '', role: '', teamId: null, availableOnly: true, offset: 0, limit: 50 }),
+    enabled: context.ownedPlayers.length > 0,
+    staleTime: 60_000,
+  });
+  const scoutCandidatePlayers: MarketPlayer[] = useMemo(() => {
+    if (!scoutPlayersQuery.data?.players?.length) return [];
+    return scoutPlayersQuery.data.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      in_game_name: p.in_game_name,
+      primary_role: p.primary_role,
+      profile_image_url: p.profile_image_url,
+      availability_status: p.availability_status,
+      professional_teams: p.team_name ? { id: 0, name: p.team_name, logo_url: null } : null,
+      current_price: p.current_price,
+      ownership_percentage: p.ownership_percentage ?? null,
+      recent_points: p.recent_points,
+    } as MarketPlayer));
+  }, [scoutPlayersQuery.data?.players]);
   const professionalTeamsQuery = useQuery({
     queryKey: ['professional-teams'],
     queryFn: getProfessionalTeams,
@@ -165,7 +186,7 @@ export function TransferMarket({
   );
   const selectedIn = visibleIncomingPlayers.find(
     (player) => player.id === (selectedInId ?? (quickAddIsSelected ? quickAddPlayerId : null))
-  ) ?? null;
+  ) ?? scoutCandidatePlayers.find((p) => p.id === (selectedInId ?? (quickAddIsSelected ? quickAddPlayerId : null))) ?? null;
   const canTransfer = Boolean(
     context.fantasySeasonId &&
     !context.gameweek?.isLocked &&
@@ -263,7 +284,7 @@ export function TransferMarket({
               ))}
               <Pressable
                 accessibilityRole="button"
-                disabled={context.gameweek?.isLocked || transferMutation.isPending}
+                disabled={transferMutation.isPending}
                 className="min-h-11 items-center justify-center rounded-lg bg-indigo-500/20 px-3"
                 onPress={() => {
                   setSelectedOutId(suggestion.playerOutId);
@@ -325,6 +346,28 @@ export function TransferMarket({
         )}
       </View>
 
+      {/* Differential Scout & Recommendations */}
+      <DifferentialScoutPanel
+        candidates={scoutCandidatePlayers.length ? scoutCandidatePlayers : (marketQuery.data ?? [])}
+        selectedPlayerInId={selectedInId ?? (quickAddIsSelected ? quickAddPlayerId ?? null : null)}
+        isLocked={false}
+        onSelectPlayerIn={(scoutPlayer) => {
+          setSuggestedSelection(null);
+          setSelectionOverride({
+            quickAddId: undefined,
+            playerId: scoutPlayer.id,
+          });
+          setDismissedQuickAddId(null);
+          setShowDifferentialFeedback(true);
+          transferMutation.reset();
+          Alert.alert(
+            'Player selected for transfer',
+            `${scoutPlayer.in_game_name || scoutPlayer.name} has been added to your trade.\n\nPlease make sure you select an outgoing player in the same position, then scroll down to the Trade Review area to confirm.`,
+            [{ text: 'Got it' }]
+          );
+        }}
+      />
+
       <View className="gap-2">
         <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Select player to sell</Text>
         {context.ownedPlayers.map((player) => {
@@ -338,7 +381,7 @@ export function TransferMarket({
               className={`min-h-20 flex-row items-center gap-3 rounded-xl border p-3 ${
                 selected ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-950'
               }`}
-              disabled={context.gameweek?.isLocked || transferMutation.isPending}
+              disabled={transferMutation.isPending}
               onPress={() => {
                 const nextSelectedOut = selected ? null : player.id;
                 setSelectedOutId(nextSelectedOut);
@@ -414,7 +457,7 @@ export function TransferMarket({
           autoCapitalize="none"
           autoCorrect={false}
           className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-base text-white"
-          editable={!context.gameweek?.isLocked && !transferMutation.isPending}
+          editable={!transferMutation.isPending}
           onChangeText={(value) => {
             setSearch(value);
             setSuggestedSelection(null);
@@ -679,7 +722,7 @@ export function TransferMarket({
                         ? (isDark ? 'rgba(20, 184, 166, 0.14)' : '#f0fdfa')
                         : (isDark ? '#020617' : '#ffffff'),
                     }}
-                    disabled={!selectedOut || context.gameweek?.isLocked || transferMutation.isPending}
+                    disabled={!selectedOut || transferMutation.isPending}
                     onPress={() => {
                       if (isQuickAdd) {
                         setSelectionOverride({ quickAddId: quickAddPlayerId, playerId: null });
@@ -783,6 +826,17 @@ export function TransferMarket({
           </Text>
         )}
       </View>
+
+      {showDifferentialFeedback && (!selectedOut || !selectedIn) ? (
+        <View className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 gap-1.5">
+          <Text className="text-xs font-bold text-amber-300">
+            ★ Transfer In Selected: {!selectedOut ? 'Now choose a player to sell above to complete the trade' : 'Review details below'}
+          </Text>
+          <Text className="text-xs text-slate-300">
+            Once both outgoing and incoming players match role and budget requirements, confirm the trade below.
+          </Text>
+        </View>
+      ) : null}
 
       {selectedOut && selectedIn && selectedIn.current_price !== null ? (
         <View className="gap-1 rounded-xl border border-cyan-900/60 bg-cyan-950/30 p-3">

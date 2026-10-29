@@ -125,6 +125,20 @@ export default function ComparePlayersScreen() {
                         highlight
                       />
                       <ComparisonRow
+                        label="Floor / Ceiling"
+                        values={query.data.map((player) => player.analytics ? `${player.analytics.floor.toFixed(1)} - ${player.analytics.ceiling.toFixed(1)} (${player.analytics.volatility[0]})` : '—')}
+                        highlight
+                      />
+                      <ComparisonRow
+                        label="Role Delta"
+                        values={query.data.map((player) => {
+                          if (!player.analytics || player.analytics.roleDelta === null) return '—';
+                          const delta = player.analytics.roleDelta;
+                          return `${delta >= 0 ? '+' : ''}${delta.toFixed(1)} pts`;
+                        })}
+                        highlight
+                      />
+                      <ComparisonRow
                         label="5-GW Form"
                         values={query.data.map((player) => player.analytics?.form?.length ? player.analytics.form.map(f => f.toFixed(0)).join(', ') : '—')}
                         highlight
@@ -142,7 +156,7 @@ export default function ComparePlayersScreen() {
             {hasPremium ? (
               <View className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
                 <Text className="text-xs font-semibold text-amber-300">
-                  ★ Advanced Intelligence Active: Side-by-side projected points, form trends, and price deltas unlocked.
+                  ★ Advanced Intelligence Active: Side-by-side floor/ceiling spreads, role benchmark deltas, projected points, and price deltas unlocked.
                 </Text>
               </View>
             ) : (

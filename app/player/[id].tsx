@@ -9,6 +9,7 @@ import { aggregateLatestGameweekScoreBreakdown, getPlayerDetail } from '@/src/fe
 import { getManagerProfile } from '@/src/features/account/api';
 import { isPremiumUser } from '@/src/lib/premium';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
+import { useMobileTheme } from '@/src/lib/theme';
 
 function displayName(player: { in_game_name: string | null; name: string }): string {
   return player.in_game_name || player.name;
@@ -16,6 +17,8 @@ function displayName(player: { in_game_name: string | null; name: string }): str
 
 export default function PlayerDetailScreen() {
   const router = useRouter();
+  const { theme } = useMobileTheme();
+  const isDark = theme === 'dark';
   const params = useLocalSearchParams<{ id: string }>();
   const playerId = Number(params.id);
   const validId = Number.isInteger(playerId) && playerId > 0;
@@ -218,25 +221,147 @@ export default function PlayerDetailScreen() {
             </View>
 
             {hasPremium && query.data.analytics ? (
-              <View className="gap-3 rounded-2xl border border-amber-500/30 bg-slate-900 p-5">
+              <View
+                className="gap-4 rounded-2xl border border-amber-500/30 p-5"
+                style={{ backgroundColor: isDark ? '#0f172a' : '#f8fafc' }}
+              >
                 <View className="flex-row items-center justify-between">
                   <View>
-                    <Text className="text-xs font-semibold uppercase tracking-wider text-amber-300">Premium intelligence</Text>
-                    <Text className="mt-1 text-xl font-bold text-white">Form & Projections</Text>
+                    <Text className="text-xs font-bold uppercase tracking-wider text-amber-400">Premium intelligence</Text>
+                    <Text className="mt-0.5 text-xl font-extrabold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>
+                      Form & Projections
+                    </Text>
                   </View>
-                  <View className="rounded-full bg-amber-500/20 px-2.5 py-1">
+                  <View className="rounded-full border border-amber-500/40 bg-amber-500/20 px-2.5 py-1">
                     <Text className="text-xs font-bold text-amber-300">PRO</Text>
                   </View>
                 </View>
+
+                {/* Outcome Range & Volatility Index */}
+                <View
+                  className="rounded-xl border p-3.5"
+                  style={{
+                    borderColor: isDark ? '#334155' : '#cbd5e1',
+                    backgroundColor: isDark ? '#020617' : '#ffffff',
+                  }}
+                >
+                  <View className="flex-row items-center justify-between gap-2">
+                    <View>
+                      <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Outcome Range & Volatility
+                      </Text>
+                      <Text className="text-[10px] text-slate-500">10th vs 90th percentile realistic spread</Text>
+                    </View>
+                    <View className="flex-row items-center gap-1.5">
+                      <View
+                        className="rounded-full px-2 py-0.5 border"
+                        style={{
+                          borderColor:
+                            query.data.analytics.volatility === 'Low'
+                              ? 'rgba(16, 185, 129, 0.4)'
+                              : query.data.analytics.volatility === 'High'
+                                ? 'rgba(245, 158, 11, 0.4)'
+                                : 'rgba(6, 182, 212, 0.4)',
+                          backgroundColor:
+                            query.data.analytics.volatility === 'Low'
+                              ? 'rgba(16, 185, 129, 0.15)'
+                              : query.data.analytics.volatility === 'High'
+                                ? 'rgba(245, 158, 11, 0.15)'
+                                : 'rgba(6, 182, 212, 0.15)',
+                        }}
+                      >
+                        <Text
+                          className="text-[10px] font-bold uppercase tracking-wider"
+                          style={{
+                            color:
+                              query.data.analytics.volatility === 'Low'
+                                ? '#34d399'
+                                : query.data.analytics.volatility === 'High'
+                                  ? '#fbbf24'
+                                  : '#38bdf8',
+                          }}
+                        >
+                          {query.data.analytics.volatility} Volatility
+                        </Text>
+                      </View>
+                      {query.data.analytics.consistencyRate !== undefined ? (
+                        <Text className="text-[10px] font-medium text-slate-400">
+                          {query.data.analytics.consistencyRate}% Consistent
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {/* Floor / Projected / Ceiling Visual Range Bar */}
+                  <View className="mt-3">
+                    <View
+                      className="h-2.5 w-full overflow-hidden rounded-full"
+                      style={{ backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }}
+                    >
+                      <View
+                        className="h-full rounded-full"
+                        style={{
+                          marginLeft: `${Math.min(80, Math.max(0, query.data.analytics.floor * 2.2))}%`,
+                          width: `${Math.min(95, Math.max(10, (query.data.analytics.ceiling - query.data.analytics.floor) * 2.2))}%`,
+                          backgroundColor: isDark ? '#2dd4bf' : '#0d9488',
+                        }}
+                      />
+                    </View>
+                    <View className="mt-2 flex-row items-center justify-between">
+                      <View>
+                        <Text className="text-[10px] uppercase font-semibold text-slate-500">Floor</Text>
+                        <Text className="text-xs font-bold" style={{ color: isDark ? '#e2e8f0' : '#1e293b' }}>
+                          {query.data.analytics.floor.toFixed(1)} pts
+                        </Text>
+                      </View>
+                      <View className="items-center">
+                        <Text className="text-[10px] uppercase font-bold text-cyan-400">Projected</Text>
+                        <Text className="text-xs font-extrabold text-cyan-400">
+                          {query.data.analytics.projectedPoints.toFixed(1)} pts
+                        </Text>
+                      </View>
+                      <View className="items-end">
+                        <Text className="text-[10px] uppercase font-semibold text-slate-500">Ceiling</Text>
+                        <Text className="text-xs font-bold text-amber-400">
+                          {query.data.analytics.ceiling.toFixed(1)} pts
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Stat Grid with Role Benchmark Delta */}
                 <View className="flex-row flex-wrap gap-2 pt-1">
                   <Metric label="Projected" value={`${query.data.analytics.projectedPoints.toFixed(1)} pts`} />
-                  <Metric label="Avg Points" value={`${query.data.analytics.averagePoints.toFixed(1)} pts`} />
-                  <Metric label="Price Delta" value={`${query.data.analytics.priceChange >= 0 ? '+' : ''}${query.data.analytics.priceChange.toFixed(2)}M`} />
+                  <View className="min-w-20 flex-1 rounded-lg bg-slate-950 px-3 py-2 justify-between">
+                    <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-500">Avg Points</Text>
+                    <Text className="mt-1 text-sm font-semibold text-slate-200">
+                      {`${query.data.analytics.averagePoints.toFixed(1)} pts`}
+                    </Text>
+                    {query.data.analytics.roleDelta !== null && query.data.analytics.roleDelta !== undefined ? (
+                      <Text
+                        className="mt-0.5 text-[9px] font-semibold"
+                        style={{
+                          color: query.data.analytics.roleDelta >= 0 ? '#34d399' : '#f87171',
+                        }}
+                      >
+                        {`${query.data.analytics.roleDelta >= 0 ? '+' : ''}${query.data.analytics.roleDelta.toFixed(1)} vs role`}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Metric
+                    label="Price Delta"
+                    value={`${query.data.analytics.priceChange >= 0 ? '+' : ''}${query.data.analytics.priceChange.toFixed(2)}M`}
+                  />
                   <Metric label="Best Score" value={`${query.data.analytics.bestPoints.toFixed(1)} pts`} />
                 </View>
+
+                {/* Form Trend */}
                 {query.data.analytics.form.length > 0 ? (
-                  <View className="mt-2 rounded-xl bg-slate-950 p-3">
-                    <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Recent 5 Form Trend</Text>
+                  <View className="rounded-xl bg-slate-950 p-3">
+                    <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                      Recent 5 Form Trend
+                    </Text>
                     <View className="mt-2 flex-row items-center gap-2">
                       {query.data.analytics.form.map((pts, idx) => (
                         <View key={idx} className="flex-1 items-center rounded-lg bg-slate-800/80 py-1.5">
