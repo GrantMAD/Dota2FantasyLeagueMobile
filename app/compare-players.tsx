@@ -5,6 +5,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getPlayerDetail, normalizePlayerComparisonIds } from '@/src/features/players/api';
+import { getMatchesPage } from '@/src/features/competition/api';
 import { getManagerProfile } from '@/src/features/account/api';
 import { isPremiumUser } from '@/src/lib/premium';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
@@ -24,12 +25,27 @@ export default function ComparePlayersScreen() {
     staleTime: 60_000,
   });
 
+  const upcomingMatchesQuery = useQuery({
+    queryKey: ['upcoming-matches-compare'],
+    queryFn: () => getMatchesPage({ status: 'scheduled', limit: 50 }),
+    staleTime: 60_000,
+  });
+
   const profileQuery = useQuery({
     queryKey: ['manager-profile'],
     queryFn: getManagerProfile,
     staleTime: 60_000,
   });
   const hasPremium = isPremiumUser(profileQuery.data);
+
+  const removePlayer = (playerId: number) => {
+    const updatedIds = ids.filter((id) => id !== playerId);
+    if (updatedIds.length > 0) {
+      router.replace(`/compare-players?ids=${updatedIds.join(',')}`);
+    } else {
+      router.replace('/(tabs)/discover');
+    }
+  };
 
   return (
     <Screen>
@@ -71,29 +87,62 @@ export default function ComparePlayersScreen() {
           <>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3">
               {query.data.map((player) => (
-                <Pressable
+                <View
                   key={player.id}
-                  accessibilityRole="button"
                   className="w-56 rounded-2xl border border-slate-800 bg-slate-900 p-4"
-                  onPress={() => router.push(`/player/${player.id}`)}
                 >
-                  <View className="flex-row items-center gap-3">
-                    <PlayerAvatar uri={player.profile_image_url} label={displayName(player)} size={44} />
-                    <View className="flex-1">
-                      <Text className="font-bold text-white">{displayName(player)}</Text>
-                      <Text className="mt-1 text-xs text-slate-400">{player.team_name ?? 'Free agent'}</Text>
-                      <Text className="mt-2 text-xs font-semibold uppercase tracking-wider text-brand-300">
-                        {player.primary_role ?? 'Role unavailable'}
-                      </Text>
-                    </View>
+                  <View className="flex-row items-center justify-between pb-2 border-b border-slate-800/60 mb-2">
+                    <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Comparing
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${displayName(player)} from comparison`}
+                      hitSlop={8}
+                      className="h-6 w-6 items-center justify-center rounded-full bg-slate-800"
+                      onPress={() => removePlayer(player.id)}
+                    >
+                      <Text className="text-xs font-bold text-slate-400">✕</Text>
+                    </Pressable>
                   </View>
-                </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => router.push(`/player/${player.id}`)}
+                  >
+                    <View className="flex-row items-center gap-3">
+                      <PlayerAvatar uri={player.profile_image_url} label={displayName(player)} size={44} />
+                      <View className="flex-1">
+                        <Text className="font-bold text-white">{displayName(player)}</Text>
+                        <Text className="mt-1 text-xs text-slate-400">{player.team_name ?? 'Free agent'}</Text>
+                        <Text className="mt-2 text-xs font-semibold uppercase tracking-wider text-brand-300">
+                          {player.primary_role ?? 'Role unavailable'}
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                </View>
               ))}
             </ScrollView>
             <View className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
               <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: 112 + query.data.length * 120 }}>
                 <View>
                   <ComparisonRow label="Availability" values={query.data.map((player) => player.availability_status ?? 'Unknown')} />
+                  {/* Upcoming fixture row */}
+                  <ComparisonRow
+                    label="Next fixture"
+                    values={query.data.map((player) => {
+                      if (!player.team_name) return 'Free agent';
+                      const upcoming = (upcomingMatchesQuery.data?.matches ?? []).find((m) =>
+                        m.radiant_team?.name.toLowerCase() === player.team_name?.toLowerCase() ||
+                        m.dire_team?.name.toLowerCase() === player.team_name?.toLowerCase()
+                      );
+                      if (!upcoming) return 'TBD';
+                      const oppName = upcoming.radiant_team?.name.toLowerCase() === player.team_name?.toLowerCase()
+                        ? (upcoming.dire_team?.name ?? 'Opponent')
+                        : (upcoming.radiant_team?.name ?? 'Opponent');
+                      return `vs ${oppName}`;
+                    })}
+                  />
                   <ComparisonRow label="Price" values={query.data.map((player) => `${player.current_price?.toFixed(1) ?? '—'}M`)} />
                   <ComparisonRow label="Season points" values={query.data.map((player) => `${player.total_season_points.toFixed(1)}`)} />
                   <ComparisonRow label="Latest gameweek" values={query.data.map((player) => `${player.last_gw_points.toFixed(1)}`)} />

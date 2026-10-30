@@ -9,6 +9,7 @@ import { getTournaments } from '@/src/features/competition/api';
 import { useMobileTheme } from '@/src/lib/theme';
 
 type TournamentFilter = 'all' | 'eligible' | 'archived';
+type TierFilter = 'all' | 'Tier 1' | 'Tier 2';
 
 function formatDate(value: string | null): string {
   if (!value) return 'TBC';
@@ -22,18 +23,30 @@ export default function TournamentsScreen() {
   const router = useRouter();
   const { colors } = useMobileTheme();
   const [filter, setFilter] = useState<TournamentFilter>('all');
+  const [tierFilter, setTierFilter] = useState<TierFilter>('all');
   const [search, setSearch] = useState('');
   const query = useQuery({
     queryKey: ['tournaments'],
     queryFn: getTournaments,
     staleTime: 60_000,
   });
+
+  const featuredTournament = useMemo(() => {
+    return (query.data ?? []).find(
+      (t) => (t.eligible || t.status === 'eligible' || t.status === 'active') && (t.tier === 'Tier 1' || !t.tier)
+    ) ?? query.data?.[0] ?? null;
+  }, [query.data]);
+
   const tournaments = useMemo(() => (query.data ?? []).filter((tournament) => {
     if (filter === 'eligible' && tournament.status !== 'eligible' && tournament.status !== 'active') return false;
     if (filter === 'archived' && tournament.status !== 'archived') return false;
+    if (tierFilter !== 'all') {
+      const tTier = (tournament.tier ?? '').toLowerCase();
+      if (!tTier.includes(tierFilter.toLowerCase())) return false;
+    }
     const term = search.trim().toLowerCase();
     return !term || tournament.name.toLowerCase().includes(term) || (tournament.tier ?? '').toLowerCase().includes(term);
-  }), [filter, query.data, search]);
+  }), [filter, query.data, search, tierFilter]);
 
   return (
     <Screen>
@@ -60,6 +73,39 @@ export default function TournamentsScreen() {
             <DataFreshnessBadge page="tournaments" />
           </View>
         </View>
+        {/* Featured Tournament Hero */}
+        {featuredTournament ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Featured event: ${featuredTournament.name}`}
+            className="overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 p-5 shadow-lg"
+            onPress={() => router.push(`/tournament/${featuredTournament.id}`)}
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="rounded-full border border-amber-500/40 bg-amber-500/20 px-2.5 py-0.5">
+                <Text className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                  Featured Event
+                </Text>
+              </View>
+              {featuredTournament.eligible ? (
+                <View className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5">
+                  <Text className="text-[10px] font-semibold text-emerald-300">✓ Fantasy Eligible</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text className="mt-2 text-xl font-extrabold text-white">{featuredTournament.name}</Text>
+            <Text className="mt-1 text-xs text-slate-400">
+              {featuredTournament.tier ?? 'Pro Tier'} · {formatDate(featuredTournament.start_date)} – {formatDate(featuredTournament.end_date)}
+            </Text>
+            <View className="mt-3 flex-row items-center justify-between border-t border-slate-800/80 pt-3">
+              <Text className="text-xs text-slate-400">
+                {featuredTournament.series_count} series · {featuredTournament.participating_teams.length} teams
+              </Text>
+              <Text className="text-xs font-bold text-amber-400">View tournament →</Text>
+            </View>
+          </Pressable>
+        ) : null}
+
         <TextInput
           accessibilityLabel="Search tournaments"
           autoCapitalize="none"
@@ -70,24 +116,46 @@ export default function TournamentsScreen() {
           placeholderTextColor={colors.placeholder}
           value={search}
         />
-        <View className="flex-row gap-2">
-          {([
-            ['all', 'All'],
-            ['eligible', 'Eligible'],
-            ['archived', 'Archived'],
-          ] as const).map(([value, label]) => (
-            <Pressable
-              key={value}
-              accessibilityRole="button"
-              accessibilityState={{ selected: filter === value }}
-              className={`min-h-10 flex-1 items-center justify-center rounded-full border px-2 ${
-                filter === value ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-900'
-              }`}
-              onPress={() => setFilter(value)}
-            >
-              <Text className={`text-sm font-semibold ${filter === value ? 'text-brand-300' : 'text-slate-300'}`}>{label}</Text>
-            </Pressable>
-          ))}
+        {/* Status and Tier Filter Pills */}
+        <View className="gap-2">
+          <View className="flex-row gap-2">
+            {([
+              ['all', 'All Statuses'],
+              ['eligible', 'Eligible'],
+              ['archived', 'Archived'],
+            ] as const).map(([value, label]) => (
+              <Pressable
+                key={value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: filter === value }}
+                className={`min-h-10 flex-1 items-center justify-center rounded-full border px-2 ${
+                  filter === value ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-900'
+                }`}
+                onPress={() => setFilter(value)}
+              >
+                <Text className={`text-xs font-semibold ${filter === value ? 'text-brand-300' : 'text-slate-300'}`}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View className="flex-row gap-2">
+            {([
+              ['all', 'All Tiers'],
+              ['Tier 1', 'Tier 1'],
+              ['Tier 2', 'Tier 2'],
+            ] as const).map(([value, label]) => (
+              <Pressable
+                key={value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: tierFilter === value }}
+                className={`min-h-9 flex-1 items-center justify-center rounded-full border px-2 ${
+                  tierFilter === value ? 'border-amber-500/60 bg-amber-500/15' : 'border-slate-800 bg-slate-950'
+                }`}
+                onPress={() => setTierFilter(value)}
+              >
+                <Text className={`text-xs font-medium ${tierFilter === value ? 'text-amber-300' : 'text-slate-400'}`}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
         {query.isPending ? (
           <View accessibilityLabel="Loading tournaments" className="gap-3">

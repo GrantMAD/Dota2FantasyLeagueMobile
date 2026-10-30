@@ -1,15 +1,17 @@
+import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, RefreshControl, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { Screen } from '@/src/components/Screen';
-import { aggregateLatestGameweekScoreBreakdown, getPlayerDetail } from '@/src/features/players/api';
+import { aggregateLatestGameweekScoreBreakdown, getPlayerDetail, PlayerPerformance } from '@/src/features/players/api';
 import { getManagerProfile } from '@/src/features/account/api';
 import { isPremiumUser } from '@/src/lib/premium';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
 import { useMobileTheme } from '@/src/lib/theme';
+import { useFantasyContext } from '@/src/features/fantasy/hooks';
 
 function displayName(player: { in_game_name: string | null; name: string }): string {
   return player.in_game_name || player.name;
@@ -19,6 +21,8 @@ export default function PlayerDetailScreen() {
   const router = useRouter();
   const { theme } = useMobileTheme();
   const isDark = theme === 'dark';
+  const fantasyContext = useFantasyContext();
+  const [selectedPerformance, setSelectedPerformance] = useState<PlayerPerformance | null>(null);
   const params = useLocalSearchParams<{ id: string }>();
   const playerId = Number(params.id);
   const validId = Number.isInteger(playerId) && playerId > 0;
@@ -41,6 +45,8 @@ export default function PlayerDetailScreen() {
   const hasScoreBreakdownData = query.data?.performances.some(
     (performance) => performance.score_breakdown !== undefined,
   ) ?? false;
+  const ownedPlayerIds = new Set((fantasyContext.data?.ownedPlayers ?? []).map((player) => player.id));
+  const isOwned = query.data ? ownedPlayerIds.has(query.data.id) : false;
 
   return (
     <Screen>
@@ -154,25 +160,55 @@ export default function PlayerDetailScreen() {
                   </View>
                 );
               })()}
-              <View className={`self-start rounded-full px-3 py-1 ${
-                query.data.availability_status === 'available' ? 'bg-emerald-500/15' : 'bg-amber-500/15'
-              }`}>
-                <Text className={`text-xs font-semibold ${
-                  query.data.availability_status === 'available' ? 'text-emerald-300' : 'text-amber-200'
-                }`}>
-                  {query.data.availability_status ?? 'Availability unknown'}
-                </Text>
+              <View className="flex-row items-center gap-2">
+                <View className={`self-start rounded-full px-3 py-1 ${query.data.availability_status === 'available' ? 'bg-emerald-500/15' : 'bg-amber-500/15'
+                  }`}>
+                  <Text className={`text-xs font-semibold ${query.data.availability_status === 'available' ? 'text-emerald-300' : 'text-amber-200'
+                    }`}>
+                    {query.data.availability_status ?? 'Availability unknown'}
+                  </Text>
+                </View>
+                {isOwned ? (
+                  <View className="self-start rounded-full border border-emerald-500/40 bg-emerald-500/15 px-3 py-1">
+                    <Text className="text-xs font-semibold text-emerald-300">✓ In Your Squad</Text>
+                  </View>
+                ) : null}
               </View>
               {query.data.availability_reason ? (
                 <Text className="text-sm leading-5 text-amber-200/80">{query.data.availability_reason}</Text>
               ) : null}
-              <Pressable
-                accessibilityRole="button"
-                className="min-h-11 items-center justify-center rounded-xl border border-cyan-700/60 bg-cyan-950/40"
-                onPress={() => router.push(`/compare-players?ids=${query.data.id}`)}
-              >
-                <Text className="font-semibold text-cyan-200">Compare this player</Text>
-              </Pressable>
+              <View className="flex-row gap-2">
+                {isOwned ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    className="min-h-11 flex-1 items-center justify-center rounded-xl border border-emerald-500/50 bg-emerald-500/15"
+                    onPress={() => router.push('/(tabs)/team')}
+                  >
+                    <Text className="font-semibold text-emerald-300">View In Squad</Text>
+                  </Pressable>
+                ) : query.data.availability_status === 'available' ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    className="min-h-11 flex-1 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/20"
+                    onPress={() => router.push({
+                      pathname: '/(tabs)/team',
+                      params: {
+                        quickAddPlayerId: String(query.data?.id),
+                        quickAddPlayerName: displayName(query.data!),
+                      },
+                    })}
+                  >
+                    <Text className="font-bold text-emerald-300">Transfer In</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  className="min-h-11 flex-1 items-center justify-center rounded-xl border border-cyan-700/60 bg-cyan-950/40"
+                  onPress={() => router.push(`/compare-players?ids=${query.data?.id}`)}
+                >
+                  <Text className="font-semibold text-cyan-200">Compare Player</Text>
+                </Pressable>
+              </View>
             </View>
 
             <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-5">
@@ -392,18 +428,44 @@ export default function PlayerDetailScreen() {
             <View className="gap-3">
               <View>
                 <Text className="text-xl font-bold text-white">Recent performances</Text>
-                <Text className="mt-1 text-sm text-slate-400">Latest match records from the shared scoring data.</Text>
+                <Text className="mt-1 text-sm text-slate-400">
+                  Tap any match to view the complete fantasy scoring breakdown & performance metrics.
+                </Text>
               </View>
               {query.data.performances.length ? query.data.performances.map((performance) => (
-                <View key={performance.id} className="flex-row items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
-                  <View>
-                    <Text className="font-semibold text-white">Gameweek {performance.gameweek_id}</Text>
+                <Pressable
+                  key={performance.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View Gameweek ${performance.gameweek_id} match details`}
+                  className="flex-row items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 active:bg-slate-800/80"
+                  onPress={() => setSelectedPerformance(performance)}
+                >
+                  <View className="flex-1">
+                    <View className="flex-row items-center gap-2">
+                      <Text className="font-semibold text-white">Gameweek {performance.gameweek_id}</Text>
+                      {performance.opponent_name ? (
+                        <Text className="text-xs text-cyan-400 font-medium">vs {performance.opponent_name}</Text>
+                      ) : null}
+                      {performance.is_win !== null && performance.is_win !== undefined ? (
+                        <View className={`rounded px-1.5 py-0.5 border ${performance.is_win ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-red-500/20 border-red-500/30'
+                          }`}>
+                          <Text className={`text-[10px] font-bold ${performance.is_win ? 'text-emerald-400' : 'text-red-400'
+                            }`}>
+                            {performance.is_win ? 'W' : 'L'}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <Text className="mt-1 text-xs text-slate-400">
                       {performance.kills ?? '—'} K · {performance.deaths ?? '—'} D · {performance.assists ?? '—'} A
+                      {performance.duration_minutes ? ` · ${performance.duration_minutes}m` : ''}
                     </Text>
                   </View>
-                  <Text className="text-lg font-bold text-emerald-300">{performance.total_points.toFixed(1)} pts</Text>
-                </View>
+                  <View className="items-end gap-1">
+                    <Text className="text-lg font-bold text-emerald-300">{performance.total_points.toFixed(1)} pts</Text>
+                    <Text className="text-[11px] font-semibold text-brand-300">Details →</Text>
+                  </View>
+                </Pressable>
               )) : (
                 <View className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                   <Text className="text-sm text-slate-400">No recorded performances yet.</Text>
@@ -414,6 +476,133 @@ export default function PlayerDetailScreen() {
         ) : null}
         {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing player details" color="#14b8a6" /> : null}
       </ScrollView>
+
+      {/* Match Details Modal */}
+      {selectedPerformance && query.data ? (
+        <Modal
+          visible={Boolean(selectedPerformance)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedPerformance(null)}
+        >
+          <View style={{ flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.85)', padding: 16 }}>
+            <View style={{ maxHeight: '90%', backgroundColor: isDark ? '#1e293b' : '#ffffff', borderColor: isDark ? '#334155' : '#cbd5e1', borderWidth: 1, borderRadius: 24, overflow: 'hidden', elevation: 20, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 20 }}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 16 }}>
+
+                {/* Header */}
+                <View style={{ borderBottomWidth: 1, borderBottomColor: isDark ? '#334155' : '#e2e8f0', paddingBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: '#f59e0b', textTransform: 'uppercase' }}>
+                        GW {selectedPerformance.gameweek_id}
+                      </Text>
+                    </View>
+                    {selectedPerformance.is_win !== null && selectedPerformance.is_win !== undefined ? (
+                      <View style={{ backgroundColor: selectedPerformance.is_win ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)', borderWidth: 1, borderColor: selectedPerformance.is_win ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: selectedPerformance.is_win ? '#10b981' : '#ef4444', textTransform: 'uppercase' }}>
+                          {selectedPerformance.is_win ? 'Victory' : 'Defeat'}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={{ marginTop: 10, fontSize: 19, fontWeight: '700', color: isDark ? '#f1f5f9' : '#0f172a' }}>
+                    {displayName(query.data)}{selectedPerformance.opponent_name ? ` vs ${selectedPerformance.opponent_name}` : ''}
+                  </Text>
+                  {selectedPerformance.duration_minutes ? (
+                    <Text style={{ marginTop: 4, fontSize: 12, color: isDark ? '#94a3b8' : '#64748b' }}>
+                      Match Duration: {selectedPerformance.duration_minutes} mins
+                    </Text>
+                  ) : null}
+                </View>
+
+                {/* Fantasy Points Summary */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: isDark ? '#0f172a' : '#f8fafc', borderWidth: 1, borderColor: isDark ? '#334155' : '#e2e8f0', borderRadius: 12, padding: 14 }}>
+                  <View>
+                    <Text style={{ fontSize: 10, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', color: isDark ? '#64748b' : '#94a3b8' }}>
+                      Points Earned
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 4 }}>
+                      <Text style={{ fontSize: 26, fontWeight: '900', color: '#f59e0b' }}>
+                        {selectedPerformance.total_points.toFixed(1)}
+                      </Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#fbbf24' }}>pts</Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', color: isDark ? '#64748b' : '#94a3b8' }}>
+                      Combat K / D / A
+                    </Text>
+                    <Text style={{ marginTop: 4, fontSize: 18, fontWeight: '700', color: isDark ? '#f1f5f9' : '#0f172a' }}>
+                      {selectedPerformance.kills ?? 0} / {selectedPerformance.deaths ?? 0} / {selectedPerformance.assists ?? 0}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* In-Game Performance Stats Grid */}
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: isDark ? '#94a3b8' : '#64748b' }}>
+                    In-Game Performance
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    <ModalMetric isDark={isDark} label="GPM / XPM" value={`${selectedPerformance.gold_per_minute ?? '—'} / ${selectedPerformance.experience_per_minute ?? '—'}`} />
+                    <ModalMetric isDark={isDark} label="LH / Denies" value={`${selectedPerformance.last_hits ?? '—'} / ${selectedPerformance.denies ?? '—'}`} />
+                    <ModalMetric isDark={isDark} label="Hero Dmg" value={selectedPerformance.hero_damage != null ? Number(selectedPerformance.hero_damage).toLocaleString() : '—'} />
+                    <ModalMetric isDark={isDark} label="Tower / Rosh" value={`${selectedPerformance.tower_participation ?? '—'} / ${selectedPerformance.roshan_participation ?? '—'}`} />
+                    <ModalMetric isDark={isDark} label="Building Dmg" value={selectedPerformance.building_damage != null ? Number(selectedPerformance.building_damage).toLocaleString() : '—'} />
+                    <ModalMetric isDark={isDark} label="Healing" value={selectedPerformance.healing != null ? Number(selectedPerformance.healing).toLocaleString() : '—'} />
+                    <ModalMetric isDark={isDark} label="Wards Placed/Cut" value={`${selectedPerformance.wards_placed ?? '—'} / ${selectedPerformance.wards_destroyed ?? '—'}`} />
+                  </View>
+                </View>
+
+                {/* Fantasy Scoring Breakdown */}
+                {selectedPerformance.score_breakdown ? (
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: isDark ? '#94a3b8' : '#64748b' }}>
+                      Fantasy Scoring Breakdown
+                    </Text>
+                    <View style={{ borderRadius: 12, borderWidth: 1, borderColor: isDark ? '#334155' : '#e2e8f0', overflow: 'hidden' }}>
+                      {([
+                        ['Combat Points (K/D/A)', selectedPerformance.score_breakdown.combat],
+                        ['Economy (Normalized GPM/XPM)', selectedPerformance.score_breakdown.economy],
+                        ['Objective (Towers & Roshan)', selectedPerformance.score_breakdown.objective],
+                        ['Teamfight & Support', selectedPerformance.score_breakdown.teamfight],
+                        ['Match Victory Bonus', selectedPerformance.score_breakdown.win],
+                        ['Series Bonus', selectedPerformance.score_breakdown.series],
+                        ['Performance Index', selectedPerformance.score_breakdown.performance],
+                        ['Consistency Bonus', selectedPerformance.score_breakdown.consistency],
+                        ['Penalty Points', selectedPerformance.score_breakdown.penalty],
+                      ] as const).map(([label, value]) => (
+                        <View key={label} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(51,65,85,0.6)' : '#f1f5f9', backgroundColor: isDark ? '#0f172a' : '#f8fafc', paddingHorizontal: 12, paddingVertical: 9 }}>
+                          <Text style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#475569' }}>{label}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: value >= 0 ? (isDark ? '#a3e635' : '#4d7c0f') : (isDark ? '#f87171' : '#b91c1c') }}>
+                            {value >= 0 ? '+' : ''}{value.toFixed(2)}
+                          </Text>
+                        </View>
+                      ))}
+                      {/* Total row */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: isDark ? '#1e293b' : '#e2e8f0', paddingHorizontal: 12, paddingVertical: 11 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#f1f5f9' : '#0f172a' }}>Total Calculated Points</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#f59e0b' }}>
+                          ={selectedPerformance.score_breakdown.total.toFixed(2)} pts
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Close Button */}
+                <Pressable
+                  accessibilityRole="button"
+                  style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: isDark ? '#334155' : '#e2e8f0' }}
+                  onPress={() => setSelectedPerformance(null)}
+                >
+                  <Text style={{ fontWeight: '600', fontSize: 15, color: isDark ? '#f1f5f9' : '#0f172a' }}>Close</Text>
+                </Pressable>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </Screen>
   );
 }
@@ -423,6 +612,15 @@ function Metric({ label, value }: { label: string; value: string }) {
     <View className="min-w-20 flex-1 rounded-lg bg-slate-950 px-3 py-2">
       <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{label}</Text>
       <Text className="mt-1 text-sm font-semibold text-slate-200">{value}</Text>
+    </View>
+  );
+}
+
+function ModalMetric({ isDark, label, value }: { isDark: boolean; label: string; value: string }) {
+  return (
+    <View style={{ minWidth: 80, flex: 1, borderRadius: 10, backgroundColor: isDark ? '#0f172a' : '#f1f5f9', paddingHorizontal: 12, paddingVertical: 8 }}>
+      <Text style={{ fontSize: 10, fontWeight: '500', letterSpacing: 0.6, textTransform: 'uppercase', color: isDark ? '#64748b' : '#94a3b8' }}>{label}</Text>
+      <Text style={{ marginTop: 4, fontSize: 13, fontWeight: '600', color: isDark ? '#e2e8f0' : '#1e293b' }}>{value}</Text>
     </View>
   );
 }

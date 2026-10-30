@@ -38,6 +38,20 @@ export interface PlayerPerformance {
   total_points: number;
   price: number | null;
   score_breakdown?: PlayerScoreBreakdown | null;
+  opponent_name?: string | null;
+  is_win?: boolean | null;
+  duration_minutes?: number | null;
+  gold_per_minute?: number | null;
+  experience_per_minute?: number | null;
+  last_hits?: number | null;
+  denies?: number | null;
+  hero_damage?: number | null;
+  building_damage?: number | null;
+  healing?: number | null;
+  wards_placed?: number | null;
+  wards_destroyed?: number | null;
+  tower_participation?: number | null;
+  roshan_participation?: number | null;
 }
 
 export interface PlayerScoreBreakdown {
@@ -278,6 +292,36 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
     if (performance.price !== undefined && performance.price !== null && optionalStat(performance.price) === null) {
       throw new ApiError('Player performance price data was returned in an unexpected format.', 502);
     }
+    const stringOrNull = (value: unknown): string | null =>
+      typeof value === 'string' && value.trim() ? value.trim() : null;
+    const booleanOrNull = (value: unknown): boolean | null =>
+      typeof value === 'boolean' ? value : null;
+
+    // Optional match details if returned by RPC/joins
+    const matchData = isRecord(performance.matches) ? performance.matches : null;
+    let opponentName: string | null = stringOrNull(performance.opponent_name);
+    let isWin: boolean | null = booleanOrNull(performance.is_win);
+    let durationMinutes: number | null = optionalStat(performance.duration_minutes);
+
+    if (matchData) {
+      if (!opponentName) {
+        const teamA = isRecord(matchData.team_a) && typeof matchData.team_a.name === 'string' ? matchData.team_a.name : null;
+        const teamB = isRecord(matchData.team_b) && typeof matchData.team_b.name === 'string' ? matchData.team_b.name : null;
+        const teamAId = isRecord(matchData.team_a) && typeof matchData.team_a.id === 'number' ? matchData.team_a.id : null;
+        const playerTeamId = isRecord(raw.professional_teams) && typeof raw.professional_teams.id === 'number' ? raw.professional_teams.id : null;
+        opponentName = (playerTeamId && teamAId === playerTeamId) ? (teamB || 'Opponent') : (teamA || 'Opponent');
+      }
+      if (isWin === null && typeof matchData.winner_team_id === 'number') {
+        const playerTeamId = isRecord(raw.professional_teams) && typeof raw.professional_teams.id === 'number' ? raw.professional_teams.id : null;
+        if (playerTeamId) {
+          isWin = matchData.winner_team_id === playerTeamId;
+        }
+      }
+      if (durationMinutes === null) {
+        durationMinutes = optionalStat(matchData.duration_minutes);
+      }
+    }
+
     return {
       id: Number(performance.id),
       gameweek_id: Number(performance.gameweek_id),
@@ -287,6 +331,20 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
       total_points: totalPoints,
       price: optionalStat(performance.price),
       score_breakdown: parseScoreBreakdown(performance.score_breakdown),
+      opponent_name: opponentName,
+      is_win: isWin,
+      duration_minutes: durationMinutes,
+      gold_per_minute: optionalStat(performance.gold_per_minute),
+      experience_per_minute: optionalStat(performance.experience_per_minute),
+      last_hits: optionalStat(performance.last_hits),
+      denies: optionalStat(performance.denies),
+      hero_damage: optionalStat(performance.hero_damage),
+      building_damage: optionalStat(performance.building_damage),
+      healing: optionalStat(performance.healing),
+      wards_placed: optionalStat(performance.wards_placed),
+      wards_destroyed: optionalStat(performance.wards_destroyed),
+      tower_participation: optionalStat(performance.tower_participation),
+      roshan_participation: optionalStat(performance.roshan_participation),
     };
   });
 
