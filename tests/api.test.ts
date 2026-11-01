@@ -1447,6 +1447,7 @@ describe('mobile data access', () => {
           metadata: { league_id: 21 },
         }],
         unreadCount: 4,
+        nextCursor: null,
       },
       error: null,
     });
@@ -1457,24 +1458,29 @@ describe('mobile data access', () => {
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_notifications', {
       p_category: 'league',
-      p_limit: 100,
+      p_limit: 30,
+      p_cursor_created_at: null,
+      p_cursor_id: null,
     });
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it('supports a bounded notification preview', async () => {
     mobileFantasyContextRpc.mockResolvedValueOnce({
-      data: { notifications: [], unreadCount: 0 },
+      data: { notifications: [], unreadCount: 0, nextCursor: null },
       error: null,
     });
 
     await expect(getNotifications('all', 5)).resolves.toEqual({
       notifications: [],
       unreadCount: 0,
+      nextCursor: null,
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_notifications', {
       p_category: 'all',
       p_limit: 5,
+      p_cursor_created_at: null,
+      p_cursor_id: null,
     });
   });
 
@@ -1495,7 +1501,32 @@ describe('mobile data access', () => {
     expect(matchesNotificationCategory(invitation, 'scoring')).toBe(false);
   });
 
-  it('routes issue report status notifications to the matching report and Support category', () => {
+  it('fetches notification pages with a stable server-side cursor', async () => {
+    mobileFantasyContextRpc.mockResolvedValueOnce({
+      data: {
+        notifications: [],
+        unreadCount: 2,
+        nextCursor: { createdAt: '2026-10-07T10:00:00', id: 91 },
+      },
+      error: null,
+    });
+
+    await expect(getNotifications('scoring', 30, {
+      createdAt: '2026-10-08T10:00:00',
+      id: 95,
+    })).resolves.toMatchObject({
+      unreadCount: 2,
+      nextCursor: { createdAt: '2026-10-07T10:00:00', id: 91 },
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_notifications', {
+      p_category: 'scoring',
+      p_limit: 30,
+      p_cursor_created_at: '2026-10-08T10:00:00',
+      p_cursor_id: 95,
+    });
+  });
+
+  it('routes issue report status notifications to the matching report without adding a non-web category', () => {
     const issueUpdate = {
       id: 95,
       type: 'issue_report_status',
@@ -1506,8 +1537,7 @@ describe('mobile data access', () => {
       metadata: { issue_report_id: 42 },
     };
 
-    expect(notificationCategoryForType(issueUpdate.type)).toBe('support');
-    expect(matchesNotificationCategory(issueUpdate, 'support')).toBe(true);
+    expect(notificationCategoryForType(issueUpdate.type)).toBeNull();
     expect(notificationActionFor(issueUpdate)).toEqual({
       label: 'View issue report',
       href: { pathname: '/report-issue', params: { reportId: '42' } },
@@ -1552,6 +1582,26 @@ describe('mobile data access', () => {
       label: 'View league',
       href: { pathname: '/league/[id]', params: { id: '23' } },
     });
+    expect(notificationActionFor({
+      ...base,
+      type: 'rank_update',
+      metadata: { gameweek_id: 8 },
+    })).toEqual({ label: 'View leaderboard', href: '/leaderboard' });
+    expect(notificationActionFor({
+      ...base,
+      type: 'player_removed',
+    })).toEqual({
+      label: 'Replace player',
+      href: { pathname: '/team', params: { tab: 'transfers' } },
+    });
+    expect(notificationActionFor({
+      ...base,
+      type: 'system',
+      metadata: { player_id: 17 },
+    })).toEqual({
+      label: 'View player',
+      href: { pathname: '/player/[id]', params: { id: '17' } },
+    });
   });
 
   it('falls back to category destinations for missing or invalid notification metadata IDs', () => {
@@ -1567,7 +1617,10 @@ describe('mobile data access', () => {
       ...base,
       type: 'price_change',
       metadata: { player_id: '../admin' },
-    })).toEqual({ label: 'Open squad planner', href: '/squad-planner' });
+    })).toEqual({
+      label: 'Open transfer market',
+      href: { pathname: '/team', params: { tab: 'transfers' } },
+    });
     expect(notificationActionFor({
       ...base,
       type: 'league_result',

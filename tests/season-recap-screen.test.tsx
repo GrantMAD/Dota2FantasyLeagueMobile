@@ -136,4 +136,5 @@ describe('season recap screen card sharing', () => {
     );
     await waitFor(() => expect(screen.getByText('Your recap card is ready to share or save.')).toBeTruthy());
   });
+
 });

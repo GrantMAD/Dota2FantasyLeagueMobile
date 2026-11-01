@@ -1,19 +1,176 @@
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { useState, type ComponentProps } from 'react';
+import { ActivityIndicator, Platform, Pressable, RefreshControl, Text, View, type LayoutChangeEvent } from 'react-native';
+import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
+import { SymbolView } from 'expo-symbols';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { getAnalytics } from '@/src/features/analytics/api';
+import type { AnalyticsPlayer, AnalyticsRole, AnalyticsTrend } from '@/src/features/analytics/api';
 import { getAnalyticsTrendForRange, getCaptainEfficiencyAssessment, type AnalyticsTrendRange } from '@/src/features/analytics/presentation';
 
-function Metric({ label, value }: { label: string; value: string }) {
+const roleColors = ['#06b6d4', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'];
+
+type AnalyticsIconName = ComponentProps<typeof SymbolView>['name'];
+
+function AnalyticsIcon({ name, size = 17 }: { name: AnalyticsIconName; size?: number }) {
   return (
-    <View className="min-h-24 flex-1 justify-between rounded-xl border border-slate-800 bg-slate-900 p-4">
-      <Text className="text-xs uppercase tracking-wider text-slate-400">{label}</Text>
-      <Text className="text-xl font-bold text-white">{value}</Text>
+    <SymbolView
+      {...(Platform.OS === 'web'
+        ? { 'aria-hidden': true }
+        : { accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' })}
+      name={name}
+      size={size}
+      tintColor="#2dd4bf"
+    />
+  );
+}
+
+function SectionHeading({ title, icon }: { title: string; icon: AnalyticsIconName }) {
+  return (
+    <View className="flex-row items-center gap-2">
+      <AnalyticsIcon name={icon} size={19} />
+      <Text className="text-lg font-bold text-white">{title}</Text>
     </View>
   );
+}
+
+function Metric({ label, value, icon, compact = false }: {
+  label: string;
+  value: string;
+  icon: AnalyticsIconName;
+  compact?: boolean;
+}) {
+  return (
+    <View className={`min-h-24 min-w-0 flex-1 justify-between rounded-xl border border-slate-800 bg-slate-900 ${compact ? 'p-3' : 'p-4'}`}>
+      <View className="flex-row items-center gap-1.5">
+        <AnalyticsIcon name={icon} size={compact ? 13 : 16} />
+        <Text
+          className={`${compact ? 'text-[10px] tracking-wide' : 'text-xs tracking-wider'} flex-1 uppercase text-slate-400`}
+          numberOfLines={compact ? 2 : undefined}
+        >
+          {label}
+        </Text>
+      </View>
+      <Text
+        className={`${compact ? 'text-base' : 'text-xl'} font-bold text-white`}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function TrendChart({ trends }: { trends: AnalyticsTrend[] }) {
+  const [width, setWidth] = useState(0);
+  const height = 220;
+  const left = 38;
+  const right = 38;
+  const top = 18;
+  const bottom = 28;
+  const plotWidth = Math.max(0, width - left - right);
+  const plotHeight = height - top - bottom;
+  const maxScore = Math.max(1, ...trends.flatMap((item) => [item.userScore, item.globalAverage]));
+  const ranks = trends.flatMap((item) => item.rank == null ? [] : [item.rank]);
+  const minRank = ranks.length ? Math.min(...ranks) : 1;
+  const maxRank = ranks.length ? Math.max(...ranks) : 5;
+  const x = (index: number) => left + (trends.length <= 1 ? plotWidth / 2 : index * plotWidth / (trends.length - 1));
+  const scoreY = (value: number) => top + (1 - value / maxScore) * plotHeight;
+  const rankY = (value: number) => top + ((value - minRank) / Math.max(1, maxRank - minRank)) * plotHeight;
+  const linePath = (getY: (row: AnalyticsTrend) => number | null) => {
+    let path = '';
+    trends.forEach((row, index) => {
+      const y = getY(row);
+      if (y === null) return;
+      path += `${path ? ' L' : 'M'} ${x(index)} ${y}`;
+    });
+    return path;
+  };
+  const labelIndexes = [...new Set([0, Math.floor((trends.length - 1) / 2), trends.length - 1])];
+
+  return (
+    <View
+      accessibilityLabel="Gameweek trajectory chart: your score and global average in points, with global rank"
+      className="h-[220px] w-full"
+      onLayout={(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width)}
+    >
+      {width > 0 ? (
+        <Svg
+          {...(Platform.OS === 'web'
+            ? { 'aria-hidden': true }
+            : { accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' })}
+          height={height}
+          width={width}
+        >
+          {[0, 0.5, 1].map((fraction) => {
+            const y = top + fraction * plotHeight;
+            return <Line key={fraction} x1={left} x2={width - right} y1={y} y2={y} stroke="#475569" strokeDasharray="4 4" />;
+          })}
+          <SvgText x={left - 5} y={top + 4} fill="#94a3b8" fontSize="9" textAnchor="end">{maxScore.toFixed(0)}</SvgText>
+          <SvgText x={left - 5} y={top + plotHeight} fill="#94a3b8" fontSize="9" textAnchor="end">0</SvgText>
+          {ranks.length ? (
+            <>
+              <SvgText x={width - right + 5} y={top + 4} fill="#fbbf24" fontSize="9">#{minRank}</SvgText>
+              <SvgText x={width - right + 5} y={top + plotHeight} fill="#fbbf24" fontSize="9">#{maxRank}</SvgText>
+            </>
+          ) : null}
+          <Path d={linePath((row) => scoreY(row.userScore))} fill="none" stroke="#22d3ee" strokeWidth="3" />
+          <Path d={linePath((row) => scoreY(row.globalAverage))} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 4" />
+          <Path d={linePath((row) => row.rank == null ? null : rankY(row.rank))} fill="none" stroke="#f59e0b" strokeWidth="2.5" />
+          {trends.map((row, index) => (
+            <Circle key={`${row.gameweekId}-score`} cx={x(index)} cy={scoreY(row.userScore)} r={3.5} fill="#22d3ee" />
+          ))}
+          {labelIndexes.map((index) => (
+            <SvgText key={index} x={x(index)} y={height - 6} fill="#94a3b8" fontSize="9" textAnchor="middle">
+              GW {trends[index].gameweekId}
+            </SvgText>
+          ))}
+        </Svg>
+      ) : null}
+    </View>
+  );
+}
+
+function RoleScoringChart({ roles }: { roles: AnalyticsRole[] }) {
+  const maxPoints = Math.max(1, ...roles.map((item) => item.points));
+  return (
+    <View className="gap-4">
+      {roles.map((item, index) => (
+        <View key={item.role} className="gap-2">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-sm font-medium text-slate-300">{item.role}</Text>
+            <Text className="text-sm font-semibold tabular-nums text-white">{item.points.toFixed(1)} pts</Text>
+          </View>
+          <View
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel={`${item.role} points`}
+            accessibilityValue={{ min: 0, max: maxPoints, now: item.points }}
+            className="h-3 overflow-hidden rounded-full bg-slate-800"
+          >
+            <View
+              className="h-full rounded-full"
+              style={{ width: `${Math.min(100, Math.max(0, item.points / maxPoints * 100))}%`, backgroundColor: roleColors[index % roleColors.length] }}
+            />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function getDreamTeamLineup(players: AnalyticsPlayer[]) {
+  const remaining = [...players];
+  const roles = ['Carry', 'Mid', 'Offlane', 'Support', 'Hard Support'];
+  const starters = roles.flatMap((role) => {
+    const index = remaining.findIndex((player) => player.role === role);
+    return index < 0 ? [] : remaining.splice(index, 1);
+  });
+  return { starters, bench: remaining.sort((a, b) => b.points - a.points) };
 }
 
 export default function AnalyticsScreen() {
@@ -66,13 +223,36 @@ export default function AnalyticsScreen() {
         ) : (
           <>
             <View className="flex-row gap-3">
-              <Metric label="Season points" value={query.data.user.totalPoints.toFixed(1)} />
-              <Metric label="Global rank" value={query.data.user.globalRank ? `#${query.data.user.globalRank}` : '—'} />
+              <Metric
+                label="Total points"
+                value={query.data.user.totalPoints.toLocaleString()}
+                icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
+              />
+              <Metric
+                label="Global rank"
+                value={query.data.user.globalRank ? `#${query.data.user.globalRank}` : '—'}
+                icon={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }}
+              />
             </View>
             <View className="flex-row gap-3">
-              <Metric label="Squad value" value={query.data.user.squadValue.toFixed(1)} />
-              <Metric label="Budget" value={query.data.user.budget.toFixed(1)} />
-              <Metric label="Free transfers" value={String(query.data.user.freeTransfers)} />
+              <Metric
+                compact
+                label="Squad value"
+                value={`$${(query.data.user.squadValue / 10).toFixed(1)}M`}
+                icon={{ ios: 'person.3.fill', android: 'groups', web: 'groups' }}
+              />
+              <Metric
+                compact
+                label="Budget"
+                value={`$${query.data.user.budget.toFixed(1)}M`}
+                icon={{ ios: 'dollarsign.circle.fill', android: 'account_balance_wallet', web: 'account_balance_wallet' }}
+              />
+              <Metric
+                compact
+                label="Free transfers"
+                value={String(query.data.user.freeTransfers)}
+                icon={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
+              />
             </View>
 
             <View
@@ -81,22 +261,28 @@ export default function AnalyticsScreen() {
               className="flex-row flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-2"
             >
               {([
-                ['my', 'My Performance'],
-                ['market', 'Market'],
-                ['dream', 'Dream Team'],
-              ] as const).map(([key, label]) => (
+                ['my', 'My Performance', query.data.trend.length],
+                ['market', 'Market', Math.min(query.data.market.length, 6)],
+                ['dream', 'Dream Team', query.data.dreamTeam.length],
+              ] as const).map(([key, label, count]) => (
                 <Pressable
                   key={key}
                   nativeID={`analytics-tab-${key}`}
                   accessibilityRole="tab"
                   accessibilityLabel={label}
                   accessibilityState={{ selected: tab === key }}
-                  className={`min-h-10 flex-1 items-center justify-center rounded-xl px-3 ${
+                  style={{ flexGrow: key === 'my' ? 1.5 : 1 }}
+                  className={`min-h-10 flex-1 items-center justify-center rounded-xl px-4 ${
                     tab === key ? 'bg-brand-500' : ''
                   }`}
                   onPress={() => setTab(key)}
                 >
-                  <Text className={`text-xs font-semibold ${tab === key ? 'text-on-accent' : 'text-slate-300'}`}>{label}</Text>
+                  <View className="flex-row items-center gap-2">
+                    <Text className={`text-xs font-semibold ${tab === key ? 'text-on-accent' : 'text-slate-300'}`}>{label}</Text>
+                    <Text className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                      tab === key ? 'bg-slate-950/15 text-on-accent' : 'bg-slate-800 text-slate-400'
+                    }`}>{count}</Text>
+                  </View>
                 </Pressable>
               ))}
             </View>
@@ -110,7 +296,25 @@ export default function AnalyticsScreen() {
               >
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <View className="gap-3">
-                <Text className="text-lg font-bold text-white">Gameweek trend</Text>
+                <SectionHeading
+                  title="Gameweek trajectory"
+                  icon={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
+                />
+                <Text className="text-xs leading-5 text-slate-400">
+                  Your performance vs global average and global rank across gameweeks.
+                </Text>
+                <View className="flex-row flex-wrap gap-x-4 gap-y-2">
+                  {[
+                    ['#22d3ee', 'Your score'],
+                    ['#94a3b8', 'Global average'],
+                    ['#f59e0b', 'Global rank'],
+                  ].map(([color, label]) => (
+                    <View key={label} className="flex-row items-center gap-1.5">
+                      <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                      <Text className="text-xs text-slate-300">{label}</Text>
+                    </View>
+                  ))}
+                </View>
                 <View accessibilityRole="tablist" accessibilityLabel="Gameweek trend range" className="flex-row gap-2">
                   {([
                     ['3', 'Last 3'],
@@ -134,6 +338,7 @@ export default function AnalyticsScreen() {
               </View>
               {visibleTrend.length ? (
                 <>
+                  <TrendChart trends={visibleTrend} />
                   <View
                     accessible
                     accessibilityRole="header"
@@ -180,7 +385,10 @@ export default function AnalyticsScreen() {
             </View>
 
             <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <Text className="text-lg font-bold text-white">Captain efficiency</Text>
+              <SectionHeading
+                title="Captain efficiency"
+                icon={{ ios: 'scope', android: 'gps_fixed', web: 'gps_fixed' }}
+              />
               {(() => {
                 const assessment = getCaptainEfficiencyAssessment(query.data.captainEfficiency.efficiency);
                 const normalizedEfficiency = Math.min(100, Math.max(0, query.data.captainEfficiency.efficiency));
@@ -221,13 +429,14 @@ export default function AnalyticsScreen() {
             </View>
 
             <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <Text className="text-lg font-bold text-white">Points by lineup role</Text>
-              {query.data.roleBreakdown.length ? query.data.roleBreakdown.map((item) => (
-                <View key={item.role} className="flex-row justify-between border-b border-slate-800 pb-2">
-                  <Text className="text-sm text-slate-300">{item.role}</Text>
-                  <Text className="font-semibold text-white">{item.points.toFixed(1)}</Text>
-                </View>
-              )) : <Text className="text-sm text-slate-400">Role scoring will appear as lineups are completed.</Text>}
+              <SectionHeading
+                title="Role scoring breakdown"
+                icon={{ ios: 'chart.pie.fill', android: 'pie_chart', web: 'pie_chart' }}
+              />
+              <Text className="text-xs text-slate-400">Distribution of total fantasy points earned by position.</Text>
+              {query.data.roleBreakdown.length
+                ? <RoleScoringChart roles={query.data.roleBreakdown} />
+                : <Text className="text-sm text-slate-400">No role breakdown data available yet.</Text>}
             </View>
 
               </View>
@@ -241,48 +450,91 @@ export default function AnalyticsScreen() {
                 className="gap-5"
               >
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <Text className="text-lg font-bold text-white">Dream team</Text>
-              {query.data.dreamTeam.length ? query.data.dreamTeam.map((player, index) => (
-                <View
-                  key={`${player.playerName}-${index}`}
-                  className={`gap-3 rounded-xl border p-4 ${
-                    index < 5 ? 'border-brand-500/30 bg-brand-500/5' : 'border-slate-800 bg-slate-950/50'
-                  }`}
-                >
-                  <View className="flex-row items-start justify-between gap-3">
-                    <View className="flex-1">
-                      <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                        {index < 5 ? `Starter ${index + 1}` : `Bench ${index - 4}`}
-                      </Text>
-                      <Text className="mt-1 font-bold text-white">{player.playerName}</Text>
-                      <Text className="mt-1 text-xs text-slate-400">{player.team}</Text>
-                    </View>
-                    <Text className="font-bold text-amber-300">{player.points.toFixed(1)} pts</Text>
-                  </View>
-                  <Text className="self-start rounded-full border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300">{player.role}</Text>
-                </View>
-              )) : <Text className="text-sm text-slate-400">No scored professional players are available yet.</Text>}
-            </View>
+                <SectionHeading
+                  title="Gameweek dream team"
+                  icon={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }}
+                />
+                <Text className="text-xs leading-5 text-slate-400">Best role-balanced scorers from the latest available gameweek.</Text>
+                {query.data.dreamTeam.length ? (() => {
+                  const { starters, bench } = getDreamTeamLineup(query.data.dreamTeam);
+                  return (
+                    <>
+                      <View className="overflow-hidden rounded-2xl border border-emerald-700/50 bg-emerald-950 p-3">
+                        <View className="absolute inset-2 rounded-xl border border-white/15" />
+                        <View className="absolute bottom-1/2 left-3 right-3 h-px bg-white/10" />
+                        <View className="flex-row flex-wrap justify-center gap-2">
+                          {starters.map((player) => {
+                            const market = query.data.market.find((item) =>
+                              item.playerName === player.playerName &&
+                              item.team === player.team &&
+                              item.role === player.role
+                            );
+                            return (
+                              <View key={`${player.playerName}-${player.role}`} className="min-h-28 w-[30%] justify-center rounded-xl border border-white/20 bg-slate-950/80 p-2">
+                                <Text className="text-center text-[9px] font-bold uppercase text-emerald-200">{player.role}</Text>
+                                <Text numberOfLines={1} className="mt-1 text-center text-xs font-bold text-white">{player.playerName}</Text>
+                                <Text numberOfLines={1} className="mt-0.5 text-center text-[9px] text-slate-300">{player.team}</Text>
+                                <Text className="mt-1 text-center text-sm font-black text-amber-300">{player.points.toFixed(1)} pts</Text>
+                                <Text className="mt-0.5 text-center text-[9px] text-slate-300">
+                                  {market ? `$${market.price.toFixed(1)}M · ${market.roi.toFixed(1)} pts / $10M` : 'Price unavailable'}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </View>
+                      {bench.length ? (
+                        <View className="gap-2">
+                          <Text className="text-xs font-bold uppercase tracking-wider text-slate-400">Bench</Text>
+                          {bench.map((player, index) => {
+                            const market = query.data.market.find((item) =>
+                              item.playerName === player.playerName &&
+                              item.team === player.team &&
+                              item.role === player.role
+                            );
+                            return (
+                              <View key={`${player.playerName}-${index}`} className="flex-row items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                                <View className="flex-1">
+                                  <Text className="text-[10px] font-bold uppercase text-slate-400">Bench {index + 1} · {player.role}</Text>
+                                  <Text numberOfLines={1} className="mt-1 font-semibold text-white">{player.playerName}</Text>
+                                  <Text className="mt-1 text-[10px] text-slate-400">
+                                    {market ? `$${market.price.toFixed(1)}M · ${market.roi.toFixed(1)} pts / $10M` : 'Price unavailable'}
+                                  </Text>
+                                </View>
+                                <Text className="font-bold text-amber-300">{player.points.toFixed(1)} pts</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </>
+                  );
+                })() : <Text className="text-sm text-slate-400">Dream Team results will appear after gameweek scoring is available.</Text>}
+              </View>
 
-            <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <Text className="text-lg font-bold text-white">Best value</Text>
-              {query.data.valueForMoney.length ? query.data.valueForMoney.map((player, index) => (
-                <View key={`${player.playerName}-${index}`} className="gap-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
-                  <View className="flex-row items-start justify-between gap-3">
-                    <View className="flex-1">
-                      <Text className="font-bold text-white">{player.playerName}</Text>
-                      <Text className="mt-1 text-xs text-slate-400">{player.team}</Text>
+              <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                <SectionHeading
+                  title="Top individual performances"
+                  icon={{ ios: 'star.fill', android: 'grade', web: 'grade' }}
+                />
+                <Text className="text-xs text-slate-400">Standout scoring and value signals.</Text>
+                {query.data.valueForMoney.length ? query.data.valueForMoney.slice(0, 5).map((player, index) => (
+                  <View key={`${player.playerName}-${index}`} className="gap-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+                    <View className="flex-row items-start justify-between gap-3">
+                      <View className="flex-1">
+                        <Text className="font-bold text-white">{player.playerName}</Text>
+                        <Text className="mt-1 text-xs text-slate-400">{player.team}</Text>
+                      </View>
+                      <Text className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-sm font-bold text-amber-300">{player.roi.toFixed(1)} ROI</Text>
                     </View>
-                    <Text className="font-bold text-emerald-300">{player.roi.toFixed(2)} ROI</Text>
+                    <View className="flex-row flex-wrap gap-2">
+                      <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.role}</Text>
+                      <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">${player.price.toFixed(1)}M</Text>
+                      <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.ownership.toFixed(1)}% owned</Text>
+                    </View>
                   </View>
-                  <View className="flex-row flex-wrap gap-2">
-                    <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.role}</Text>
-                    <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.price.toFixed(1)}M</Text>
-                    <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.ownership.toFixed(1)}% owned</Text>
-                  </View>
-                </View>
-              )) : <Text className="text-sm text-slate-400">Value rankings will appear when match data is available.</Text>}
-            </View>
+                )) : <Text className="text-sm text-slate-400">No standout performances are available yet.</Text>}
+              </View>
               </View>
             ) : null}
 
@@ -294,36 +546,36 @@ export default function AnalyticsScreen() {
                 className="gap-5"
               >
                 <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <Text className="text-lg font-bold text-white">Market & metagame intelligence</Text>
-                  <Text className="text-sm leading-5 text-slate-400">Ownership, value, and return-on-investment signals from the current player market.</Text>
-                  {query.data.market.length ? query.data.market.map((player, index) => (
+                  <SectionHeading
+                    title="Value for money"
+                    icon={{ ios: 'dollarsign.circle.fill', android: 'paid', web: 'paid' }}
+                  />
+                  <Text className="text-xs text-slate-400">High-return players by points per $10M.</Text>
+                  {query.data.market.length ? query.data.market.slice(0, 6).map((player, index) => (
                     <View key={`${player.playerName}-${index}`} className="gap-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
                       <View className="flex-row items-start justify-between gap-3">
                         <View className="flex-1">
                           <Text className="font-bold text-white">{player.playerName}</Text>
                           <Text className="mt-1 text-xs text-slate-400">{player.team}</Text>
                         </View>
-                        <Text className="font-bold text-brand-300">{player.roi.toFixed(2)} ROI</Text>
+                        <Text className="shrink-0 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs font-semibold text-cyan-300">{player.role}</Text>
                       </View>
-                      <View className="flex-row flex-wrap gap-2">
-                        <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.role}</Text>
-                        <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.price.toFixed(1)}M</Text>
-                        <Text className="rounded-full border border-slate-700 px-2.5 py-1 text-xs text-slate-300">{player.ownership.toFixed(1)}% owned</Text>
+                      <View className="flex-row justify-between border-t border-slate-800 pt-3">
+                        <View>
+                          <Text className="text-[10px] uppercase tracking-wider text-slate-500">Price</Text>
+                          <Text className="mt-1 text-sm font-semibold text-white">${player.price.toFixed(1)}M</Text>
+                        </View>
+                        <View>
+                          <Text className="text-[10px] uppercase tracking-wider text-slate-500">Owned</Text>
+                          <Text className="mt-1 text-sm font-semibold text-white">{player.ownership.toFixed(1)}%</Text>
+                        </View>
+                        <View>
+                          <Text className="text-[10px] uppercase tracking-wider text-slate-500">ROI</Text>
+                          <Text className="mt-1 text-sm font-bold text-emerald-300">{player.roi.toFixed(2)}</Text>
+                        </View>
                       </View>
                     </View>
                   )) : <Text className="text-sm text-slate-400">Market insights will appear when player data is available.</Text>}
-                </View>
-                <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                  <Text className="text-lg font-bold text-white">Best value</Text>
-                  {query.data.valueForMoney.length ? query.data.valueForMoney.map((player, index) => (
-                    <View key={`${player.playerName}-${index}`} className="flex-row items-center justify-between gap-3">
-                      <View className="flex-1">
-                        <Text className="font-semibold text-white">{player.playerName}</Text>
-                        <Text className="text-xs text-slate-500">{player.team} · {player.role} · {player.price.toFixed(1)}M</Text>
-                      </View>
-                      <Text className="font-bold text-emerald-300">{player.roi.toFixed(2)} ROI</Text>
-                    </View>
-                  )) : <Text className="text-sm text-slate-400">Value rankings will appear when match data is available.</Text>}
                 </View>
               </View>
             ) : null}

@@ -51,6 +51,7 @@ export default function SeasonRecapScreen() {
     queryFn: getSeasonRecaps,
     staleTime: 60_000,
   });
+  const recaps: SeasonRecap[] = query.data ?? [];
 
   async function shareRecap(recap: SeasonRecap) {
     if (!sharingConsent || sharingId !== null) return;
@@ -131,7 +132,7 @@ export default function SeasonRecapScreen() {
               <Text className="font-semibold text-white">Try again</Text>
             </Pressable>
           </View>
-        ) : query.data.length === 0 ? (
+        ) : recaps.length === 0 ? (
           <View className="gap-3 rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-6">
             <Text className="text-center text-lg font-semibold text-white">Your season recap will appear here</Text>
             <Text className="text-center text-sm leading-5 text-slate-400">
@@ -153,7 +154,7 @@ export default function SeasonRecapScreen() {
                   {sharingConsent ? <Text className="text-xs font-bold text-cyan-200">✓</Text> : null}
                 </View>
                 <View className="flex-1">
-                  <Text className="font-semibold text-white">I choose to share a privacy-safe recap</Text>
+                  <Text className="font-semibold text-white">I choose to enable recap sharing and downloads</Text>
                   <Text className="mt-1 text-xs leading-5 text-slate-400">
                     Sharing or saving creates a copy you can give to others. Nothing is published automatically, and
                     both actions stay disabled until you opt in.
@@ -183,19 +184,39 @@ export default function SeasonRecapScreen() {
               ) : null}
             </View>
             <View className="gap-2">
-              <Text className="font-semibold text-white">Recap card theme</Text>
-              <View accessibilityLabel="Recap card theme" className="flex-row flex-wrap gap-2">
+              <Text className="font-semibold text-white">Choose your card style</Text>
+              <View accessibilityLabel="Recap card theme" className="gap-3">
                 {SEASON_RECAP_CARD_THEMES.map((theme) => (
                   <Pressable
                     key={theme.id}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: cardTheme === theme.id }}
-                    className={`rounded-lg border px-3 py-2 ${
-                      cardTheme === theme.id ? 'border-cyan-400 bg-cyan-950' : 'border-slate-700 bg-slate-950'
+                    className={`overflow-hidden rounded-xl border p-3 ${
+                      cardTheme === theme.id ? 'border-cyan-400' : 'border-slate-700'
                     }`}
                     onPress={() => setCardTheme(theme.id)}
                   >
-                    <Text className="text-sm font-semibold text-white">{theme.name}</Text>
+                    <View
+                      accessibilityElementsHidden
+                      importantForAccessibility="no-hide-descendants"
+                      className="mb-3 h-20 justify-between rounded-lg border p-3"
+                      style={{ backgroundColor: theme.endColor, borderColor: `${theme.borderColor}88` }}
+                    >
+                      <Text className="text-[9px] font-bold uppercase tracking-[2px]" style={{ color: theme.accentColor }}>
+                        Dota Fantasy · Season recap
+                      </Text>
+                      <View>
+                        <Text className="text-sm font-bold text-white">Your season</Text>
+                        <View className="mt-2 flex-row gap-2">
+                          <View className="h-1 w-10 rounded-full" style={{ backgroundColor: theme.accentColor }} />
+                          <View className="h-1 w-16 rounded-full" style={{ backgroundColor: theme.labelColor }} />
+                        </View>
+                      </View>
+                    </View>
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-sm font-semibold text-white">{theme.name}</Text>
+                      {cardTheme === theme.id ? <Text className="font-bold text-cyan-300">✓</Text> : null}
+                    </View>
                     <Text className="mt-0.5 text-xs text-slate-400">{theme.description}</Text>
                   </Pressable>
                 ))}
@@ -203,7 +224,7 @@ export default function SeasonRecapScreen() {
             </View>
             {shareError ? <Text accessibilityRole="alert" className="text-sm text-red-300">{shareError}</Text> : null}
             {shareMessage ? <Text accessibilityRole="alert" className="text-sm text-cyan-300">{shareMessage}</Text> : null}
-            {query.data.map((recap) => (
+            {recaps.map((recap) => (
               <View key={recap.fantasySeasonId} className="gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
                 <View>
                   <Text className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Season recap</Text>

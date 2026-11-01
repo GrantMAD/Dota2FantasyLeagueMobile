@@ -1,7 +1,7 @@
 import { ApiError } from '@/src/lib/errors';
 import { getSupabaseClient } from '@/src/lib/supabase';
 
-export type NotificationCategory = 'all' | 'unread' | 'deadline' | 'market' | 'scoring' | 'league' | 'support';
+export type NotificationCategory = 'all' | 'unread' | 'deadline' | 'market' | 'scoring' | 'league';
 
 export interface ManagerNotification {
   id: number;
@@ -16,16 +16,24 @@ export interface ManagerNotification {
 export interface NotificationPage {
   notifications: ManagerNotification[];
   unreadCount: number;
+  nextCursor: NotificationCursor | null;
+}
+
+export interface NotificationCursor {
+  createdAt: string;
+  id: number;
 }
 
 export type NotificationAction = {
   label: string;
   href:
     | '/team'
+    | '/leaderboard'
     | '/squad-planner'
     | '/gameweeks'
     | '/leagues'
     | '/report-issue'
+    | { pathname: '/team'; params: { tab: 'lineup' | 'transfers' } }
     | { pathname: '/report-issue'; params: { reportId: string } }
     | { pathname: '/league/[id]'; params: { id: string } }
     | { pathname: '/player/[id]'; params: { id: string } }
@@ -62,7 +70,11 @@ function parseNotification(value: unknown): ManagerNotification {
   };
 }
 
-export async function getNotifications(category: NotificationCategory, limit = 100): Promise<NotificationPage> {
+export async function getNotifications(
+  category: NotificationCategory,
+  limit = 30,
+  cursor: NotificationCursor | null = null
+): Promise<NotificationPage> {
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
     throw new ApiError('Notification limit must be between 1 and 100.', 400);
   }
@@ -70,18 +82,30 @@ export async function getNotifications(category: NotificationCategory, limit = 1
   const { data: result, error } = await getSupabaseClient().rpc('mobile_get_notifications', {
     p_category: category,
     p_limit: limit,
+    p_cursor_created_at: cursor?.createdAt ?? null,
+    p_cursor_id: cursor?.id ?? null,
   });
   if (error) throw new ApiError(`Unable to load notifications: ${error.message}`, 500);
   if (
     !isRecord(result) ||
     !Array.isArray(result.notifications) ||
-    !Number.isInteger(result.unreadCount)
+    !Number.isInteger(result.unreadCount) ||
+    !(result.nextCursor === null || (
+      isRecord(result.nextCursor) &&
+      typeof result.nextCursor.createdAt === 'string' &&
+      Number.isSafeInteger(result.nextCursor.id) &&
+      Number(result.nextCursor.id) > 0
+    ))
   ) {
     throw new ApiError('Notification data was returned in an unexpected format.', 502);
   }
   return {
     notifications: result.notifications.map(parseNotification),
     unreadCount: Number(result.unreadCount),
+    nextCursor: result.nextCursor === null ? null : {
+      createdAt: String(result.nextCursor.createdAt),
+      id: Number(result.nextCursor.id),
+    },
   };
 }
 
@@ -115,18 +139,18 @@ export function notificationCategoryForType(type: string): Exclude<NotificationC
     case 'price_change':
     case 'transfer_market':
     case 'wildcard_used':
+    case 'player_removed':
       return 'market';
     case 'score_posted':
     case 'gameweek_result':
     case 'rank_movement':
+    case 'rank_update':
       return 'scoring';
     case 'league_activity':
     case 'league_result':
     case 'h2h_result':
     case 'league_invite':
       return 'league';
-    case 'issue_report_status':
-      return 'support';
     default:
       return null;
   }
@@ -153,6 +177,14 @@ export function notificationActionFor(notification: ManagerNotification): Notifi
   if (matchId) {
     return { label: 'View match', href: { pathname: '/match/[id]', params: { id: matchId } } };
   }
+  const playerId = metadataId(notification.metadata, 'player_id');
+  if (['player_unavailable', 'system'].includes(notification.type) && playerId) {
+    return { label: 'View player', href: { pathname: '/player/[id]', params: { id: playerId } } };
+  }
+  if (notification.type === 'player_removed') {
+    return { label: 'Replace player', href: { pathname: '/team', params: { tab: 'transfers' } } };
+  }
+  if (notification.type === 'rank_update') return { label: 'View leaderboard', href: '/leaderboard' };
   const tournamentId = metadataId(notification.metadata, 'tournament_id');
   if (tournamentId) {
     return {
@@ -161,13 +193,15 @@ export function notificationActionFor(notification: ManagerNotification): Notifi
     };
   }
   const category = notificationCategoryForType(notification.type);
-  if (category === 'support') return { label: 'View issue reports', href: '/report-issue' };
-  if (category === 'deadline') return { label: 'Review my squad', href: '/team' };
+  if (notification.type === 'issue_report_status') return { label: 'View issue reports', href: '/report-issue' };
+  if (category === 'deadline') {
+    return { label: 'Review my squad', href: { pathname: '/team', params: { tab: 'lineup' } } };
+  }
   if (category === 'market') {
     const playerId = metadataId(notification.metadata, 'player_id');
     return playerId
       ? { label: 'View player', href: { pathname: '/player/[id]', params: { id: playerId } } }
-      : { label: 'Open squad planner', href: '/squad-planner' };
+      : { label: 'Open transfer market', href: { pathname: '/team', params: { tab: 'transfers' } } };
   }
   if (category === 'scoring') {
     const gameweekId = metadataId(notification.metadata, 'gameweek_id');
