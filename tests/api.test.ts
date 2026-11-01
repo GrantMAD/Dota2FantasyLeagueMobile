@@ -17,7 +17,7 @@ import {
   getTournaments,
 } from '../src/features/competition/api';
 import { createLeague, getLeagueActivity, getLeagues, joinLeague } from '../src/features/leagues/api';
-import { getLeaderboard } from '../src/features/leaderboard/api';
+import { getLeaderboard, getLeaderboardCountries } from '../src/features/leaderboard/api';
 import { getAnalytics } from '../src/features/analytics/api';
 import { getDashboardWhatsNew, getTransferRush } from '../src/features/dashboard/api';
 import { getSeasonRecaps } from '../src/features/season-recap/api';
@@ -1299,15 +1299,22 @@ describe('mobile data access', () => {
           id: 19,
           name: 'Team Radiant',
           user_id: 'manager-19',
-          profiles: { username: 'radiant', display_name: 'Radiant Manager' },
+          profiles: {
+            username: 'radiant',
+            display_name: 'Radiant Manager',
+            avatar_url: null,
+            bio: null,
+            country_code: 'GB',
+          },
         },
       }],
       lastRecalculatedAt: '2026-10-07T10:00:00.000Z',
       pagination: { page: 2, limit: 50, total: 72 },
       topGameweekScorer: { fantasySeasonId: 19, manager: 'Radiant Manager', points: 14 },
+      currentUserEntry: null,
     }, error: null });
 
-    await expect(getLeaderboard({ page: 2, gameweekId: 7 })).resolves.toMatchObject({
+    await expect(getLeaderboard({ page: 2, gameweekId: 7, countryCode: 'GB' })).resolves.toMatchObject({
       page: 2,
       limit: 50,
       total: 72,
@@ -1316,13 +1323,66 @@ describe('mobile data access', () => {
         previousRank: 4,
         isPinned: true,
         totalPoints: 112,
-        fantasyTeam: { name: 'Team Radiant', userId: 'manager-19', managerName: 'Radiant Manager' },
+        fantasyTeam: {
+          name: 'Team Radiant',
+          userId: 'manager-19',
+          managerName: 'Radiant Manager',
+          countryCode: 'GB',
+        },
       }],
       topGameweekScorer: { fantasySeasonId: 19, manager: 'Radiant Manager', points: 14 },
     });
-    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_leaderboard_v2', {
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_leaderboard_v3', {
       p_page: 2,
       p_gameweek_id: 7,
+      p_country_code: 'GB',
+    });
+  });
+
+  it('loads and validates available leaderboard countries from the authenticated RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: { countries: [{ code: 'GB' }, { code: 'US' }] },
+      error: null,
+    });
+
+    await expect(getLeaderboardCountries()).resolves.toEqual(['GB', 'US']);
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_leaderboard_countries');
+  });
+
+  it('accepts legacy leaderboard profile objects without optional mobile profile fields', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({
+      data: {
+        leaderboard: [{
+          id: 8,
+          rank: 1,
+          previous_rank: null,
+          total_points: 100,
+          gameweek_points: 20,
+          is_pinned: false,
+          fantasy_teams: {
+            id: 12,
+            name: 'Team One',
+            user_id: 'manager-12',
+            profiles: { username: 'managerone', display_name: 'Manager One', country: 'GB' },
+          },
+        }],
+        lastRecalculatedAt: null,
+        pagination: { page: 1, limit: 50, total: 1 },
+        topGameweekScorer: null,
+        currentUserEntry: null,
+      },
+      error: null,
+    });
+
+    await expect(getLeaderboard({ page: 1, gameweekId: null })).resolves.toMatchObject({
+      entries: [{
+        fantasyTeam: {
+          managerName: 'Manager One',
+          avatarUrl: null,
+          bio: null,
+          countryCode: 'GB',
+        },
+      }],
     });
   });
 

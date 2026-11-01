@@ -4,6 +4,10 @@ import { getSupabaseClient } from '@/src/lib/supabase';
 export interface LeagueStanding {
   userId: string;
   manager: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  bio: string | null;
   points: number;
   gameweekPoints: number;
   rank: number | null;
@@ -92,6 +96,10 @@ function parseLeague(value: unknown): LeagueSummary {
       !isRecord(standing) ||
       typeof standing.userId !== 'string' ||
       typeof standing.manager !== 'string' ||
+      !(standing.username === undefined || standing.username === null || typeof standing.username === 'string') ||
+      !(standing.displayName === undefined || standing.displayName === null || typeof standing.displayName === 'string') ||
+      !(standing.avatarUrl === undefined || standing.avatarUrl === null || typeof standing.avatarUrl === 'string') ||
+      !(standing.bio === undefined || standing.bio === null || typeof standing.bio === 'string') ||
       !isFiniteNumber(standing.points) ||
       !isFiniteNumber(standing.gwPoints) ||
       !(standing.rank === null || Number.isInteger(standing.rank)) ||
@@ -104,6 +112,10 @@ function parseLeague(value: unknown): LeagueSummary {
     return {
       userId: standing.userId,
       manager: standing.manager,
+      username: typeof standing.username === 'string' ? standing.username : null,
+      displayName: typeof standing.displayName === 'string' ? standing.displayName : null,
+      avatarUrl: typeof standing.avatarUrl === 'string' ? standing.avatarUrl : null,
+      bio: typeof standing.bio === 'string' ? standing.bio : null,
       points: standing.points,
       gameweekPoints: standing.gwPoints,
       rank: standing.rank === null ? null : Number(standing.rank),

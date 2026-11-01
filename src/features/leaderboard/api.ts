@@ -14,6 +14,9 @@ export interface LeaderboardEntry {
     userId: string | null;
     managerName: string;
     username: string | null;
+    avatarUrl: string | null;
+    bio: string | null;
+    countryCode: string | null;
   };
 }
 
@@ -28,6 +31,7 @@ export interface LeaderboardPage {
     manager: string;
     points: number;
   } | null;
+  currentUserEntry: LeaderboardEntry | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -40,6 +44,10 @@ function isNullableNumber(value: unknown): value is number | null {
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
+}
+
+function isOptionalNullableString(value: unknown): boolean {
+  return value === undefined || isNullableString(value);
 }
 
 function isTopGameweekScorer(
@@ -72,9 +80,17 @@ function parseEntry(value: unknown): LeaderboardEntry {
   }
 
   const profile = value.fantasy_teams.profiles;
-  if (profile !== null && (!isRecord(profile) ||
-    !isNullableString(profile.username) ||
-    !isNullableString(profile.display_name))) {
+  if (
+    profile !== undefined &&
+    profile !== null &&
+    (!isRecord(profile) ||
+      !isOptionalNullableString(profile.username) ||
+      !isOptionalNullableString(profile.display_name) ||
+      !isOptionalNullableString(profile.avatar_url) ||
+      !isOptionalNullableString(profile.bio) ||
+      !isOptionalNullableString(profile.country) ||
+      !isOptionalNullableString(profile.country_code))
+  ) {
     throw new ApiError('Leaderboard manager data was returned in an unexpected format.', 502);
   }
   const displayName = isRecord(profile) && typeof profile.display_name === 'string'
@@ -82,6 +98,19 @@ function parseEntry(value: unknown): LeaderboardEntry {
     : null;
   const username = isRecord(profile) && typeof profile.username === 'string'
     ? profile.username
+    : null;
+  const avatarUrl = isRecord(profile) && typeof profile.avatar_url === 'string'
+    ? profile.avatar_url
+    : null;
+  const bio = isRecord(profile) && typeof profile.bio === 'string'
+    ? profile.bio
+    : null;
+  const countryCode = isRecord(profile)
+    ? typeof profile.country_code === 'string'
+      ? profile.country_code
+      : typeof profile.country === 'string'
+        ? profile.country
+        : null
     : null;
 
   return {
@@ -97,6 +126,9 @@ function parseEntry(value: unknown): LeaderboardEntry {
       userId: value.fantasy_teams.user_id,
       managerName: displayName || username || value.fantasy_teams.name,
       username,
+      avatarUrl,
+      bio,
+      countryCode,
     },
   };
 }
@@ -104,10 +136,12 @@ function parseEntry(value: unknown): LeaderboardEntry {
 export async function getLeaderboard(params: {
   page: number;
   gameweekId: number | null;
+  countryCode?: string | null;
 }): Promise<LeaderboardPage> {
-  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_leaderboard_v2', {
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_leaderboard_v3', {
     p_page: params.page,
     p_gameweek_id: params.gameweekId,
+    p_country_code: params.countryCode ?? null,
   });
   if (error) throw new ApiError(`Unable to load leaderboard: ${error.message}`, 500);
 
@@ -119,6 +153,7 @@ export async function getLeaderboard(params: {
     !Number.isInteger(result.pagination.limit) ||
     !Number.isInteger(result.pagination.total) ||
     !isNullableString(result.lastRecalculatedAt) ||
+    !(result.currentUserEntry === undefined || result.currentUserEntry === null || isRecord(result.currentUserEntry)) ||
     !(result.topGameweekScorer === null || isTopGameweekScorer(result.topGameweekScorer))
   ) {
     throw new ApiError('Leaderboard data was returned in an unexpected format.', 502);
@@ -137,5 +172,22 @@ export async function getLeaderboard(params: {
           manager: result.topGameweekScorer.manager,
           points: result.topGameweekScorer.points,
         },
+    currentUserEntry: result.currentUserEntry && isRecord(result.currentUserEntry)
+      ? parseEntry(result.currentUserEntry)
+      : null,
   };
+}
+
+export async function getLeaderboardCountries(): Promise<string[]> {
+  const { data: result, error } = await getSupabaseClient().rpc('mobile_get_leaderboard_countries');
+  if (error) throw new ApiError(`Unable to load leaderboard countries: ${error.message}`, 500);
+  if (!isRecord(result) || !Array.isArray(result.countries)) {
+    throw new ApiError('Leaderboard country data was returned in an unexpected format.', 502);
+  }
+  return result.countries.map((country) => {
+    if (!isRecord(country) || typeof country.code !== 'string' || !/^[A-Z]{2}$/.test(country.code)) {
+      throw new ApiError('Leaderboard country data was returned in an unexpected format.', 502);
+    }
+    return country.code;
+  });
 }
