@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import type { FantasyContext } from './api';
 import { activateWildcard } from './api';
+import { useMobileFeedback } from '@/src/components/MobileFeedbackProvider';
 
 interface WildcardPanelProps {
   context: FantasyContext;
@@ -10,6 +11,7 @@ interface WildcardPanelProps {
 
 export function WildcardPanel({ context, userId }: WildcardPanelProps) {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useMobileFeedback();
   const mutation = useMutation({
     mutationFn: activateWildcard,
     onSuccess: async (result) => {
@@ -19,7 +21,7 @@ export function WildcardPanel({ context, userId }: WildcardPanelProps) {
       const gameweekMessage = activatedGameweekNumber === null
         ? ''
         : ` Used in Gameweek ${activatedGameweekNumber}.`;
-      Alert.alert(
+      notify(
         'Wildcard activated',
         `${result.message}${gameweekMessage} Your Wildcard can be used once per season and is available again next season.`
       );
@@ -43,18 +45,14 @@ export function WildcardPanel({ context, userId }: WildcardPanelProps) {
   function confirmActivation() {
     if (!canActivate || !context.fantasySeasonId) return;
     const fantasySeasonId = context.fantasySeasonId;
-    Alert.alert(
-      'Activate Wildcard?',
-      'This uses your once-per-season Wildcard for the current eligible gameweek and enables multiple transfers without transfer-hit penalties. It cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Activate Wildcard',
-          style: 'destructive',
-          onPress: () => mutation.mutate({ fantasySeasonId }),
-        },
-      ]
-    );
+    void confirm({
+      title: 'Activate Wildcard?',
+      message: 'This uses your once-per-season Wildcard for the current eligible gameweek and enables multiple transfers without transfer-hit penalties. It cannot be undone.',
+      confirmLabel: 'Activate Wildcard',
+      destructive: true,
+    }).then((confirmed) => {
+      if (confirmed) mutation.mutate({ fantasySeasonId });
+    });
   }
 
   return (

@@ -54,6 +54,20 @@ describe('SquadRosterView', () => {
     expect(view.getByText('Carry · Pos 1')).toBeTruthy();
     expect(view.getByText('Bench / Reserves')).toBeTruthy();
     expect(view.getByText('Player 6')).toBeTruthy();
+    expect(view.getAllByRole('link').slice(0, 2).map((link) => link.props.accessibilityLabel)).toEqual([
+      'View Player 1, carry',
+      'View Player 2, mid',
+    ]);
+  });
+
+  it('keeps captain and vice-captain first in grid view', () => {
+    const view = render(<SquadRosterView players={players} lineup={lineup} />);
+    fireEvent.press(view.getByRole('tab', { name: 'Grid view' }));
+
+    expect(view.getAllByRole('link').slice(0, 2).map((link) => link.props.accessibilityLabel)).toEqual([
+      'View Player 1, carry',
+      'View Player 2, mid',
+    ]);
   });
 
   it('filters the compact roster by role and starter or bench status', () => {

@@ -1,11 +1,12 @@
 import { useDeferredValue, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import type { FantasyContext, FantasyPlayer, MarketPlayer } from './api';
 import { addPlayersToSquad, getPlayerMarket } from './api';
 import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { useMobileTheme } from '@/src/lib/theme';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
+import { useMobileFeedback } from '@/src/components/MobileFeedbackProvider';
 
 const SQUAD_MAX_SIZE = 8;
 
@@ -41,6 +42,7 @@ export function SquadBuilder({
   quickAddPlayerName,
 }: SquadBuilderProps) {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useMobileFeedback();
   const { colors } = useMobileTheme();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -103,7 +105,7 @@ export function SquadBuilder({
         queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] }),
         queryClient.invalidateQueries({ queryKey: ['transfer-history-analytics', userId] }),
       ]);
-      Alert.alert(
+      notify(
         'Squad updated',
         `Added players to your squad. ${result.squadSize}/${result.squadMaxSize} players selected.`
       );
@@ -123,18 +125,15 @@ export function SquadBuilder({
 
   function confirmAddPlayers() {
     if (!canAddPlayers || !context.fantasySeasonId) return;
+    const fantasySeasonId = context.fantasySeasonId;
     const playerIds = [...selectedPlayers.keys()];
-    Alert.alert(
-      'Confirm squad selection',
-      `Add ${playerIds.length} player${playerIds.length === 1 ? '' : 's'} for ${selectionCost.toFixed(1)}M? The server will confirm your available budget.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Add players',
-          onPress: () => addMutation.mutate({ fantasySeasonId: context.fantasySeasonId!, playerIds }),
-        },
-      ]
-    );
+    void confirm({
+      title: 'Confirm squad selection',
+      message: `Add ${playerIds.length} player${playerIds.length === 1 ? '' : 's'} for ${selectionCost.toFixed(1)}M? The server will confirm your available budget.`,
+      confirmLabel: 'Add players',
+    }).then((confirmed) => {
+      if (confirmed) addMutation.mutate({ fantasySeasonId, playerIds });
+    });
   }
 
   return (

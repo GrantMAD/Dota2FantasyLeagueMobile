@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import type { FantasyContext, FantasyPlayer, MarketPlayer, TransferSuggestion } from './api';
 import { getPlayerMarket, getTransferHistory, getTransferSuggestions, processTransfer } from './api';
@@ -9,6 +9,7 @@ import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { useMobileTheme } from '@/src/lib/theme';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
 import { DifferentialScoutPanel } from '@/src/components/DifferentialScoutPanel';
+import { useMobileFeedback } from '@/src/components/MobileFeedbackProvider';
 
 interface TransferMarketProps {
   context: FantasyContext;
@@ -39,6 +40,7 @@ export function TransferMarket({
   quickAddPlayerName,
 }: TransferMarketProps) {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useMobileFeedback();
   const { colors, theme } = useMobileTheme();
   const isDark = theme === 'dark';
   const [search, setSearch] = useState('');
@@ -122,7 +124,7 @@ export function TransferMarket({
   const transferMutation = useMutation({
     mutationFn: processTransfer,
     onSuccess: async (result) => {
-      Alert.alert(
+      notify(
         'Transfer completed',
         `Your squad has been updated. Penalty: ${result.penaltyPoints} points.`
       );
@@ -199,21 +201,16 @@ export function TransferMarket({
 
   function requestTransferConfirmation() {
     if (!canTransfer || !selectedOut || !selectedIn || !context.fantasySeasonId) return;
-    Alert.alert(
-      'Confirm transfer',
-      `Transfer out ${playerName(selectedOut)} and bring in ${playerName(selectedIn)}? The server will validate budget, deadline, and transfer penalties.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm transfer',
-          onPress: () => transferMutation.mutate({
-            fantasySeasonId: context.fantasySeasonId!,
-            transfersIn: [selectedIn.id],
-            transfersOut: [selectedOut.id],
-          }),
-        },
-      ]
-    );
+    const fantasySeasonId = context.fantasySeasonId;
+    const transfersIn = [selectedIn.id];
+    const transfersOut = [selectedOut.id];
+    void confirm({
+      title: 'Confirm transfer',
+      message: `Transfer out ${playerName(selectedOut)} and bring in ${playerName(selectedIn)}? The server will validate budget, deadline, and transfer penalties.`,
+      confirmLabel: 'Confirm transfer',
+    }).then((confirmed) => {
+      if (confirmed) transferMutation.mutate({ fantasySeasonId, transfersIn, transfersOut });
+    });
   }
 
   return (
@@ -361,10 +358,10 @@ export function TransferMarket({
           setDismissedQuickAddId(null);
           setShowDifferentialFeedback(true);
           transferMutation.reset();
-          Alert.alert(
+          notify(
             'Player selected for transfer',
-            `${scoutPlayer.in_game_name || scoutPlayer.name} has been added to your trade.\n\nPlease make sure you select an outgoing player in the same position, then scroll down to the Trade Review area to confirm.`,
-            [{ text: 'Got it' }]
+            `${scoutPlayer.in_game_name || scoutPlayer.name} has been added to your trade. Please select an outgoing player in the same position, then scroll down to the Trade Review area to confirm.`,
+            'info',
           );
         }}
       />

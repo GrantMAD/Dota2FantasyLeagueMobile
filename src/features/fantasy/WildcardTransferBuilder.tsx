@@ -1,9 +1,10 @@
 import { useDeferredValue, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import type { FantasyContext, FantasyPlayer, MarketPlayer } from './api';
 import { getPlayerMarket, getTransferHistory, processTransfer } from './api';
 import { useMobileTheme } from '@/src/lib/theme';
+import { useMobileFeedback } from '@/src/components/MobileFeedbackProvider';
 
 interface WildcardTransferBuilderProps {
   context: FantasyContext;
@@ -25,6 +26,7 @@ function playerName(player: { in_game_name: string | null; name: string }): stri
 
 export function WildcardTransferBuilder({ context, userId }: WildcardTransferBuilderProps) {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useMobileFeedback();
   const { colors } = useMobileTheme();
   const [search, setSearch] = useState('');
   const [selectedOutId, setSelectedOutId] = useState<number | null>(null);
@@ -55,7 +57,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
     onSuccess: async (result) => {
       setPairs([]);
       setSelectedOutId(null);
-      Alert.alert(
+      notify(
         'Wildcard transfers completed',
         `Your squad has been updated. Transfer-hit penalty: ${result.penaltyPoints} points.`
       );
@@ -97,22 +99,19 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
 
   function confirmTransfers() {
     if (!canSubmit || !context.fantasySeasonId) return;
+    const fantasySeasonId = context.fantasySeasonId;
     const transferCount = pairs.length;
-    Alert.alert(
-      'Confirm Wildcard transfers',
-      `Complete ${transferCount} transfer${transferCount === 1 ? '' : 's'} using your active Wildcard? The server will validate roles, budget, squad limits, and the deadline.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm transfers',
-          onPress: () => transferMutation.mutate({
-            fantasySeasonId: context.fantasySeasonId!,
-            transfersIn: pairs.map((pair) => pair.playerIn.id),
-            transfersOut: pairs.map((pair) => pair.playerOut.id),
-          }),
-        },
-      ]
-    );
+    void confirm({
+      title: 'Confirm Wildcard transfers',
+      message: `Complete ${transferCount} transfer${transferCount === 1 ? '' : 's'} using your active Wildcard? The server will validate roles, budget, squad limits, and the deadline.`,
+      confirmLabel: 'Confirm transfers',
+    }).then((confirmed) => {
+      if (confirmed) transferMutation.mutate({
+        fantasySeasonId,
+        transfersIn: pairs.map((pair) => pair.playerIn.id),
+        transfersOut: pairs.map((pair) => pair.playerOut.id),
+      });
+    });
   }
 
   return (

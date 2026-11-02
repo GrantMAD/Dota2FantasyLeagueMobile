@@ -73,6 +73,23 @@ function roleColors(role: string | null) {
   }
 }
 
+function pitchRoleColors(role: string | null) {
+  switch (normalizeRole(role)) {
+    case 'carry':
+      return { accent: 'bg-amber-400', avatar: 'bg-amber-400/15', text: 'text-amber-300' };
+    case 'mid':
+      return { accent: 'bg-cyan-400', avatar: 'bg-cyan-400/15', text: 'text-cyan-300' };
+    case 'offlane':
+      return { accent: 'bg-emerald-400', avatar: 'bg-emerald-400/15', text: 'text-emerald-300' };
+    case 'support':
+      return { accent: 'bg-sky-400', avatar: 'bg-sky-400/15', text: 'text-sky-300' };
+    case 'hard_support':
+      return { accent: 'bg-teal-400', avatar: 'bg-teal-400/15', text: 'text-teal-300' };
+    default:
+      return { accent: 'bg-slate-500', avatar: 'bg-slate-500/15', text: 'text-slate-300' };
+  }
+}
+
 function PlayerCard({
   player,
   entry,
@@ -115,6 +132,65 @@ function PlayerCard({
         </Text>
       </Pressable>
     </Link>
+  );
+}
+
+function PitchStarterRow({
+  player,
+  entry,
+  label,
+}: {
+  player: FantasyPlayer;
+  entry: FantasyLineupEntry | undefined;
+  label: string;
+}) {
+  const colors = pitchRoleColors(player.primary_role);
+  return (
+    <View className="min-h-20 flex-row items-stretch gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+      <View className={`w-1 rounded-full ${colors.accent}`} />
+      <View className="min-w-0 flex-1 justify-center gap-2">
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className={`text-[10px] font-bold uppercase tracking-wider ${colors.text}`}>
+            {label}
+          </Text>
+          <View className="flex-row gap-1.5">
+            {entry?.is_captain ? <Badge label="Captain" highlighted /> : null}
+            {entry?.is_vice_captain ? <Badge label="Vice-captain" highlighted /> : null}
+          </View>
+        </View>
+        <Link href={`/player/${player.id}`} asChild>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={`View ${playerName(player)}, ${roleLabel(player.primary_role)}`}
+            className="min-h-11 flex-row items-center gap-3"
+          >
+            {player.profile_image_url ? (
+              <Image source={{ uri: player.profile_image_url }} className="h-10 w-10 rounded-full" />
+            ) : (
+              <View className={`h-10 w-10 items-center justify-center rounded-full ${colors.avatar}`}>
+                <Text className={`text-sm font-bold ${colors.text}`}>
+                  {playerName(player).slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View className="min-w-0 flex-1">
+              <Text className="font-semibold text-slate-50" numberOfLines={1}>{playerName(player)}</Text>
+              <Text className="mt-0.5 text-[10px] text-slate-400" numberOfLines={1}>
+                {player.professional_teams?.name ?? `${player.last_gw_points} pts last GW · ${player.recent_points} recent avg`}
+              </Text>
+            </View>
+            <View className="items-end">
+              <Text className="font-mono text-sm font-bold text-slate-200">{player.current_price.toFixed(1)}M</Text>
+              {player.professional_teams?.name ? (
+                <Text className="mt-0.5 text-[10px] text-slate-500">
+                  {player.last_gw_points} GW · {player.recent_points} avg
+                </Text>
+              ) : null}
+            </View>
+          </Pressable>
+        </Link>
+      </View>
+    </View>
   );
 }
 
@@ -174,6 +250,18 @@ export function SquadRosterView({
     return assigned;
   }, [lineup, players]);
   const starterIds = new Set([...starterBySlot.values()].map((player) => player.id));
+  const leadershipPriority = (player: FantasyPlayer) => {
+    const entry = entriesByPlayer.get(player.id);
+    if (entry?.is_captain) return 0;
+    if (entry?.is_vice_captain) return 1;
+    return 2;
+  };
+  const orderedStarterSlots = [...STARTER_SLOTS].sort((left, right) => {
+    const leftPlayer = starterBySlot.get(left.slot);
+    const rightPlayer = starterBySlot.get(right.slot);
+    return (leftPlayer ? leadershipPriority(leftPlayer) : 2) -
+      (rightPlayer ? leadershipPriority(rightPlayer) : 2);
+  });
   const starters = players.filter((player) => starterIds.has(player.id));
   const bench = players.filter((player) => !starterIds.has(player.id));
   const filteredPlayers = players.filter((player) => {
@@ -181,7 +269,7 @@ export function SquadRosterView({
     if (filter === 'starters' && !isStarter) return false;
     if (filter === 'bench' && isStarter) return false;
     return selectedRole === 'all' || normalizeRole(player.primary_role) === selectedRole;
-  });
+  }).sort((left, right) => leadershipPriority(left) - leadershipPriority(right));
   const roleOptions = ['all', 'carry', 'mid', 'offlane', 'support', 'hard_support'];
 
   return (
@@ -248,12 +336,12 @@ export function SquadRosterView({
       </View>
 
       {view === 'pitch' && filter !== 'bench' ? (
-        <View accessibilityLabel="Tactical starting lineup" className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-          <Text className="text-xs font-bold uppercase tracking-widest text-cyan-300">Starting Five</Text>
+        <View accessibilityLabel="Tactical starting lineup" className="gap-3">
+          <Text className="text-sm font-bold uppercase tracking-widest text-cyan-300">Starting Five</Text>
           {!lineup.some((entry) => entry.is_starter) ? (
             <Text className="text-xs text-slate-400">Suggested role layout · not saved to your lineup</Text>
           ) : null}
-          {STARTER_SLOTS
+          {orderedStarterSlots
             .filter(({ slot }) => selectedRole === 'all' || selectedRole === slot ||
               ((slot === 'support' || slot === 'hard_support') &&
                 (selectedRole === 'support' || selectedRole === 'hard_support')))
@@ -261,23 +349,22 @@ export function SquadRosterView({
               const player = starterBySlot.get(slot);
               const entry = player ? entriesByPlayer.get(player.id) : undefined;
               return (
-                <View key={slot} className="min-h-20 flex-row items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 p-2">
-                  <Text className="w-28 text-[10px] font-semibold uppercase text-slate-400">{label}</Text>
-                  {player ? (
-                    <PlayerCard player={player} entry={entry} />
-                  ) : (
-                    <View className="flex-1 rounded-lg border border-dashed border-slate-700 p-3">
-                      <Text className="text-xs text-slate-500">No player assigned</Text>
-                    </View>
-                  )}
-                </View>
+                player ? (
+                  <PitchStarterRow key={slot} player={player} entry={entry} label={label} />
+                ) : (
+                  <View key={slot} className="min-h-16 flex-row items-center gap-3 rounded-xl border border-dashed border-slate-700 bg-slate-950/60 p-3">
+                    <View className={`h-2 w-2 rounded-full ${pitchRoleColors(slot).accent}`} />
+                    <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</Text>
+                    <Text className="ml-auto text-xs text-slate-500">No player assigned</Text>
+                  </View>
+                )
               );
             })}
         </View>
       ) : null}
 
       {view === 'pitch' && filter !== 'starters' ? (
-        <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+        <View className="gap-3">
           <View className="flex-row items-center justify-between">
             <Text className="text-xs font-bold uppercase tracking-widest text-slate-400">Bench / Reserves</Text>
             <Text className="text-xs text-slate-500">{bench.length} players</Text>

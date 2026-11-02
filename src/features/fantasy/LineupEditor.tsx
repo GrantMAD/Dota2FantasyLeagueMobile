@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ActivityIndicator, Alert, Image, Modal, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import type { FantasyContext, FantasyLineupEntry, FantasyPlayer } from './api';
 import { saveLineup } from './api';
 import { useMobileTheme } from '@/src/lib/theme';
+import { useMobileFeedback } from '@/src/components/MobileFeedbackProvider';
 
 const STARTER_SLOTS = ['carry', 'mid', 'offlane', 'support', 'hard_support'] as const;
 const BENCH_SLOTS = ['bench_1', 'bench_2', 'bench_3'] as const;
@@ -103,6 +104,7 @@ interface LineupEditorProps {
 
 export function LineupEditor({ context, userId }: LineupEditorProps) {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useMobileFeedback();
   const { colors, theme } = useMobileTheme();
   const lineupIconTint = theme === 'dark' ? '#22d3ee' : '#0e7490';
   const [lineup, setLineup] = useState<FantasyLineupEntry[]>(context.lineup);
@@ -122,7 +124,7 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
   const mutation = useMutation({
     mutationFn: saveLineup,
     onSuccess: () => {
-      Alert.alert('Lineup saved', 'Your gameweek lineup has been updated.');
+      notify('Lineup saved', 'Your gameweek lineup has been updated.');
       void queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] });
     },
     onError: (error) => {
@@ -191,7 +193,7 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
       const timeUntilDeadline = new Date(deadline).getTime() - Date.now();
       if (Number.isFinite(timeUntilDeadline) && timeUntilDeadline <= 0) {
         setSaveError('The gameweek deadline has passed. Refresh your team to check the locked lineup.');
-        Alert.alert('Deadline passed', 'This gameweek is now locked. Refresh your team to see the latest lineup status.');
+        notify('Deadline passed', 'This gameweek is now locked. Refresh your team to see the latest lineup status.', 'error');
         void queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] });
         return;
       }
@@ -200,14 +202,14 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
         timeUntilDeadline <= 2 * 60 * 60 * 1000 &&
         !confirmedNearDeadline
       ) {
-        Alert.alert(
-          'Deadline approaching',
-          `Deadline is in ${formatTimeUntilDeadline(deadline)} for Gameweek ${context.gameweek.gameweekNumber}. Are you sure you want to save these lineup changes?`,
-          [
-            { text: 'Keep editing', style: 'cancel' },
-            { text: 'Save lineup', onPress: () => submitLineup(true) },
-          ],
-        );
+        void confirm({
+          title: 'Deadline approaching',
+          message: `Deadline is in ${formatTimeUntilDeadline(deadline)} for Gameweek ${context.gameweek.gameweekNumber}. Are you sure you want to save these lineup changes?`,
+          cancelLabel: 'Keep editing',
+          confirmLabel: 'Save lineup',
+        }).then((confirmed) => {
+          if (confirmed) submitLineup(true);
+        });
         return;
       }
     }
@@ -377,7 +379,7 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
           <View className="max-h-[80%] rounded-t-3xl border border-slate-700 bg-slate-950 px-5 pb-8 pt-5">
             <View className="mb-4 flex-row items-center justify-between">
               <View>
-                <Text className="text-xl font-bold text-white">
+                <Text accessibilityRole="header" className="text-xl font-bold text-white">
                   Choose {activeSlot ? SLOT_LABELS[activeSlot] : 'player'}
                 </Text>
                 <Text className="mt-1 text-sm text-slate-400">

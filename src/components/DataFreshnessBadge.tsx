@@ -71,6 +71,7 @@ export function DataFreshnessBadge({ page, className }: DataFreshnessBadgeProps)
   // Query freshness data from endpoint with 2m background polling
   const {
     data: freshness,
+    error,
     isLoading,
     isRefetching,
     refetch,
@@ -133,6 +134,7 @@ export function DataFreshnessBadge({ page, className }: DataFreshnessBadgeProps)
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         freshness={freshness}
+        error={error}
         isLoading={isLoading}
         isRefetching={isRefetching}
         onRefresh={() => void refetch()}

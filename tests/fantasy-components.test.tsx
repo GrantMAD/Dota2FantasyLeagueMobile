@@ -1,5 +1,4 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type {
@@ -24,6 +23,7 @@ import {
   saveLineup,
 } from '../src/features/fantasy/api';
 import { getProfessionalTeams } from '../src/features/players/api';
+import { MobileFeedbackProvider } from '../src/components/MobileFeedbackProvider';
 
 jest.mock('../src/lib/theme', () => ({
   useMobileTheme: () => ({ colors: { onAccent: '#ffffff', placeholder: '#999999' } }),
@@ -162,14 +162,16 @@ function renderWithQueryClient(element: React.ReactElement) {
   });
 
   queryClients.push(queryClient);
-  return render(<QueryClientProvider client={queryClient}>{element}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MobileFeedbackProvider>{element}</MobileFeedbackProvider>
+    </QueryClientProvider>,
+  );
 }
 
-function confirmAlertAction(buttonLabel: string) {
-  const [, , buttons] = jest.mocked(Alert.alert).mock.calls.at(-1) ?? [];
-  const button = buttons?.find((candidate) => candidate.text === buttonLabel);
-  if (!button?.onPress) throw new Error(`Confirmation action ${buttonLabel} was not displayed.`);
-  button.onPress();
+async function confirmFeedback(view: ReturnType<typeof render>, buttonLabel: string) {
+  const buttons = view.getAllByRole('button', { name: buttonLabel });
+  await fireEvent.press(buttons[buttons.length - 1]);
 }
 
 async function selectProfessionalTeam(view: ReturnType<typeof render>, teamName = 'Radiant') {
@@ -185,7 +187,6 @@ async function selectProfessionalTeam(view: ReturnType<typeof render>, teamName 
 
 describe('fantasy management components', () => {
   beforeEach(() => {
-    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     queryClients = [];
     mockedSaveLineup.mockReset();
     mockedProcessTransfer.mockReset();
@@ -251,7 +252,7 @@ describe('fantasy management components', () => {
 
     expect(view.getByLabelText('Player 1 avatar')).toBeTruthy();
     await fireEvent.press(view.getByRole('button', { name: 'Choose Bench 1 player' }));
-    expect(view.getAllByLabelText('Player 1 avatar')).toHaveLength(2);
+    await waitFor(() => expect(view.getAllByLabelText('Player 1 avatar')).toHaveLength(2));
   });
 
   it('requires confirmation before saving within two hours of the deadline', async () => {
@@ -273,16 +274,10 @@ describe('fantasy management components', () => {
     await fireEvent.press(view.getByRole('button', { name: 'Save lineup' }));
 
     expect(mockedSaveLineup).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Deadline approaching',
-      expect.stringMatching(/Deadline is in 1h \d+m for Gameweek 7/),
-      expect.arrayContaining([
-        expect.objectContaining({ text: 'Keep editing', style: 'cancel' }),
-        expect.objectContaining({ text: 'Save lineup', onPress: expect.any(Function) }),
-      ]),
-    );
+    expect(view.getByText('Deadline approaching')).toBeTruthy();
+    expect(view.getByText(/Deadline is in 1h \d+m for Gameweek 7/)).toBeTruthy();
 
-    await act(async () => confirmAlertAction('Save lineup'));
+    await confirmFeedback(view, 'Save lineup');
     await waitFor(() => expect(mockedSaveLineup).toHaveBeenCalledTimes(1));
   });
 
@@ -303,10 +298,8 @@ describe('fantasy management components', () => {
     await fireEvent.press(view.getByRole('button', { name: 'Save lineup' }));
 
     expect(mockedSaveLineup).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Deadline passed',
-      'This gameweek is now locked. Refresh your team to see the latest lineup status.',
-    );
+    expect(view.getByText('Deadline passed')).toBeTruthy();
+    expect(view.getByText('This gameweek is now locked. Refresh your team to see the latest lineup status.')).toBeTruthy();
     expect(view.getByText('The gameweek deadline has passed. Refresh your team to check the locked lineup.')).toBeTruthy();
   });
 
@@ -339,18 +332,13 @@ describe('fantasy management components', () => {
     await fireEvent.press(view.getByRole('button', { name: 'Review transfer' }));
 
     expect(mockedProcessTransfer).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Confirm transfer',
-      expect.stringContaining('Transfer out Player 1 and bring in Replacement Carry?'),
-      expect.any(Array),
-    );
+    expect(view.getAllByText('Confirm transfer').length).toBeGreaterThan(0);
+    expect(view.getByText(/Transfer out Player 1 and bring in Replacement Carry\?/)).toBeTruthy();
 
-    confirmAlertAction('Confirm transfer');
+    await confirmFeedback(view, 'Confirm transfer');
     await waitFor(() => expect(mockedProcessTransfer).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
-      'Transfer completed',
-      'Your squad has been updated. Penalty: 0 points.',
-    ));
+    await waitFor(() => expect(view.getByText('Transfer completed')).toBeTruthy());
+    expect(view.getByText('Your squad has been updated. Penalty: 0 points.')).toBeTruthy();
     await waitFor(() => expect(queryClients[0].isMutating()).toBe(0));
     expect(mockedProcessTransfer).toHaveBeenCalledWith({
       fantasySeasonId: 12,
@@ -493,13 +481,10 @@ describe('fantasy management components', () => {
     expect(view.getAllByText('Suggested Replacement').length).toBeGreaterThan(0);
     await fireEvent.press(view.getByRole('button', { name: 'Review transfer' }));
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Confirm transfer',
-      expect.stringContaining('Transfer out Player 1 and bring in Suggested Replacement?'),
-      expect.any(Array),
-    );
+    expect(view.getAllByText('Confirm transfer').length).toBeGreaterThan(0);
+    expect(view.getByText(/Transfer out Player 1 and bring in Suggested Replacement\?/)).toBeTruthy();
     expect(mockedProcessTransfer).not.toHaveBeenCalled();
-    await act(async () => confirmAlertAction('Confirm transfer'));
+    await confirmFeedback(view, 'Confirm transfer');
     await waitFor(() => expect(mockedProcessTransfer).toHaveBeenCalledWith({
       fantasySeasonId: 12,
       transfersIn: [10],
@@ -591,18 +576,13 @@ describe('fantasy management components', () => {
 
     await fireEvent.press(view.getAllByRole('button', { name: 'Activate' })[0]);
     expect(mockedActivateChip).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Activate Triple Captain?',
-      expect.stringContaining('This action cannot be undone.'),
-      expect.any(Array),
-    );
+    expect(view.getByText('Activate Triple Captain?')).toBeTruthy();
+    expect(view.getByText('This action cannot be undone. The server will check whether the chip can be used in this gameweek.')).toBeTruthy();
 
-    confirmAlertAction('Activate chip');
+    await confirmFeedback(view, 'Activate chip');
     await waitFor(() => expect(mockedActivateChip).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
-      'Chip activated',
-      'Triple Captain activated.',
-    ));
+    await waitFor(() => expect(view.getByText('Chip activated')).toBeTruthy());
+    expect(view.getByText('Triple Captain activated.')).toBeTruthy();
     await waitFor(() => expect(queryClients[0].isMutating()).toBe(0));
     expect(mockedActivateChip).toHaveBeenCalledWith({
       fantasySeasonId: 12,
@@ -632,14 +612,12 @@ describe('fantasy management components', () => {
     );
 
     await fireEvent.press(view.getByRole('button', { name: 'Activate Wildcard' }));
-    confirmAlertAction('Activate Wildcard');
+    await confirmFeedback(view, 'Activate Wildcard');
 
     await waitFor(() => expect(mockedActivateWildcard).toHaveBeenCalledWith({
       fantasySeasonId: 12,
     }, expect.any(Object)));
-    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
-      'Wildcard activated',
-      'Wildcard activated. Used in Gameweek 7. Your Wildcard can be used once per season and is available again next season.',
-    ));
+    await waitFor(() => expect(view.getByText('Wildcard activated')).toBeTruthy());
+    expect(view.getByText('Wildcard activated. Used in Gameweek 7. Your Wildcard can be used once per season and is available again next season.')).toBeTruthy();
   });
 });

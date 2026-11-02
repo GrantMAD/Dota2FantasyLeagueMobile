@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -48,6 +47,7 @@ import {
 import { useAuth } from '@/src/lib/auth';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { useMobileTheme } from '@/src/lib/theme';
+import { useMobileFeedback } from '@/src/components/MobileFeedbackProvider';
 
 function PreferenceToggle({
   label,
@@ -216,6 +216,7 @@ function ProfileOverview({
   onSaved: (message: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const { notify } = useMobileFeedback();
   const fantasyQuery = useFantasyContext();
   const pushStatus = usePushNotificationStatus();
   const { theme: colorScheme } = useMobileTheme();
@@ -266,7 +267,7 @@ function ProfileOverview({
     },
     onError: (err: Error) => {
       setSelectedBannerThemeId(getMobileBannerTheme(profile.bannerTheme).id);
-      Alert.alert('Unable to save banner theme', err.message);
+      notify('Unable to save banner theme', err.message, 'error');
     },
   });
 
@@ -725,6 +726,7 @@ function ProfileEditor({
   onSaved: (message: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const { confirm } = useMobileFeedback();
   const { session } = useAuth();
   const pushStatus = usePushNotificationStatus();
   const { theme, setTheme, isSaving: savingTheme } = useMobileTheme();
@@ -838,35 +840,31 @@ function ProfileEditor({
   }
 
   function handleEnablePush() {
-    Alert.alert(
-      'Enable device notifications?',
-      'Fantasy Dota 2 will send generic update alerts. Open the app to view the full notification.',
-      [
-        { text: 'Not now', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: () => {
-            void (async () => {
-              setEnablingPush(true);
-              setNotice(null);
-              try {
-                if (!session?.user.id) throw new Error('Sign in again to register this device.');
-                await requestAndRegisterPushNotifications(profile.id);
-                const updatedProfile = await updatePushNotificationPreference(true);
-                queryClient.setQueryData<ManagerProfile | null>(['manager-profile'], updatedProfile);
-                setPushNotifications(updatedProfile.pushNotifications);
-                pushStatus.markDeviceRegistered(profile.id);
-                setNotice('Push notifications are enabled for this account and device.');
-              } catch (error: unknown) {
-                setNotice(error instanceof Error ? error.message : 'Unable to enable device notifications.');
-              } finally {
-                setEnablingPush(false);
-              }
-            })();
-          },
-        },
-      ],
-    );
+    void confirm({
+      title: 'Enable device notifications?',
+      message: 'Fantasy Dota 2 will send generic update alerts. Open the app to view the full notification.',
+      cancelLabel: 'Not now',
+      confirmLabel: 'Continue',
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      void (async () => {
+        setEnablingPush(true);
+        setNotice(null);
+        try {
+          if (!session?.user.id) throw new Error('Sign in again to register this device.');
+          await requestAndRegisterPushNotifications(profile.id);
+          const updatedProfile = await updatePushNotificationPreference(true);
+          queryClient.setQueryData<ManagerProfile | null>(['manager-profile'], updatedProfile);
+          setPushNotifications(updatedProfile.pushNotifications);
+          pushStatus.markDeviceRegistered(profile.id);
+          setNotice('Push notifications are enabled for this account and device.');
+        } catch (error: unknown) {
+          setNotice(error instanceof Error ? error.message : 'Unable to enable device notifications.');
+        } finally {
+          setEnablingPush(false);
+        }
+      })();
+    });
   }
 
   return (

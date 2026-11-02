@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
+import { useMobileFeedback } from '@/src/components/MobileFeedbackProvider';
 import type { FantasyContext } from './api';
 import { activateChip } from './api';
 import { useMobileTheme } from '@/src/lib/theme';
@@ -13,6 +14,7 @@ interface ChipActivationPanelProps {
 
 export function ChipActivationPanel({ context, userId }: ChipActivationPanelProps) {
   const queryClient = useQueryClient();
+  const { confirm, notify } = useMobileFeedback();
   const { theme } = useMobileTheme();
   const isDark = theme === 'dark';
   const [actionError, setActionError] = useState<string | null>(null);
@@ -20,7 +22,7 @@ export function ChipActivationPanel({ context, userId }: ChipActivationPanelProp
     mutationFn: activateChip,
     onSuccess: async (result) => {
       setActionError(null);
-      Alert.alert('Chip activated', result.message);
+      notify('Chip activated', result.message);
       await queryClient.invalidateQueries({ queryKey: ['fantasy-context', userId] });
     },
     onError: (error) => {
@@ -31,21 +33,16 @@ export function ChipActivationPanel({ context, userId }: ChipActivationPanelProp
   function confirmActivation(chip: 'triple-captain' | 'bench-boost', label: string) {
     if (!context.fantasySeasonId || context.gameweek?.isLocked || mutation.isPending) return;
     const fantasySeasonId = context.fantasySeasonId;
-    Alert.alert(
-      `Activate ${label}?`,
-      'This action cannot be undone. The server will check whether the chip can be used in this gameweek.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Activate chip',
-          style: 'destructive',
-          onPress: () => {
-            setActionError(null);
-            mutation.mutate({ fantasySeasonId, chip });
-          },
-        },
-      ]
-    );
+    void confirm({
+      title: `Activate ${label}?`,
+      message: 'This action cannot be undone. The server will check whether the chip can be used in this gameweek.',
+      confirmLabel: 'Activate chip',
+      destructive: true,
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      setActionError(null);
+      mutation.mutate({ fantasySeasonId, chip });
+    });
   }
 
   return (

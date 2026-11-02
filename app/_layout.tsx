@@ -24,6 +24,7 @@ import { MobilePushNotificationsProvider } from '@/src/lib/push-notifications';
 import { ConnectivityProvider } from '@/src/lib/connectivity';
 import { TopNavigationBar } from '@/src/components/TopNavigationBar';
 import { BottomNavigationBar } from '@/src/components/BottomNavigationBar';
+import { MobileFeedbackProvider } from '@/src/components/MobileFeedbackProvider';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -90,7 +91,9 @@ function ThemedApp() {
     <NavigationThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <MobilePushNotificationsProvider>
-        <AppRoutes />
+        <MobileFeedbackProvider>
+          <AppRoutes />
+        </MobileFeedbackProvider>
       </MobilePushNotificationsProvider>
     </NavigationThemeProvider>
   );

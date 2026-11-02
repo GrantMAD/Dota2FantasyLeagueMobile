@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   Text,
   TextInput,
@@ -271,12 +273,16 @@ export function PersonalGoalsProgress({
 
       {/* Goal Setting Modal */}
       <Modal
+        accessibilityViewIsModal
         visible={isModalOpen}
         transparent
         animationType="fade"
         onRequestClose={() => setIsModalOpen(false)}
       >
-        <View className="flex-1 items-center justify-center bg-black/70 px-4">
+        <KeyboardAvoidingView
+          className="flex-1 items-center justify-center bg-black/70 px-4"
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View
             accessibilityLabel="Edit Season Goals Dialog"
             className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
@@ -289,7 +295,7 @@ export function PersonalGoalsProgress({
                   size={18}
                   tintColor="#67e8f9"
                 />
-                <Text className="text-lg font-bold text-white">Set Season Milestones</Text>
+                <Text accessibilityRole="header" className="text-lg font-bold text-white">Set Season Milestones</Text>
               </View>
               <Pressable
                 accessibilityLabel="Close"
@@ -389,7 +395,7 @@ export function PersonalGoalsProgress({
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );

@@ -490,6 +490,7 @@ export default function LeaguesScreen() {
       </ScrollView>
 
       <Modal
+        accessibilityViewIsModal
         animationType="slide"
         onRequestClose={() => {
           setSelectedManager(null);
@@ -505,7 +506,7 @@ export default function LeaguesScreen() {
                 <Text className="text-xs font-semibold uppercase tracking-wider text-brand-400">
                   {selectedManager ? 'Manager profile' : 'Fixture details'}
                 </Text>
-                <Text className="mt-1 text-xl font-bold text-slate-50">
+                <Text accessibilityRole="header" className="mt-1 text-xl font-bold text-slate-50">
                   {selectedManager?.manager.manager ?? selectedFixture?.leagueName}
                 </Text>
               </View>

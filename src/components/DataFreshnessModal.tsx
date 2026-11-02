@@ -15,6 +15,7 @@ export interface DataFreshnessModalProps {
   freshness: FreshnessData | null | undefined;
   isLoading: boolean;
   isRefetching: boolean;
+  error: Error | null;
   onRefresh: () => void;
 }
 
@@ -164,6 +165,7 @@ export function DataFreshnessModal({
   freshness,
   isLoading,
   isRefetching,
+  error,
   onRefresh,
 }: DataFreshnessModalProps) {
   const { theme } = useMobileTheme();
@@ -176,6 +178,7 @@ export function DataFreshnessModal({
 
   return (
     <Modal
+      accessibilityViewIsModal
       animationType="fade"
       transparent
       visible={visible}
@@ -193,6 +196,7 @@ export function DataFreshnessModal({
 
         {/* Modal Card Dialog with solid background and clean borders */}
         <View
+          accessibilityRole="summary"
           accessibilityLabel="Live Data Sync Dialog"
           style={{
             backgroundColor: isDark ? '#020617' : '#ffffff',
@@ -205,6 +209,7 @@ export function DataFreshnessModal({
             <View className="flex-1 pr-3">
               <View className="flex-row items-center gap-2">
                 <Text
+                  accessibilityRole="header"
                   style={{ color: isDark ? '#ffffff' : '#0f172a' }}
                   className="text-xl font-bold"
                 >
@@ -308,6 +313,23 @@ export function DataFreshnessModal({
             </View>
 
             {/* Jobs List Header */}
+            {error ? (
+              <View
+                accessibilityRole="alert"
+                style={{
+                  backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                  borderColor: isDark ? '#991b1b' : '#fecaca',
+                }}
+                className="gap-2 rounded-xl border p-3"
+              >
+                <Text style={{ color: isDark ? '#fecaca' : '#991b1b' }} className="font-semibold">
+                  Unable to refresh sync status
+                </Text>
+                <Text style={{ color: isDark ? '#fecaca' : '#7f1d1d' }} className="text-sm leading-5">
+                  {error.message || 'The latest pipeline status could not be loaded. Please try again.'}
+                </Text>
+              </View>
+            ) : null}
             <View className="flex-row items-center justify-between pt-1">
               <Text
                 style={{ color: isDark ? '#94a3b8' : '#64748b' }}
@@ -338,6 +360,18 @@ export function DataFreshnessModal({
               freshness.jobs.map((job) => (
                 <JobCard key={job.jobName} job={job} isDark={isDark} />
               ))
+            ) : error ? (
+              <View
+                style={{
+                  backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+                  borderColor: isDark ? '#1e293b' : '#e2e8f0',
+                }}
+                className="items-center rounded-2xl border p-6"
+              >
+                <Text style={{ color: isDark ? '#94a3b8' : '#64748b' }} className="text-center text-xs">
+                  Pipeline details are unavailable until the status request succeeds.
+                </Text>
+              </View>
             ) : (
               <View
                 style={{

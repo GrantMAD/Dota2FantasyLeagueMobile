@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
@@ -7,6 +7,7 @@ import { TextField } from '@/src/components/TextField';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPremiumWaitlistStatus, joinPremiumWaitlist, removePremiumWaitlistEntry } from '@/src/features/premium/api';
 import { useAuth } from '@/src/lib/auth';
+import { useMobileFeedback } from '@/src/components/MobileFeedbackProvider';
 
 const features = [
   ['Floor, Ceiling & Volatility Index', '10th and 90th percentile outcome ranges and volatility ratings so you never get caught out by boom-or-bust trap picks.'],
@@ -32,6 +33,7 @@ const capabilities = [
 export default function PremiumScreen() {
   const { session } = useAuth();
   const queryClient = useQueryClient();
+  const { confirm } = useMobileFeedback();
   const userId = session?.user.id ?? null;
   const [email, setEmail] = useState('');
   const [consent, setConsent] = useState(false);
@@ -66,14 +68,14 @@ export default function PremiumScreen() {
   const busy = saveMutation.isPending || removeMutation.isPending;
 
   function confirmRemoveWaitlistEntry() {
-    Alert.alert(
-      'Remove waitlist entry?',
-      'This deletes your saved email and withdraws your consent for Premium launch updates.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove me', style: 'destructive', onPress: () => removeMutation.mutate() },
-      ],
-    );
+    void confirm({
+      title: 'Remove waitlist entry?',
+      message: 'This deletes your saved email and withdraws your consent for Premium launch updates.',
+      confirmLabel: 'Remove me',
+      destructive: true,
+    }).then((confirmed) => {
+      if (confirmed) removeMutation.mutate();
+    });
   }
 
   return (
