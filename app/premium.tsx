@@ -81,11 +81,11 @@ export default function PremiumScreen() {
       <ScrollView className="flex-1" contentContainerClassName="gap-6 px-5 pb-8 pt-5">
         <View className="gap-4 rounded-2xl border border-amber-500/30 bg-slate-900 p-5">
           <Text className="text-xs font-semibold uppercase tracking-[3px] text-amber-300">Advanced fantasy tools</Text>
-          <Text className="text-3xl font-bold text-white">Turn information into an edge.</Text>
+          <Text className="text-3xl font-bold text-slate-50">Turn information into an edge.</Text>
           <Text className="text-sm leading-6 text-slate-300">
-            Premium is planned to bring deeper analytics, smarter projections, and sharper transfer intelligence to managers who want to plan one move ahead.
+            Premium is in active development, with deeper analytics, smarter projections, and sharper transfer intelligence for managers who want to plan one move ahead.
           </Text>
-          <Text className="text-xs leading-5 text-slate-400">Premium tools are planned, with no launch date announced. Core fantasy gameplay remains free.</Text>
+          <Text className="text-xs leading-5 text-slate-400">Core fantasy gameplay remains free. Joining the waitlist does not start a subscription, and no email is sent when you join.</Text>
           <Link href="/analytics" asChild>
             <Pressable className="min-h-11 self-start justify-center rounded-lg bg-brand-500 px-4">
               <Text className="font-bold text-on-accent">Use free analytics →</Text>
@@ -96,7 +96,7 @@ export default function PremiumScreen() {
         <View className="gap-4 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5">
           <View className="gap-2">
             <Text className="text-xs font-semibold uppercase tracking-wider text-amber-300">Premium updates</Text>
-            <Text className="text-xl font-bold text-white">Join the waitlist</Text>
+            <Text className="text-xl font-bold text-slate-50">Join the waitlist</Text>
             <Text className="text-sm leading-5 text-slate-300">
               Your email and consent are saved with your account for future Premium launch updates. Joining does not start a subscription, and no email is sent now.
             </Text>
@@ -109,7 +109,7 @@ export default function PremiumScreen() {
             <View accessibilityRole="alert" className="gap-3">
               <Text className="text-sm leading-5 text-red-200">{waitlistQuery.error.message}</Text>
               <Pressable accessibilityRole="button" onPress={() => void waitlistQuery.refetch()}>
-                <Text className="font-semibold text-white">Try again</Text>
+                <Text className="font-semibold text-slate-50">Try again</Text>
               </Pressable>
             </View>
           ) : waitlistQuery.data?.waitlisted && !editingEmail ? (
@@ -165,7 +165,7 @@ export default function PremiumScreen() {
                 className="min-h-12 flex-row items-start gap-3"
               >
                 <View className={`mt-0.5 h-5 w-5 items-center justify-center rounded border ${consent ? 'border-amber-400 bg-amber-400' : 'border-slate-500'}`}>
-                  {consent ? <Text className="text-xs font-black text-slate-950">✓</Text> : null}
+                  {consent ? <Text className="text-xs font-black text-amber-950">✓</Text> : null}
                 </View>
                 <Text className="flex-1 text-sm leading-5 text-slate-300">
                   I agree to receive Premium launch updates at this address. I can remove my waitlist entry at any time.
@@ -199,7 +199,7 @@ export default function PremiumScreen() {
                   }}
                   className={`min-h-11 justify-center rounded-lg px-4 ${consent && !busy ? 'bg-amber-500' : 'bg-slate-700'}`}
                 >
-                  <Text className="font-bold text-slate-950">{busy ? 'Saving…' : waitlistQuery.data?.waitlisted ? 'Update email' : 'Join waitlist'}</Text>
+                  <Text className="font-bold text-amber-950">{busy ? 'Saving…' : waitlistQuery.data?.waitlisted ? 'Update email' : 'Join waitlist'}</Text>
                 </Pressable>
               </View>
             </View>
@@ -209,12 +209,12 @@ export default function PremiumScreen() {
         <View className="gap-3">
           <View>
             <Text className="text-xs font-semibold uppercase tracking-wider text-amber-300">The toolkit</Text>
-            <Text className="mt-1 text-xl font-bold text-white">Make every decision count</Text>
+            <Text className="mt-1 text-xl font-bold text-slate-50">Make every decision count</Text>
           </View>
           {features.map(([title, description]) => (
             <View key={title} className="gap-2 rounded-xl border border-slate-800 bg-slate-900 p-4">
               <View className="flex-row items-start justify-between gap-2">
-                <Text className="flex-1 font-bold text-white">{title}</Text>
+                <Text className="flex-1 font-bold text-slate-50">{title}</Text>
                 <Text className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-300">Planned</Text>
               </View>
               <Text className="text-sm leading-5 text-slate-400">{description}</Text>
@@ -224,17 +224,23 @@ export default function PremiumScreen() {
 
         <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
           <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500">Access model</Text>
-          <Text className="text-xl font-bold text-white">Free foundation, optional depth</Text>
-          <View className="flex-row border-b border-slate-700 pb-2">
+          <Text className="text-xl font-bold text-slate-50">Free foundation, optional depth</Text>
+          <View className="flex-row border-b border-slate-700 bg-slate-800/60 px-2 py-3">
             <Text className="flex-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Capability</Text>
-            <Text className="w-12 text-center text-xs font-semibold text-emerald-300">Free</Text>
-            <Text className="w-20 text-center text-xs font-semibold text-amber-300">Planned Premium</Text>
+            <Text className="w-14 text-center text-xs font-semibold text-slate-200">Free</Text>
+            <Text className="w-24 text-center text-xs font-semibold text-amber-300">Planned Premium</Text>
           </View>
           {capabilities.map(([label, free]) => (
-            <View key={String(label)} className="flex-row items-center border-b border-slate-800 py-2">
+            <View key={String(label)} className="flex-row items-center border-b border-slate-800 px-2 py-3">
               <Text className="flex-1 text-sm text-slate-300">{String(label)}</Text>
-              <Text className="w-12 text-center text-emerald-300">{free ? '✓' : '—'}</Text>
-              <Text className="w-20 text-center text-amber-300">✓</Text>
+              <Text
+                accessible
+                accessibilityLabel={free ? 'Included in free' : 'Not included in free'}
+                className={`w-14 text-center text-lg font-bold ${free ? 'text-emerald-300' : 'text-slate-500'}`}
+              >
+                {free ? '✓' : '−'}
+              </Text>
+              <Text accessible accessibilityLabel="Planned for Premium" className="w-24 text-center text-lg font-bold text-amber-300">✓</Text>
             </View>
           ))}
         </View>
@@ -242,16 +248,16 @@ export default function PremiumScreen() {
         <View className="gap-4">
           <View className="gap-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-5">
             <Text className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Available now</Text>
-            <Text className="text-lg font-bold text-white">The core game stays free</Text>
+            <Text className="text-lg font-bold text-slate-50">The core game stays free</Text>
             <Text className="text-sm leading-5 text-slate-300">
               Build your squad, make transfers, join leagues, follow the leaderboard, and use current analytics without a Premium subscription.
             </Text>
           </View>
           <View className="gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5">
             <Text className="text-xs font-semibold uppercase tracking-wider text-amber-300">Planned</Text>
-            <Text className="text-lg font-bold text-white">More ways to plan your season</Text>
+            <Text className="text-lg font-bold text-slate-50">More ways to plan your season</Text>
             <Text className="text-sm leading-5 text-slate-300">
-              Advanced analytics, projections, transfer recommendations, squad optimisation, price alerts, and the fantasy assistant are planned Premium tools. No launch date has been announced.
+              Floor and ceiling outcomes, weighted projections, differential scouting, role-relative analysis, and squad optimisation are planned Premium tools. Price movement and deadline alerts are also planned.
             </Text>
           </View>
         </View>

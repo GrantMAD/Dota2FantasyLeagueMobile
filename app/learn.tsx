@@ -3,13 +3,20 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 
+const learningPath = [
+  { step: '01', icon: '📘', title: 'Start with Basics', description: 'Learn the rules, scoring, and gameweek deadlines.', href: '/rules' as const, action: 'Explore rules' },
+  { step: '02', icon: '👥', title: 'Draft Your Squad', description: 'Build your roster and stay within the season budget.', href: '/team' as const, action: 'Build squad' },
+  { step: '03', icon: '🎯', title: 'Set Tactical Lineup', description: 'Choose starters, captaincy, substitutes, and chips.', href: '/team' as const, action: 'Set lineup' },
+  { step: '04', icon: '🏆', title: 'Compete & Climb', description: 'Join leagues, track your rank, and improve your strategy.', href: '/leagues' as const, action: 'Explore leagues' },
+];
+
 const quickRules = [
-  { label: 'Squad size', value: '8 players' },
-  { label: 'Starting roles', value: '5 positions' },
-  { label: 'Starting budget', value: '$45.0M' },
-  { label: 'Captain bonus', value: '2.0× points' },
-  { label: 'Free transfers', value: '1 per gameweek' },
-  { label: 'Lock window', value: '30 minutes' },
+  { label: 'Squad size', value: '8 players', icon: '👥', section: 'squad' },
+  { label: 'Starting roles', value: '5 positions', icon: '🎯', section: 'squad' },
+  { label: 'Starting budget', value: '$45.0M', icon: '💰', section: 'squad' },
+  { label: 'Captain bonus', value: '2.0× points', icon: '👑', section: 'captain' },
+  { label: 'Free transfers', value: '1 per gameweek', icon: '🔁', section: 'transfers' },
+  { label: 'Lock window', value: '30 minutes', icon: '⏱️', section: 'deadlines' },
 ];
 
 const actions = [
@@ -26,7 +33,7 @@ export default function LearnScreen() {
         <View className="gap-4 rounded-2xl border border-brand-500/30 bg-slate-900 p-5">
           <View>
             <Text className="text-xs font-semibold uppercase tracking-[3px] text-brand-300">Fantasy learning center</Text>
-            <Text className="mt-2 text-3xl font-bold text-white">Learn the game. Make better calls.</Text>
+            <Text className="mt-2 text-3xl font-bold text-slate-50">Learn the game. Make better calls.</Text>
             <Text className="mt-3 text-sm leading-6 text-slate-300">
               Start with a guided tour, check the official scoring rules, then move straight into managing your team.
             </Text>
@@ -36,25 +43,45 @@ export default function LearnScreen() {
               <Text className="font-bold text-on-accent">Start the manager guide →</Text>
             </Pressable>
           </Link>
-          <View className="flex-row flex-wrap gap-2 border-t border-slate-800 pt-4">
-            {['1  Start', '2  Build', '3  Compete', '4  Improve'].map((step) => (
-              <Text key={step} className="rounded-full bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-300">{step}</Text>
-            ))}
+        </View>
+
+        <View className="gap-3">
+          <View>
+            <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500">Your learning path</Text>
+            <Text className="mt-1 text-xl font-bold text-slate-50">Four steps to a stronger season</Text>
           </View>
+          {learningPath.map((item) => (
+            <Link key={item.step} href={item.href} asChild>
+              <Pressable accessibilityRole="button" className="min-h-24 flex-row items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                <View className="h-11 w-11 items-center justify-center rounded-xl bg-brand-500/10">
+                  <Text accessibilityElementsHidden className="text-xl">{item.icon}</Text>
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[10px] font-bold uppercase tracking-wider text-brand-300">Step {item.step}</Text>
+                  <Text className="mt-1 font-bold text-slate-50">{item.title}</Text>
+                  <Text className="mt-1 text-xs leading-5 text-slate-400">{item.description}</Text>
+                </View>
+                <View className="items-end gap-1">
+                  <Text className="text-xs font-semibold text-brand-300">{item.action}</Text>
+                  <Text className="text-brand-300">→</Text>
+                </View>
+              </Pressable>
+            </Link>
+          ))}
         </View>
 
         <View className="flex-row gap-3">
           <Link href="/guide" asChild>
             <Pressable className="min-h-28 flex-1 justify-center gap-2 rounded-2xl border border-brand-500/30 bg-slate-900 p-4">
               <Text className="text-xs font-semibold uppercase tracking-wider text-brand-300">Walkthroughs</Text>
-              <Text className="text-lg font-bold text-white">Manager Guide</Text>
+              <Text className="text-lg font-bold text-slate-50">Manager Guide</Text>
               <Text className="text-xs leading-4 text-slate-400">Step-by-step mobile tour</Text>
             </Pressable>
           </Link>
           <Link href="/rules" asChild>
             <Pressable className="min-h-28 flex-1 justify-center gap-2 rounded-2xl border border-amber-500/30 bg-slate-900 p-4">
               <Text className="text-xs font-semibold uppercase tracking-wider text-amber-300">Official reference</Text>
-              <Text className="text-lg font-bold text-white">Rules & Scoring</Text>
+              <Text className="text-lg font-bold text-slate-50">Rules & Scoring</Text>
               <Text className="text-xs leading-4 text-slate-400">Squad, points, chips, and deadlines</Text>
             </Pressable>
           </Link>
@@ -64,16 +91,19 @@ export default function LearnScreen() {
           <View className="flex-row items-end justify-between gap-3">
             <View>
               <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500">At a glance</Text>
-              <Text className="mt-1 text-xl font-bold text-white">Core fantasy rules</Text>
+              <Text className="mt-1 text-xl font-bold text-slate-50">Core fantasy rules</Text>
             </View>
             <Link href="/rules"><Text className="font-semibold text-brand-300">Full rules →</Text></Link>
           </View>
           <View className="flex-row flex-wrap gap-2">
             {quickRules.map((rule) => (
-              <Link key={rule.label} href="/rules" asChild>
-                <Pressable className="min-h-20 min-w-[47%] flex-1 justify-center rounded-xl border border-slate-800 bg-slate-900 p-3">
-                  <Text className="text-xs text-slate-500">{rule.label}</Text>
-                  <Text className="mt-1 font-semibold text-white">{rule.value}</Text>
+              <Link key={rule.label} href={{ pathname: '/rules', params: { section: rule.section } }} asChild>
+                <Pressable className="min-h-24 min-w-[47%] flex-1 justify-center rounded-xl border border-slate-800 bg-slate-900 p-3">
+                  <View className="flex-row items-center gap-2">
+                    <Text accessibilityElementsHidden className="text-base">{rule.icon}</Text>
+                    <Text className="flex-1 text-xs text-slate-500">{rule.label}</Text>
+                  </View>
+                  <Text className="mt-2 font-semibold text-slate-50">{rule.value}</Text>
                 </Pressable>
               </Link>
             ))}
@@ -83,7 +113,7 @@ export default function LearnScreen() {
         <View className="gap-3">
           <View>
             <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500">Learn by doing</Text>
-            <Text className="mt-1 text-xl font-bold text-white">Your next move</Text>
+            <Text className="mt-1 text-xl font-bold text-slate-50">Your next move</Text>
           </View>
           {actions.map((action) => (
             <Link key={action.title} href={action.href} asChild>
@@ -92,7 +122,7 @@ export default function LearnScreen() {
                   <Text className="font-bold text-emerald-300">→</Text>
                 </View>
                 <View className="flex-1">
-                  <Text className="font-semibold text-white">{action.title}</Text>
+                  <Text className="font-semibold text-slate-50">{action.title}</Text>
                   <Text className="mt-1 text-xs leading-4 text-slate-400">{action.description}</Text>
                 </View>
                 <Text className="text-xs font-semibold text-brand-300">{action.label}</Text>

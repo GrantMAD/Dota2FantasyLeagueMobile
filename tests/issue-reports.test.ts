@@ -1,36 +1,63 @@
 import { getIssueReports, submitIssueReport } from '../src/features/issue-reports/api';
 
 const mockGetSession = jest.fn();
+const mockFrom = jest.fn();
+const mockRpc = jest.fn();
+const mockUpload = jest.fn();
+const mockCreateSignedUrl = jest.fn();
+const mockRemove = jest.fn();
 const mockFetch = jest.fn();
 const originalFetch = globalThis.fetch;
 
-jest.mock('../src/lib/supabase', () => ({
-  getSupabaseClient: () => ({ auth: { getSession: mockGetSession } }),
-}));
-
-jest.mock('../src/lib/web', () => ({
-  getWebBaseUrl: () => 'https://web.example.test',
-}));
-
 const report = {
   id: 42,
+  user_id: 'user-123',
   title: 'Button does not save',
   category: 'bug',
   description: 'Pressing the save button does not save the changes.',
   page_url: '/settings',
-  screenshot_url: null,
+  screenshot_path: null,
   status: 'new',
   resolution_note: null,
   created_at: '2026-10-26T10:00:00.000Z',
   updated_at: '2026-10-26T10:00:00.000Z',
 };
 
+function makeQuery(result: { data: unknown; error: null | { message: string } }) {
+  const query: Record<string, jest.Mock | ((resolve: (value: unknown) => unknown) => unknown)> = {};
+  for (const method of ['select', 'eq', 'order', 'limit', 'in']) {
+    query[method] = jest.fn(() => query);
+  }
+  query.then = (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve);
+  return query;
+}
+
+jest.mock('../src/lib/supabase', () => ({
+  getSupabaseClient: () => ({
+    auth: { getSession: mockGetSession },
+    from: mockFrom,
+    rpc: mockRpc,
+    storage: {
+      from: () => ({
+        upload: mockUpload,
+        createSignedUrl: mockCreateSignedUrl,
+        remove: mockRemove,
+      }),
+    },
+  }),
+}));
+
 describe('mobile issue reporting API', () => {
   beforeEach(() => {
     mockGetSession.mockResolvedValue({
-      data: { session: { access_token: 'test-access-token' } },
+      data: { session: { user: { id: 'user-123' }, access_token: 'test-access-token' } },
       error: null,
     });
+    mockFrom.mockReset();
+    mockRpc.mockReset();
+    mockUpload.mockReset().mockResolvedValue({ error: null });
+    mockCreateSignedUrl.mockReset().mockResolvedValue({ data: { signedUrl: 'https://storage.example.test/signed' }, error: null });
+    mockRemove.mockReset().mockResolvedValue({ error: null });
     mockFetch.mockReset();
     globalThis.fetch = mockFetch;
   });
@@ -39,42 +66,34 @@ describe('mobile issue reporting API', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('loads the manager reports and status history with bearer authentication', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        reports: [report],
-        history: [{
-          id: 5,
-          issue_report_id: 42,
-          old_status: null,
-          new_status: 'new',
-          resolution_note: null,
-          created_at: '2026-10-26T10:00:00.000Z',
-        }],
-      }),
+  it('loads the signed-in manager reports and status history directly from Supabase', async () => {
+    const reportQuery = makeQuery({ data: [report], error: null });
+    const historyQuery = makeQuery({
+      data: [{
+        id: 5,
+        issue_report_id: 42,
+        old_status: null,
+        new_status: 'new',
+        resolution_note: null,
+        created_at: '2026-10-26T10:00:00.000Z',
+      }],
+      error: null,
     });
+    mockFrom.mockReturnValueOnce(reportQuery).mockReturnValueOnce(historyQuery);
 
     await expect(getIssueReports(42)).resolves.toMatchObject({
-      reports: [{ id: 42, status: 'new' }],
+      reports: [{ id: 42, status: 'new', screenshot_url: null }],
       history: [{ issue_report_id: 42, new_status: 'new' }],
     });
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://web.example.test/api/issue-reports?reportId=42',
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer test-access-token' }),
-        cache: 'no-store',
-      }),
-    );
+    expect(mockFrom).toHaveBeenNthCalledWith(1, 'issue_reports');
+    expect(reportQuery.eq).toHaveBeenCalledWith('user_id', 'user-123');
+    expect(reportQuery.eq).toHaveBeenCalledWith('id', 42);
+    expect(mockFrom).toHaveBeenNthCalledWith(2, 'issue_report_status_history');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('submits a validated report through the existing authenticated API', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 201,
-      json: async () => ({ report, message: 'Your report was submitted.' }),
-    });
+  it('submits a validated report through the authenticated Supabase RPC', async () => {
+    mockRpc.mockResolvedValueOnce({ data: report, error: null });
 
     await expect(submitIssueReport({
       title: report.title,
@@ -83,28 +102,28 @@ describe('mobile issue reporting API', () => {
       pageUrl: report.page_url,
     })).resolves.toMatchObject({ id: 42, status: 'new' });
 
-    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('https://web.example.test/api/issue-reports');
-    expect(options.method).toBe('POST');
-    expect(new Headers(options.headers).get('authorization')).toBe('Bearer test-access-token');
-    expect(options.body).toBeInstanceOf(FormData);
-    expect((options.body as FormData).get('page_url')).toBe('/settings');
+    expect(mockRpc).toHaveBeenCalledWith('mobile_create_issue_report', {
+      p_title: report.title,
+      p_category: 'bug',
+      p_description: report.description,
+      p_page_url: '/settings',
+      p_screenshot_path: null,
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('includes an optional screenshot in the multipart submission', async () => {
-    const screenshotBytes = new Uint8Array([0xff, 0xd8, 0xff]).buffer;
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        arrayBuffer: async () => screenshotBytes,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 201,
-        json: async () => ({ report, message: 'Your report was submitted.' }),
-      });
+  it('uploads a validated screenshot directly to private Supabase Storage', async () => {
+    const screenshotBytes = new Uint8Array([0xff, 0xd8, 0xff, 0]).buffer;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => screenshotBytes,
+    });
+    mockRpc.mockImplementationOnce(async (_name: string, args: { p_screenshot_path: string }) => ({
+      data: { ...report, screenshot_path: args.p_screenshot_path },
+      error: null,
+    }));
 
-    await submitIssueReport({
+    await expect(submitIssueReport({
       title: report.title,
       category: 'bug',
       description: report.description,
@@ -115,37 +134,78 @@ describe('mobile issue reporting API', () => {
         mimeType: 'image/jpeg',
         size: screenshotBytes.byteLength,
       },
-    });
+    })).resolves.toMatchObject({ id: 42, screenshot_url: 'https://storage.example.test/signed' });
 
-    const form = (mockFetch.mock.calls[1] as [string, RequestInit])[1].body as FormData;
-    const attachedScreenshot = form.get('screenshot') as File;
-    expect(attachedScreenshot.name).toBe('screenshot.jpg');
-    expect(attachedScreenshot.type).toBe('image/jpeg');
+    expect(mockUpload).toHaveBeenCalledWith(
+      expect.stringMatching(/^user-123\/\d+-[a-z0-9]+\.jpg$/),
+      screenshotBytes,
+      expect.objectContaining({ contentType: 'image/jpeg', upsert: false }),
+    );
+    expect(mockRpc).toHaveBeenCalledWith('mobile_create_issue_report', expect.objectContaining({
+      p_screenshot_path: expect.stringMatching(/^user-123\/\d+-[a-z0-9]+\.jpg$/),
+    }));
+    expect(mockCreateSignedUrl).toHaveBeenCalledWith(expect.any(String), 60 * 60);
   });
 
-  it('rejects a report that fails client-side validation before sending a request', async () => {
+  it('removes an uploaded screenshot when report creation fails', async () => {
+    const screenshotBytes = new Uint8Array([0xff, 0xd8, 0xff]).buffer;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => screenshotBytes,
+    });
+    mockRpc.mockResolvedValueOnce({ data: null, error: { code: 'P0001', message: 'You have reached the issue report limit.' } });
+
+    await expect(submitIssueReport({
+      title: report.title,
+      category: 'bug',
+      description: report.description,
+      pageUrl: report.page_url,
+      screenshot: {
+        uri: 'file:///screenshot.jpg',
+        name: 'screenshot.jpg',
+        mimeType: 'image/jpeg',
+        size: screenshotBytes.byteLength,
+      },
+    })).rejects.toThrow('You have reached the issue report limit.');
+    expect(mockRemove).toHaveBeenCalledWith([expect.stringMatching(/^user-123\//)]);
+  });
+
+  it('rejects invalid report input before sending requests', async () => {
     await expect(submitIssueReport({
       title: 'Bad',
       category: 'bug',
       description: 'Description long enough.',
       pageUrl: '/settings',
     })).rejects.toThrow('Title must be between 5 and 120 characters.');
+    expect(mockRpc).not.toHaveBeenCalled();
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('surfaces server rate limits and invalid response data', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 429,
-      json: async () => ({ error: 'You have reached the issue report limit.' }),
-    });
-    await expect(getIssueReports()).rejects.toThrow('You have reached the issue report limit.');
-
+  it('rejects screenshots whose bytes do not match the selected image type', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      status: 200,
-      json: async () => ({ reports: [{ ...report, status: 'unknown' }], history: [] }),
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     });
+    await expect(submitIssueReport({
+      title: report.title,
+      category: 'bug',
+      description: report.description,
+      pageUrl: '/settings',
+      screenshot: {
+        uri: 'file:///screenshot.jpg',
+        name: 'screenshot.jpg',
+        mimeType: 'image/jpeg',
+        size: 3,
+      },
+    })).rejects.toThrow('The selected screenshot is not a valid JPEG, PNG, or WebP image.');
+    expect(mockUpload).not.toHaveBeenCalled();
+  });
+
+  it('surfaces invalid rows and database read errors', async () => {
+    mockFrom.mockReturnValueOnce(makeQuery({ data: [{ ...report, status: 'unknown' }], error: null }));
     await expect(getIssueReports()).rejects.toThrow('Issue report data was returned in an unexpected format.');
+
+    mockFrom.mockReturnValueOnce(makeQuery({ data: null, error: { message: 'permission denied' } }));
+    await expect(getIssueReports()).rejects.toThrow('Unable to load issue reports: permission denied');
   });
 });
