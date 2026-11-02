@@ -3,7 +3,7 @@ export interface Achievement {
   title: string;
   description: string;
   category: 'squad' | 'performance' | 'activity' | 'career';
-  tier: 'bronze' | 'silver' | 'gold' | 'mythic';
+  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
   icon: string;
   unlocked: boolean;
   progressText: string;
@@ -18,6 +18,14 @@ export interface UserStatsForAchievements {
   hasBio: boolean;
   timezone?: string | null;
   countryCode?: string | null;
+}
+
+export function getSeasonRankTier(globalRank: number | null): string {
+  if (!globalRank || !Number.isFinite(globalRank) || globalRank < 1) return 'Unranked';
+  if (globalRank <= 10) return 'Top 10';
+  if (globalRank <= 100) return 'Top 100';
+  if (globalRank <= 1000) return 'Top 1,000';
+  return 'Ranked Manager';
 }
 
 export function computeAchievements(stats: UserStatsForAchievements): Achievement[] {
@@ -40,7 +48,7 @@ export function computeAchievements(stats: UserStatsForAchievements): Achievemen
       unlocked: hasSquad,
       progressText: hasSquad ? 'Squad created' : '0/1 squad active',
       progressPercent: hasSquad ? 100 : 0,
-      unlockedAtLabel: hasSquad ? 'Active' : undefined,
+      unlockedAtLabel: hasSquad ? 'Active Season' : undefined,
     },
     {
       id: 'century-club',
@@ -52,7 +60,7 @@ export function computeAchievements(stats: UserStatsForAchievements): Achievemen
       unlocked: totalPoints >= 100,
       progressText: `${Math.min(totalPoints, 100)}/100 points`,
       progressPercent: Math.min(100, Math.round((totalPoints / 100) * 100)),
-      unlockedAtLabel: totalPoints >= 100 ? `${totalPoints} pts` : undefined,
+      unlockedAtLabel: totalPoints >= 100 ? `${totalPoints} pts scored` : undefined,
     },
     {
       id: 'captain-hit',
@@ -64,7 +72,7 @@ export function computeAchievements(stats: UserStatsForAchievements): Achievemen
       unlocked: hasSquad && totalPoints >= 20,
       progressText: hasSquad && totalPoints >= 20 ? 'Milestone achieved' : 'Set captain for next GW',
       progressPercent: hasSquad && totalPoints >= 20 ? 100 : Math.min(90, Math.round((totalPoints / 20) * 100)),
-      unlockedAtLabel: hasSquad && totalPoints >= 20 ? 'Unlocked' : undefined,
+      unlockedAtLabel: hasSquad && totalPoints >= 20 ? 'Leader locked' : undefined,
     },
     {
       id: 'value-hunter',
@@ -76,7 +84,7 @@ export function computeAchievements(stats: UserStatsForAchievements): Achievemen
       unlocked: hasSquad && totalPoints >= 50,
       progressText: hasSquad && totalPoints >= 50 ? 'Market edge secured' : 'Trade rising stars',
       progressPercent: hasSquad && totalPoints >= 50 ? 100 : (hasSquad ? 50 : 0),
-      unlockedAtLabel: hasSquad && totalPoints >= 50 ? 'Unlocked' : undefined,
+      unlockedAtLabel: hasSquad && totalPoints >= 50 ? 'Market mastery' : undefined,
     },
     {
       id: 'top-1000',
@@ -90,7 +98,7 @@ export function computeAchievements(stats: UserStatsForAchievements): Achievemen
         ? globalRank <= 1000
           ? `Rank #${globalRank}`
           : `Rank #${globalRank} (Target: ≤ 1000)`
-        : 'Awaiting ranking',
+        : 'Awaiting season ranking',
       progressPercent: !globalRank
         ? 0
         : globalRank <= 1000
@@ -103,12 +111,12 @@ export function computeAchievements(stats: UserStatsForAchievements): Achievemen
       title: 'Perfect Gameweek',
       description: 'All 5 starting players deliver positive scores without penalty.',
       category: 'performance',
-      tier: 'mythic',
+      tier: 'platinum',
       icon: '✨',
       unlocked: hasSquad && totalPoints >= 250,
-      progressText: hasSquad && totalPoints >= 250 ? 'Flawless execution' : 'Target: 250+ pts',
+      progressText: hasSquad && totalPoints >= 250 ? 'Flawless execution' : 'Target: 250+ cumulative pts',
       progressPercent: Math.min(100, Math.round((totalPoints / 250) * 100)),
-      unlockedAtLabel: hasSquad && totalPoints >= 250 ? 'Unlocked' : undefined,
+      unlockedAtLabel: hasSquad && totalPoints >= 250 ? 'Flawless line-up' : undefined,
     },
     {
       id: 'profile-master',
@@ -120,7 +128,7 @@ export function computeAchievements(stats: UserStatsForAchievements): Achievemen
       unlocked: profileCompleteCount === 3,
       progressText: `${profileCompleteCount}/3 details completed`,
       progressPercent: Math.round((profileCompleteCount / 3) * 100),
-      unlockedAtLabel: profileCompleteCount === 3 ? 'Verified' : undefined,
+      unlockedAtLabel: profileCompleteCount === 3 ? 'Verified manager' : undefined,
     },
   ];
 }

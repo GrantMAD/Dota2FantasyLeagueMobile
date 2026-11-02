@@ -230,20 +230,31 @@ export async function updateManagerProfile(update: ManagerProfileUpdate): Promis
   if (update.countryCode !== undefined) updates.country_code = update.countryCode;
   if (update.timezone !== undefined) updates.timezone = update.timezone;
   if (update.bannerTheme !== undefined) updates.banner_theme = update.bannerTheme;
-  const profile = await updateProfile(updates);
+  const updatedProfile = await updateProfile(updates);
   if (
-    (update.bio !== undefined && profile.bio !== (update.bio.trim() || null)) ||
-    (update.countryCode !== undefined && profile.countryCode !== (update.countryCode.trim().toUpperCase() || null)) ||
-    (update.timezone !== undefined && profile.timezone !== (update.timezone.trim() || null))
+    (update.bio !== undefined && updatedProfile.bio !== (update.bio.trim() || null)) ||
+    (update.countryCode !== undefined && updatedProfile.countryCode !== (update.countryCode.trim().toUpperCase() || null)) ||
+    (update.timezone !== undefined && updatedProfile.timezone !== (update.timezone.trim() || null))
   ) {
     throw new ApiError('Profile details were not saved. Apply mobile migration 025 and try again.', 502);
   }
+  const profile = await getManagerProfile();
+  if (!profile) throw new ApiError('The updated profile could not be reloaded.', 502);
   return profile;
 }
 
 
 export async function updateBannerTheme(themeId: string): Promise<ManagerProfile> {
-  return updateProfile({ banner_theme: themeId });
+  const { data, error } = await getSupabaseClient().rpc('mobile_update_banner_theme', {
+    p_theme_id: themeId,
+  });
+  if (error) throw new ApiError(`Unable to save banner theme: ${error.message}`, 400);
+  const profile = parseProfileResponse(data);
+  if (!profile) throw new ApiError('The banner theme update did not return a saved profile.', 502);
+  if (profile.bannerTheme !== themeId) {
+    throw new ApiError('The selected banner theme was not saved. Apply migration 059 and try again.', 502);
+  }
+  return profile;
 }
 export async function updatePushNotificationPreference(enabled: boolean): Promise<ManagerProfile> {
   return updateProfile({ push_notifications: enabled });

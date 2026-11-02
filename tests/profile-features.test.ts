@@ -1,5 +1,10 @@
-import { computeAchievements } from '@/src/features/account/achievementsData';
+import { computeAchievements, getSeasonRankTier } from '@/src/features/account/achievementsData';
 import { MOBILE_BANNER_THEMES, getMobileBannerTheme } from '@/src/features/account/bannerThemes';
+import {
+  getDefaultTimezoneForCountry,
+  MOBILE_COUNTRY_OPTIONS,
+  MOBILE_TIMEZONE_OPTIONS,
+} from '@/src/features/account/settingOptions';
 
 describe('Mobile Profile Enhancements', () => {
   describe('Hero Banner Themes', () => {
@@ -20,6 +25,49 @@ describe('Mobile Profile Enhancements', () => {
 
       const unknown = getMobileBannerTheme('non-existent');
       expect(unknown.id).toBe('radiant-dawn');
+    });
+
+    it('includes the web descriptions and role details for every theme', () => {
+      expect(MOBILE_BANNER_THEMES.every((theme) => theme.description.length > 0 && theme.dotaRole.length > 0)).toBe(true);
+    });
+  });
+
+  describe('Profile settings options', () => {
+    it('provides searchable country choices and the web timezone set', () => {
+      expect(MOBILE_COUNTRY_OPTIONS.find((option) => option.value === 'US')?.label).toBe('United States');
+      expect(MOBILE_COUNTRY_OPTIONS.find((option) => option.value === 'GB')?.label).toBe('United Kingdom');
+      expect(MOBILE_TIMEZONE_OPTIONS.map((option) => option.value)).toEqual([
+        'UTC',
+        'Africa/Johannesburg',
+        'America/Toronto',
+        'America/New_York',
+        'America/Chicago',
+        'America/Los_Angeles',
+        'Europe/London',
+        'Europe/Berlin',
+        'Asia/Manila',
+        'Asia/Singapore',
+      ]);
+    });
+
+    it('suggests the primary timezone for countries with a defined default', () => {
+      expect(getDefaultTimezoneForCountry('ZA')).toBe('Africa/Johannesburg');
+      expect(getDefaultTimezoneForCountry('za')).toBe('Africa/Johannesburg');
+      expect(getDefaultTimezoneForCountry('GB')).toBe('Europe/London');
+      expect(getDefaultTimezoneForCountry('unknown')).toBeNull();
+    });
+  });
+
+  describe('Season rank tiers', () => {
+    it.each([
+      [null, 'Unranked'],
+      [0, 'Unranked'],
+      [10, 'Top 10'],
+      [100, 'Top 100'],
+      [1000, 'Top 1,000'],
+      [1001, 'Ranked Manager'],
+    ])('labels global rank %s as %s', (rank, expectedTier) => {
+      expect(getSeasonRankTier(rank)).toBe(expectedTier);
     });
   });
 
@@ -43,6 +91,9 @@ describe('Mobile Profile Enhancements', () => {
 
       const top1000 = achievements.find((a) => a.id === 'top-1000');
       expect(top1000?.unlocked).toBe(true);
+
+      expect(achievements.find((achievement) => achievement.id === 'perfect-gw')?.tier).toBe('platinum');
+      expect(achievements.find((achievement) => achievement.id === 'first-squad')?.unlockedAtLabel).toBe('Active Season');
     });
 
     it('evaluates milestones for a new manager without squad', () => {

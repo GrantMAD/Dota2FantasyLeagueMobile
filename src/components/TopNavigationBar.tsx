@@ -104,6 +104,7 @@ export function TopNavigationBar() {
   const [openDropdown, setOpenDropdown] = useState<OpenDropdown>(null);
   const [avatarFailed, setAvatarFailed] = useState<string | null>(null);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const [notificationActionError, setNotificationActionError] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
@@ -211,11 +212,14 @@ export function TopNavigationBar() {
 
   async function handleSignOut() {
     setSignOutError(null);
+    setSigningOut(true);
     try {
       await signOut();
       closeDropdown();
     } catch (error) {
       setSignOutError(error instanceof Error ? error.message : 'Unable to sign out. Please try again.');
+    } finally {
+      setSigningOut(false);
     }
   }
 
@@ -328,6 +332,8 @@ export function TopNavigationBar() {
                     <Pressable
                       key={item.label}
                       accessibilityRole="button"
+                      accessibilityState={{ disabled: signingOut }}
+                      disabled={signingOut}
                       style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingHorizontal: 12 }}
                       onPress={() => {
                         closeDropdown();
@@ -346,6 +352,8 @@ export function TopNavigationBar() {
                 ) : null}
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: signingOut, busy: signingOut }}
+                  disabled={signingOut}
                   style={{
                     minHeight: 44,
                     flexDirection: 'row',
@@ -358,12 +366,18 @@ export function TopNavigationBar() {
                   }}
                   onPress={() => void handleSignOut()}
                 >
-                  <SymbolView
-                    name={{ ios: 'rectangle.portrait.and.arrow.right', android: 'logout', web: 'logout' }}
-                    size={18}
-                    tintColor={palette.error}
-                  />
-                  <Text style={{ marginLeft: 12, color: palette.error, fontSize: 14, fontWeight: '600' }}>Sign out</Text>
+                  {signingOut ? (
+                    <ActivityIndicator accessibilityLabel="Signing out" color={palette.error} />
+                  ) : (
+                    <SymbolView
+                      name={{ ios: 'rectangle.portrait.and.arrow.right', android: 'logout', web: 'logout' }}
+                      size={18}
+                      tintColor={palette.error}
+                    />
+                  )}
+                  <Text style={{ marginLeft: 12, color: palette.error, fontSize: 14, fontWeight: '600' }}>
+                    {signingOut ? 'Signing out...' : 'Sign out'}
+                  </Text>
                 </Pressable>
               </ScrollView>
             ) : openDropdown === 'notifications' ? (

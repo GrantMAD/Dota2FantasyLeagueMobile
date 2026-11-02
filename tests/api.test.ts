@@ -33,6 +33,7 @@ import {
   registerPushToken,
   removePushToken,
   updateManagerProfile,
+  updateBannerTheme,
   updatePushNotificationPreference,
   updateThemePreference,
   uploadManagerAvatar,
@@ -1682,6 +1683,27 @@ describe('mobile data access', () => {
           member_since: '2026-01-01T00:00:00.000Z',
         } },
         error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { profile: {
+          id: 'test-user',
+          username: 'manager',
+          display_name: 'Manager',
+          bio: 'League champion',
+          country_code: 'GB',
+          timezone: 'Europe/London',
+          avatar_url: null,
+          role: 'user',
+          email: 'test@example.com',
+          email_notifications: false,
+          push_notifications: true,
+          theme_preference: 'light',
+          banner_theme: 'dire-crimson',
+          is_premium: true,
+          subscription_tier: 'pro',
+          member_since: '2026-01-01T00:00:00.000Z',
+        } },
+        error: null,
       });
 
     await expect(getManagerProfile()).resolves.toMatchObject({
@@ -1712,6 +1734,7 @@ describe('mobile data access', () => {
       emailNotifications: false,
       pushNotifications: true,
       themePreference: 'light',
+      bannerTheme: 'dire-crimson',
     });
 
     expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(1, 'mobile_get_profile');
@@ -1726,7 +1749,53 @@ describe('mobile data access', () => {
         push_notifications: true,
       },
     });
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(3, 'mobile_get_profile');
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('saves and verifies a banner theme through the dedicated authenticated RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValueOnce({
+      data: { profile: {
+        id: 'test-user',
+        username: 'captain',
+        display_name: 'Captain',
+        email: 'test@example.com',
+        email_notifications: true,
+        push_notifications: false,
+        theme_preference: 'dark',
+        banner_theme: 'dire-crimson',
+        member_since: '2026-01-01T00:00:00.000Z',
+      } },
+      error: null,
+    });
+
+    await expect(updateBannerTheme('dire-crimson')).resolves.toMatchObject({
+      id: 'test-user',
+      bannerTheme: 'dire-crimson',
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_update_banner_theme', {
+      p_theme_id: 'dire-crimson',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a banner theme update when the database returns a different theme', async () => {
+    mobileFantasyContextRpc.mockResolvedValueOnce({
+      data: { profile: {
+        id: 'test-user',
+        username: 'captain',
+        display_name: 'Captain',
+        email: 'test@example.com',
+        email_notifications: true,
+        push_notifications: false,
+        theme_preference: 'dark',
+        banner_theme: 'radiant-dawn',
+        member_since: '2026-01-01T00:00:00.000Z',
+      } },
+      error: null,
+    });
+
+    await expect(updateBannerTheme('dire-crimson')).rejects.toThrow('Apply migration 059');
   });
 
   it('loads and saves the account theme preference through authenticated Supabase RPCs', async () => {
