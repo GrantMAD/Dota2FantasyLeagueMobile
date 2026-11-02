@@ -5,11 +5,21 @@ describe('manager deep-link routing', () => {
     '/(tabs)',
     '/(tabs)/discover',
     '/matches',
+    '/friends',
+    '/help',
+    '/premium',
     '/season-recap',
     '/notifications',
     '/report-issue',
   ])('preserves the supported static destination %s', (path) => {
     expect(managerReturnRoute(path)).toBe(path);
+  });
+
+  it.each([
+    ['/more', '/(tabs)/more'],
+    ['/discover', '/(tabs)/discover'],
+  ])('maps the public tab path %s to its authenticated route', (path, expected) => {
+    expect(managerReturnRoute(path)).toBe(expected);
   });
 
   it.each([

@@ -176,20 +176,16 @@ export default function HomeScreen() {
           <View className="mt-3">
             <DataFreshnessBadge page="dashboard" />
           </View>
-          <Link href="/team" asChild>
-            <Pressable accessibilityRole="button" className="mt-4 min-h-11 items-center justify-center self-start rounded-xl bg-brand-500 px-5">
-              <Text className="font-bold text-white">Manage Squad</Text>
-            </Pressable>
-          </Link>
         </View>
 
         {query.data ? (
           <View className="gap-3">
             <View className="flex-row gap-3">
               <HomeStatCard
-                label="Active Squads"
+                label="Manage Squad"
+                subLabel={squadSummaryQuery.data?.activeSquadCount === 1 ? 'Active squad' : 'Active squads'}
                 value={squadSummaryQuery.isPending ? '…' : formatMetric(squadSummaryQuery.data?.activeSquadCount)}
-                detail="Manage your squads"
+                detail="View and manage your squads"
                 icon={{ ios: 'shield.fill', android: 'shield', web: 'shield' }}
                 tint="#22d3ee"
                 onPress={() => router.push('/team')}
@@ -857,6 +853,7 @@ export default function HomeScreen() {
 
 function HomeStatCard({
   label,
+  subLabel,
   value,
   detail,
   icon,
@@ -864,6 +861,7 @@ function HomeStatCard({
   onPress,
 }: {
   label: string;
+  subLabel?: string;
   value: string;
   detail: string;
   icon: ComponentProps<typeof SymbolView>['name'];
@@ -872,7 +870,7 @@ function HomeStatCard({
 }) {
   return (
     <Pressable
-      accessibilityLabel={`${label}: ${value}. ${detail}`}
+      accessibilityLabel={`${label}${subLabel ? `, ${subLabel}` : ''}: ${value}. ${detail}`}
       accessibilityRole="button"
       className="min-h-32 flex-1 justify-between overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-3"
       onPress={onPress}
@@ -883,6 +881,11 @@ function HomeStatCard({
         </View>
         <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</Text>
         <Text className="mt-1 text-xl font-black text-white">{value}</Text>
+        {subLabel ? (
+          <Text className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+            {subLabel}
+          </Text>
+        ) : null}
       </View>
       <Text numberOfLines={1} className="mt-2 text-[10px] font-medium text-slate-400">{detail}</Text>
     </Pressable>

@@ -35,6 +35,7 @@ export interface ManagerProfileUpdate {
 
 export interface ManagerSignupResult {
   message: string;
+  requiresEmailConfirmation: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -285,6 +286,7 @@ export async function createManagerAccount(input: {
   email: string;
   username: string;
   password: string;
+  emailRedirectTo: string;
 }): Promise<ManagerSignupResult> {
   const { data, error } = await getSupabaseClient().auth.signUp({
     email: input.email.trim().toLowerCase(),
@@ -295,6 +297,7 @@ export async function createManagerAccount(input: {
         display_name: input.username.trim(),
         mobile_client: 'fantasy-dota-mobile',
       },
+      emailRedirectTo: input.emailRedirectTo,
     },
   });
   if (error) {
@@ -303,9 +306,29 @@ export async function createManagerAccount(input: {
   if (!data.user) {
     throw new ApiError('Account creation did not return a user.', 502);
   }
+  const requiresEmailConfirmation = !data.session;
   return {
-    message: data.session
-      ? 'Your account was created successfully.'
-      : 'User created successfully. Please check your email to confirm.',
+    requiresEmailConfirmation,
+    message: requiresEmailConfirmation
+      ? 'If an account can be created with this email, a confirmation link will arrive in your inbox. Open it on this device to confirm your address and continue.'
+      : 'Your account is ready. Continue to your team to get started.',
   };
+}
+
+export async function requestManagerPasswordReset(email: string, redirectTo: string): Promise<void> {
+  const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo,
+  });
+  if (error) throw new ApiError(`Unable to send a password reset link: ${error.message}`, 400);
+}
+
+export async function exchangeMobileAuthCode(code: string): Promise<void> {
+  const { data, error } = await getSupabaseClient().auth.exchangeCodeForSession(code);
+  if (error) throw new ApiError(`Unable to verify this link: ${error.message}`, 400);
+  if (!data.session) throw new ApiError('This link did not create an authenticated session. Request a new link and try again.', 502);
+}
+
+export async function updateManagerPassword(password: string): Promise<void> {
+  const { error } = await getSupabaseClient().auth.updateUser({ password });
+  if (error) throw new ApiError(`Unable to update your password: ${error.message}`, 400);
 }

@@ -59,12 +59,7 @@ const profileMenuItems: {
   { label: 'Friends', href: '/friends', icon: { ios: 'person.2', android: 'group', web: 'group' } },
   { label: 'Gameweeks', href: '/gameweeks', icon: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' } },
   { label: 'Squad Planner', href: '/squad-planner', icon: { ios: 'calendar.badge.clock', android: 'event_note', web: 'event_note' } },
-  { label: 'Global Leaderboard', href: '/leaderboard', icon: { ios: 'list.number', android: 'leaderboard', web: 'leaderboard' } },
-  { label: 'Analytics', href: '/analytics', icon: { ios: 'chart.xyaxis.line', android: 'query_stats', web: 'query_stats' } },
-  { label: 'Season Recap', href: '/season-recap', icon: { ios: 'clock.arrow.circlepath', android: 'history', web: 'history' } },
   { label: 'Notifications', href: '/notifications', icon: { ios: 'bell', android: 'notifications', web: 'notifications' } },
-  { label: 'Learn & Rules', href: '/learn', icon: { ios: 'book.closed', android: 'menu_book', web: 'menu_book' } },
-  { label: 'Profile & Settings', href: '/profile', icon: { ios: 'person.crop.circle', android: 'manage_accounts', web: 'manage_accounts' } },
 ];
 
 function getAvatarUrl(value: unknown): string | null {
@@ -318,11 +313,46 @@ export function TopNavigationBar() {
           >
             {openDropdown === 'profile' ? (
               <ScrollView contentContainerStyle={{ padding: 12 }} showsVerticalScrollIndicator={false}>
-                <View style={{ marginBottom: 8, borderBottomWidth: 1, borderBottomColor: palette.border, paddingHorizontal: 8, paddingBottom: 12 }}>
-                  <Text style={{ color: palette.text, fontWeight: '600' }}>{userLabel}</Text>
-                  {user.email ? <Text style={{ marginTop: 4, color: palette.mutedText, fontSize: 12 }}>{user.email}</Text> : null}
+                <View style={{ marginBottom: 8, borderBottomWidth: 1, borderBottomColor: palette.border, paddingBottom: 12 }}>
+                  <Pressable
+                    accessibilityLabel={`Open profile for ${userLabel}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: signingOut }}
+                    disabled={signingOut}
+                    style={{
+                      minHeight: 92,
+                      justifyContent: 'center',
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: theme === 'dark' ? '#115e59' : '#99f6e4',
+                      backgroundColor: theme === 'dark' ? '#102a2a' : '#f0fdfa',
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                    }}
+                    onPress={() => {
+                      closeDropdown();
+                      router.push('/profile');
+                    }}
+                  >
+                    <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
+                      {userLabel}
+                    </Text>
+                    {user.email ? (
+                      <Text numberOfLines={1} style={{ marginTop: 4, color: palette.mutedText, fontSize: 12 }}>
+                        {user.email}
+                      </Text>
+                    ) : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                      <Text style={{ color: palette.accent, fontSize: 12, fontWeight: '700' }}>View profile</Text>
+                      <SymbolView
+                        name={{ ios: 'arrow.up.right', android: 'arrow_outward', web: 'arrow_outward' }}
+                        size={14}
+                        tintColor={palette.accent}
+                      />
+                    </View>
+                  </Pressable>
                   {avatarQuery.isError ? (
-                    <Text accessibilityRole="alert" style={{ marginTop: 8, color: palette.error, fontSize: 12 }}>
+                    <Text accessibilityRole="alert" style={{ marginTop: 8, paddingHorizontal: 8, color: palette.error, fontSize: 12 }}>
                       {avatarQuery.error.message}
                     </Text>
                   ) : null}
@@ -345,6 +375,56 @@ export function TopNavigationBar() {
                     </Pressable>
                   ))}
                 </View>
+                <Pressable
+                  accessibilityLabel="Explore more: planning, competitions, insights, and help"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: signingOut }}
+                  disabled={signingOut}
+                  style={{
+                    minHeight: 64,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginTop: 6,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: palette.border,
+                    backgroundColor: palette.elevated,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                  }}
+                  onPress={() => {
+                    closeDropdown();
+                    router.push('/more');
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 10,
+                      backgroundColor: theme === 'dark' ? '#134e4a' : '#ccfbf1',
+                    }}
+                  >
+                    <SymbolView
+                      name={{ ios: 'square.grid.2x2', android: 'apps', web: 'apps' }}
+                      size={18}
+                      tintColor={palette.accent}
+                    />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ color: palette.text, fontSize: 14, fontWeight: '600' }}>Explore more</Text>
+                    <Text style={{ marginTop: 3, color: palette.mutedText, fontSize: 11 }}>
+                      Planning, competitions, insights & help
+                    </Text>
+                  </View>
+                  <SymbolView
+                    name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                    size={16}
+                    tintColor={palette.accent}
+                  />
+                </Pressable>
                 {signOutError ? (
                   <Text accessibilityRole="alert" style={{ paddingHorizontal: 8, paddingTop: 8, color: palette.error, fontSize: 14 }}>
                     {signOutError}

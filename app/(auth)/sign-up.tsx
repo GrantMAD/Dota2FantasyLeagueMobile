@@ -1,4 +1,5 @@
 import { Link, useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +20,7 @@ import { AuthInput } from '@/src/components/auth/AuthInput';
 import { PasswordStrength } from '@/src/components/auth/PasswordStrength';
 import { NetworkStatusBanner } from '@/src/lib/connectivity';
 import { createManagerAccount } from '@/src/features/account/api';
+import { getWebBaseUrl } from '@/src/lib/web';
 
 const SQUAD_PREVIEW = [
   { role: 'Carry',    initials: 'CS', color: '#f59e0b' },
@@ -101,7 +103,17 @@ const preview = StyleSheet.create({
 });
 
 /** Animated success overlay shown after account creation */
-function SuccessOverlay({ message, onBack }: { message: string; onBack: () => void }) {
+function SuccessOverlay({
+  title,
+  message,
+  actionLabel,
+  onBack,
+}: {
+  title: string;
+  message: string;
+  actionLabel: string;
+  onBack: () => void;
+}) {
   const [progress] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
@@ -120,7 +132,7 @@ function SuccessOverlay({ message, onBack }: { message: string; onBack: () => vo
         resizeMode="contain"
         accessibilityLabel="Fantasy Dota 2 logo"
       />
-      <Text style={success.title}>Account created!</Text>
+      <Text style={success.title}>{title}</Text>
       <Text style={success.subtitle}>{message}</Text>
 
       {/* Progress bar */}
@@ -144,7 +156,7 @@ function SuccessOverlay({ message, onBack }: { message: string; onBack: () => vo
         accessibilityLabel="Back to sign in"
         style={({ pressed }) => [success.button, pressed && { opacity: 0.8 }]}
       >
-        <Text style={success.buttonText}>Back to sign in</Text>
+        <Text style={success.buttonText}>{actionLabel}</Text>
       </Pressable>
     </View>
   );
@@ -212,26 +224,46 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState(false);
   const [confirmationMessage, setConfirmationMessage] = useState('');
+  const [requiresEmailConfirmation, setRequiresEmailConfirmation] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function handleSignUp() {
     setErrorMessage(null);
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
     if (password.length < 8) {
       setErrorMessage('Your password must be at least 8 characters.');
       return;
     }
     setSubmitting(true);
     try {
-      const result = await createManagerAccount({ email, username, password });
+      const result = await createManagerAccount({
+        email,
+        username,
+        password,
+        emailRedirectTo: Linking.createURL('callback'),
+      });
       setConfirmationMessage(result.message);
+      setRequiresEmailConfirmation(result.requiresEmailConfirmation);
       setCreated(true);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Unable to create your account.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function openLegalDocument(path: 'terms' | 'privacy') {
+    try {
+      await Linking.openURL(new URL(`/${path}`, getWebBaseUrl()).toString());
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : `Unable to open the ${path} page.`);
     }
   }
 
@@ -242,8 +274,10 @@ export default function SignUpScreen() {
 
         {created ? (
           <SuccessOverlay
+            title={requiresEmailConfirmation ? 'Check your email' : 'Account ready!'}
             message={confirmationMessage}
-            onBack={() => router.replace('/(auth)/sign-in')}
+            actionLabel={requiresEmailConfirmation ? 'Back to sign in' : 'Continue to app'}
+            onBack={() => router.replace(requiresEmailConfirmation ? '/(auth)/sign-in' : '/(tabs)')}
           />
         ) : (
           <KeyboardAvoidingView
@@ -326,25 +360,35 @@ export default function SignUpScreen() {
                         secureTextEntry
                         textContentType="newPassword"
                         value={password}
-                        error={errorMessage}
                         hint="Minimum 8 characters"
                       />
                       <PasswordStrength password={password} />
                     </View>
 
+                    <AuthInput
+                      label="Confirm password"
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      onChangeText={setConfirmPassword}
+                      placeholder="Enter your password again"
+                      secureTextEntry
+                      textContentType="newPassword"
+                      value={confirmPassword}
+                    />
+
                     {/* Create account button */}
                     <Pressable
                       onPress={() => void handleSignUp()}
-                      disabled={submitting || !email.trim() || !username.trim() || !password}
+                      disabled={submitting || !email.trim() || !username.trim() || !password || !confirmPassword}
                       accessibilityRole="button"
                       accessibilityLabel="Create account"
                       accessibilityState={{
-                        disabled: submitting || !email.trim() || !username.trim() || !password,
+                        disabled: submitting || !email.trim() || !username.trim() || !password || !confirmPassword,
                         busy: submitting,
                       }}
                       style={({ pressed }) => [
                         styles.createButton,
-                        (submitting || !email.trim() || !username.trim() || !password) &&
+                        (submitting || !email.trim() || !username.trim() || !password || !confirmPassword) &&
                           styles.createButtonDisabled,
                         pressed && styles.createButtonPressed,
                       ]}
@@ -359,12 +403,28 @@ export default function SignUpScreen() {
                       )}
                     </Pressable>
                   </View>
+                  {errorMessage ? (
+                    <Text accessibilityRole="alert" style={styles.legalError}>
+                      {errorMessage}
+                    </Text>
+                  ) : null}
                 </View>
               </AuthCard>
 
               <Link href="/(auth)/sign-in" style={styles.signInLink}>
                 Already have an account? Sign in
               </Link>
+              <Text style={styles.legalText}>
+                By creating an account you agree to our{' '}
+                <Text accessibilityRole="link" onPress={() => void openLegalDocument('terms')} style={styles.legalLink}>
+                  Terms
+                </Text>
+                {' '}and{' '}
+                <Text accessibilityRole="link" onPress={() => void openLegalDocument('privacy')} style={styles.legalLink}>
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
             </ScrollView>
           </KeyboardAvoidingView>
         )}
@@ -487,5 +547,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#14b8a6',
     paddingBottom: 8,
+  },
+  legalText: {
+    marginTop: 16,
+    textAlign: 'center',
+    fontSize: 11,
+    lineHeight: 18,
+    color: '#64748b',
+  },
+  legalLink: {
+    color: '#94a3b8',
+    textDecorationLine: 'underline',
+  },
+  legalError: {
+    marginTop: 8,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#f87171',
   },
 });

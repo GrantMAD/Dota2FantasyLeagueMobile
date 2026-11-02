@@ -101,10 +101,10 @@ function AppRoutes() {
   const segments = useSegments();
   const pathname = usePathname();
   const isAuthRoute = segments[0] === '(auth)';
-  const isPasswordRecovery = segments[0] === 'forgot-password';
-  const showTopNavigation = Boolean(session) && !isAuthRoute && !isPasswordRecovery;
+  const isRecoveryRoute = segments[0] === 'forgot-password' || pathname === '/reset-password';
+  const showTopNavigation = Boolean(session) && !isAuthRoute && !isRecoveryRoute;
 
-  if (!ready && !isAuthRoute && !isPasswordRecovery) {
+  if (!ready && !isAuthRoute && !isRecoveryRoute) {
     return (
       <Screen>
         <View className="flex-1 items-center justify-center">
@@ -113,7 +113,7 @@ function AppRoutes() {
       </Screen>
     );
   }
-  if (ready && !session && !isAuthRoute && !isPasswordRecovery) {
+  if (ready && !session && !isAuthRoute && !isRecoveryRoute) {
     return (
       <Redirect
         href={{

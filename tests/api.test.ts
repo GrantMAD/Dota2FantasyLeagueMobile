@@ -28,12 +28,15 @@ import {
 } from '../src/features/premium/api';
 import {
   createManagerAccount,
+  exchangeMobileAuthCode,
   getManagerProfile,
   getThemePreference,
+  requestManagerPasswordReset,
   registerPushToken,
   removePushToken,
   updateManagerProfile,
   updateBannerTheme,
+  updateManagerPassword,
   updatePushNotificationPreference,
   updateThemePreference,
   uploadManagerAvatar,
@@ -1937,8 +1940,10 @@ describe('mobile data access', () => {
       email: ' NEW@example.com ',
       username: ' new-manager ',
       password: 'long-password',
+      emailRedirectTo: 'fantasydota2://callback',
     })).resolves.toEqual({
-      message: 'User created successfully. Please check your email to confirm.',
+      message: 'If an account can be created with this email, a confirmation link will arrive in your inbox. Open it on this device to confirm your address and continue.',
+      requiresEmailConfirmation: true,
     });
 
     expect(signUp).toHaveBeenCalledWith({
@@ -1950,8 +1955,38 @@ describe('mobile data access', () => {
           display_name: 'new-manager',
           mobile_client: 'fantasy-dota-mobile',
         },
+        emailRedirectTo: 'fantasydota2://callback',
       },
     });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('sends mobile password recovery requests directly through Supabase Auth', async () => {
+    const resetPasswordForEmail = jest.spyOn(supabase.auth, 'resetPasswordForEmail')
+      .mockResolvedValue({ data: {}, error: null });
+
+    await expect(requestManagerPasswordReset(
+      ' MANAGER@EXAMPLE.TEST ',
+      'fantasydota2://reset-password',
+    )).resolves.toBeUndefined();
+
+    expect(resetPasswordForEmail).toHaveBeenCalledWith('manager@example.test', {
+      redirectTo: 'fantasydota2://reset-password',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('exchanges mobile auth links and updates passwords directly through Supabase Auth', async () => {
+    const exchangeCodeForSession = jest.spyOn(supabase.auth, 'exchangeCodeForSession')
+      .mockResolvedValue({ data: { user: session.user, session }, error: null });
+    const updateUser = jest.spyOn(supabase.auth, 'updateUser')
+      .mockResolvedValue({ data: { user: session.user }, error: null });
+
+    await expect(exchangeMobileAuthCode('verification-code')).resolves.toBeUndefined();
+    await expect(updateManagerPassword('a-secure-password')).resolves.toBeUndefined();
+
+    expect(exchangeCodeForSession).toHaveBeenCalledWith('verification-code');
+    expect(updateUser).toHaveBeenCalledWith({ password: 'a-secure-password' });
     expect(fetch).not.toHaveBeenCalled();
   });
 
