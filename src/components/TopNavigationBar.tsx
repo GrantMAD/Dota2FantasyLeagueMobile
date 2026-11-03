@@ -26,6 +26,7 @@ import {
 } from '@/src/features/notifications/api';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
+import { isPremiumUser } from '@/src/lib/premium';
 
 type OpenDropdown = 'notifications' | 'profile' | 'search' | null;
 
@@ -101,6 +102,7 @@ export function TopNavigationBar() {
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [notificationActionError, setNotificationActionError] = useState<string | null>(null);
+  const [premiumTooltipVisible, setPremiumTooltipVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
   const user = session?.user;
@@ -189,6 +191,7 @@ export function TopNavigationBar() {
 
   function closeDropdown() {
     setOpenDropdown(null);
+    setPremiumTooltipVisible(false);
   }
 
   function openNotification(notification: ManagerNotification) {
@@ -222,7 +225,7 @@ export function TopNavigationBar() {
     <>
       <SafeAreaView className="border-b border-slate-800 bg-slate-950" edges={['top', 'left', 'right']}>
         <View className="h-14 flex-row items-center justify-between px-4">
-          <Text className="text-sm font-bold uppercase tracking-[2px] text-brand-400">Fantasy Dota</Text>
+          <Text className="flex-1 text-sm font-bold uppercase tracking-[2px] text-brand-400">Fantasy Dota</Text>
           <View className="flex-row items-center gap-3">
             <Pressable
               accessibilityLabel="Search players and pages"
@@ -264,6 +267,7 @@ export function TopNavigationBar() {
               className="h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-brand-500 bg-slate-800"
               onPress={() => {
                 setSignOutError(null);
+                setPremiumTooltipVisible(false);
                 setOpenDropdown(openDropdown === 'profile' ? null : 'profile');
               }}
             >
@@ -314,11 +318,7 @@ export function TopNavigationBar() {
             {openDropdown === 'profile' ? (
               <ScrollView contentContainerStyle={{ padding: 12 }} showsVerticalScrollIndicator={false}>
                 <View style={{ marginBottom: 8, borderBottomWidth: 1, borderBottomColor: palette.border, paddingBottom: 12 }}>
-                  <Pressable
-                    accessibilityLabel={`Open profile for ${userLabel}`}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: signingOut }}
-                    disabled={signingOut}
+                  <View
                     style={{
                       minHeight: 92,
                       justifyContent: 'center',
@@ -329,28 +329,93 @@ export function TopNavigationBar() {
                       paddingHorizontal: 12,
                       paddingVertical: 10,
                     }}
-                    onPress={() => {
-                      closeDropdown();
-                      router.push('/profile');
-                    }}
                   >
-                    <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
-                      {userLabel}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Pressable
+                        accessibilityLabel={`Open profile for ${userLabel}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: signingOut }}
+                        disabled={signingOut}
+                        className="min-h-10 flex-1 justify-center"
+                        onPress={() => {
+                          closeDropdown();
+                          router.push('/profile');
+                        }}
+                      >
+                        <Text numberOfLines={1} style={{ color: palette.text, fontSize: 15, fontWeight: '700' }}>
+                          {userLabel}
+                        </Text>
+                      </Pressable>
+                      {isPremiumUser(profileQuery.data) ? (
+                        <Pressable
+                          accessibilityLabel="Premium subscription"
+                          accessibilityHint="Shows information about your Premium subscription"
+                          accessibilityRole="button"
+                          accessibilityState={{ expanded: premiumTooltipVisible }}
+                          style={{
+                            minHeight: 28,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: theme === 'dark' ? '#fbbf24' : '#b45309',
+                            backgroundColor: theme === 'dark' ? '#422006' : '#fffbeb',
+                            paddingHorizontal: 8,
+                          }}
+                          onPress={() => setPremiumTooltipVisible((visible) => !visible)}
+                        >
+                          <SymbolView
+                            name={{ ios: 'crown.fill', android: 'workspace_premium', web: 'workspace_premium' }}
+                            size={13}
+                            tintColor="#fbbf24"
+                          />
+                          <Text style={{
+                            color: theme === 'dark' ? '#fcd34d' : '#92400e',
+                            fontSize: 10,
+                            fontWeight: '700',
+                          }}>
+                            Premium
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    {premiumTooltipVisible && isPremiumUser(profileQuery.data) ? (
+                      <Text
+                        accessibilityRole="text"
+                        style={{
+                          marginTop: 4,
+                          color: palette.secondaryText,
+                          fontSize: 12,
+                          lineHeight: 20,
+                        }}
+                      >
+                        Your account has an active Premium subscription.
+                      </Text>
+                    ) : null}
                     {user.email ? (
                       <Text numberOfLines={1} style={{ marginTop: 4, color: palette.mutedText, fontSize: 12 }}>
                         {user.email}
                       </Text>
                     ) : null}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: signingOut }}
+                      disabled={signingOut}
+                      className="mt-2 min-h-10 flex-row items-center justify-between"
+                      onPress={() => {
+                        closeDropdown();
+                        router.push('/profile');
+                      }}
+                    >
                       <Text style={{ color: palette.accent, fontSize: 12, fontWeight: '700' }}>View profile</Text>
                       <SymbolView
                         name={{ ios: 'arrow.up.right', android: 'arrow_outward', web: 'arrow_outward' }}
                         size={14}
                         tintColor={palette.accent}
                       />
-                    </View>
-                  </Pressable>
+                    </Pressable>
+                  </View>
                   {avatarQuery.isError ? (
                     <Text accessibilityRole="alert" style={{ marginTop: 8, paddingHorizontal: 8, color: palette.error, fontSize: 12 }}>
                       {avatarQuery.error.message}
