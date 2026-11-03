@@ -286,7 +286,7 @@ export default function FriendsScreen() {
   const progressQuery = useQuery({
     queryKey: ['friends', 'progress', selectedManager?.id],
     queryFn: () => getFriendProgress(selectedManager!.id),
-    enabled: selectedManager !== null,
+    enabled: selectedManager !== null && (followingQuery.data ?? []).some((profile) => profile.id === selectedManager.id),
     staleTime: 30_000,
   });
   const loadMoreMutation = useMutation({
@@ -391,25 +391,35 @@ export default function FriendsScreen() {
               {searchResults.map((profile) => {
                 const isFollowing = profile.is_following ?? followingIds.has(profile.id);
                 return (
-                  <View className="flex-row items-center justify-between rounded-xl border border-slate-700 bg-slate-900 px-4 py-3" key={profile.id}>
-                    <View className="mr-3 flex-1 flex-row items-center">
+                  <View className="gap-3 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3" key={profile.id}>
+                    <View className="flex-row items-center">
                       <ProfileAvatar name={profileName(profile)} url={profile.avatar_url} />
-                      <View className="flex-1">
+                      <View className="ml-3 flex-1">
                         <Text className="font-semibold text-slate-50">{profileName(profile)}</Text>
                         <Text className="text-sm text-slate-400">@{profile.username}</Text>
                       </View>
                     </View>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: followMutation.isPending }}
-                      className={`min-h-10 items-center justify-center rounded-lg px-4 ${isFollowing ? 'bg-slate-700' : 'bg-brand-500'}`}
-                      disabled={followMutation.isPending}
-                      onPress={() => toggleFollow(profile)}
-                    >
-                      <Text className={isFollowing ? 'font-semibold text-slate-200' : 'font-semibold text-on-accent'}>
-                        {isFollowing ? 'Following' : 'Follow'}
-                      </Text>
-                    </Pressable>
+                    <View className="flex-row justify-end gap-2">
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`View ${profileName(profile)} progress`}
+                        className="min-h-10 items-center justify-center rounded-lg border border-brand-500/50 bg-brand-500/10 px-3"
+                        onPress={() => setSelectedManager(profile)}
+                      >
+                        <Text className="whitespace-nowrap font-semibold text-brand-300">View progress</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: followMutation.isPending }}
+                        className={`min-h-10 items-center justify-center rounded-lg px-4 ${isFollowing ? 'bg-slate-700' : 'bg-brand-500'}`}
+                        disabled={followMutation.isPending}
+                        onPress={() => toggleFollow(profile)}
+                      >
+                        <Text className={isFollowing ? 'font-semibold text-slate-200' : 'font-semibold text-on-accent'}>
+                          {isFollowing ? 'Following' : 'Follow'}
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
                 );
               })}
@@ -657,7 +667,58 @@ export default function FriendsScreen() {
                   </View>
                 </View>
 
-                {progressQuery.isLoading ? (
+                {followingQuery.isLoading ? (
+                  <ActivityIndicator accessibilityLabel="Checking follow status" color="#14b8a6" />
+                ) : followingQuery.error ? (
+                  <View
+                    className="gap-3 rounded-2xl border p-4"
+                    style={{ backgroundColor: modalColors.card, borderColor: modalColors.border }}
+                  >
+                    <Text accessibilityRole="alert" className="text-sm" style={{ color: '#b91c1c' }}>
+                      {followingQuery.error.message}
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      className="self-start rounded-lg px-4 py-2"
+                      style={{ backgroundColor: modalColors.selected }}
+                      onPress={() => void followingQuery.refetch()}
+                    >
+                      <Text className="font-semibold" style={{ color: modalColors.accent }}>Try again</Text>
+                    </Pressable>
+                  </View>
+                ) : selectedManager && !followingIds.has(selectedManager.id) ? (
+                  <View
+                    className="gap-3 rounded-2xl border p-4"
+                    style={{ backgroundColor: modalColors.card, borderColor: modalColors.border }}
+                  >
+                    <Text className="text-base font-bold" style={{ color: modalColors.text }}>
+                      Follow {profileName(selectedManager)} to view their progress
+                    </Text>
+                    <Text className="text-sm leading-5" style={{ color: modalColors.muted }}>
+                      Following this manager lets you see their season points, global rank, and gameweek history.
+                    </Text>
+                    {followMutation.error ? (
+                      <Text accessibilityRole="alert" className="text-sm" style={{ color: '#b91c1c' }}>
+                        {followMutation.error.message}
+                      </Text>
+                    ) : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: followMutation.isPending }}
+                      className="min-h-11 flex-row items-center justify-center gap-2 self-start rounded-xl px-5"
+                      disabled={followMutation.isPending}
+                      style={{ backgroundColor: modalColors.accent, opacity: followMutation.isPending ? 0.65 : 1 }}
+                      onPress={() => toggleFollow(selectedManager)}
+                    >
+                      {followMutation.isPending ? (
+                        <ActivityIndicator color={theme === 'dark' ? '#f8fafc' : '#ffffff'} />
+                      ) : null}
+                      <Text className="font-semibold" style={{ color: '#ffffff' }}>
+                        {followMutation.isPending ? 'Following…' : `Follow ${profileName(selectedManager)}`}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : progressQuery.isLoading ? (
                   <ActivityIndicator accessibilityLabel="Loading manager progress" color="#14b8a6" />
                 ) : progressQuery.error ? (
                   <View

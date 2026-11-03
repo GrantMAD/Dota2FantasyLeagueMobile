@@ -96,6 +96,81 @@ describe('Friends screen', () => {
     expect(mockedGetProgress).toHaveBeenCalledWith(manager.id);
   });
 
+  it('prompts before opening progress for a manager who is not followed', async () => {
+    mockedGetFollowing.mockResolvedValue([]);
+    mockedGetActivity.mockResolvedValue({
+      activities: [{
+        activity_id: 'activity-1',
+        activity_type: 'gameweek_score',
+        user_id: manager.id,
+        username: manager.username,
+        display_name: manager.display_name,
+        avatar_url: manager.avatar_url,
+        season_id: 7,
+        season_name: 'Season 7',
+        gameweek_id: 10,
+        gameweek_number: 2,
+        title: 'Completed Gameweek 2',
+        players_in: null,
+        players_out: null,
+        chip: null,
+        gameweek_points: 35,
+        total_points: 82,
+        gameweek_rank: 4,
+        previous_gameweek_rank: null,
+        global_rank: 4,
+        updated_at: new Date().toISOString(),
+        lineup_changes: [],
+      }],
+      nextCursor: null,
+    });
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+        mutations: { retry: false, gcTime: 0 },
+      },
+    });
+    queryClient = client;
+    const view = render(
+      <QueryClientProvider client={client}>
+        <FriendsScreen />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(view.getByRole('button', { name: 'View tealmanager progress' })).toBeTruthy());
+    await fireEvent.press(view.getByRole('button', { name: 'View tealmanager progress' }));
+    expect(view.getByText('Follow Teal Manager to view their progress')).toBeTruthy();
+    expect(mockedGetProgress).not.toHaveBeenCalled();
+
+    await fireEvent.press(view.getByRole('button', { name: 'Follow Teal Manager' }));
+    await waitFor(() => expect(mockedSetFollow).toHaveBeenCalledWith(manager.id, true));
+  });
+
+  it('opens the follow prompt from manager search results', async () => {
+    mockedGetFollowing.mockResolvedValue([]);
+    mockedSearchFriends.mockResolvedValue([{ ...manager, is_following: false }]);
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+        mutations: { retry: false, gcTime: 0 },
+      },
+    });
+    queryClient = client;
+    const view = render(
+      <QueryClientProvider client={client}>
+        <FriendsScreen />
+      </QueryClientProvider>,
+    );
+
+    await fireEvent.changeText(view.getByLabelText('Search managers'), 'teal');
+    await waitFor(() => expect(view.getByRole('button', { name: 'View Teal Manager progress' })).toBeTruthy());
+    await fireEvent.press(view.getByRole('button', { name: 'View Teal Manager progress' }));
+
+    expect(view.getByText('Follow Teal Manager to view their progress')).toBeTruthy();
+    expect(mockedGetProgress).not.toHaveBeenCalled();
+  });
+
   it('allows a manager to unfollow someone from the following list', async () => {
     const client = new QueryClient({
       defaultOptions: {
