@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
+import { TeamLogo } from '@/src/components/TeamLogo';
 import type { MatchSummary } from './api';
 
 interface CompetingTeam {
   id: number;
   name: string;
   tag: string;
+  logo_url?: string | null;
 }
 
 interface TournamentGroupStandingsProps {
@@ -17,6 +19,7 @@ interface TeamStandingRow {
   teamId: number;
   name: string;
   tag: string;
+  logoUrl?: string | null;
   seriesPlayed: number;
   seriesWon: number;
   seriesDrawn: number;
@@ -38,6 +41,7 @@ export function TournamentGroupStandings({ matches, competingTeams }: Tournament
         teamId: t.id,
         name: t.name,
         tag: t.tag || t.name.substring(0, 4).toUpperCase(),
+        logoUrl: t.logo_url,
         seriesPlayed: 0,
         seriesWon: 0,
         seriesDrawn: 0,
@@ -166,19 +170,8 @@ export function TournamentGroupStandings({ matches, competingTeams }: Tournament
         </View>
       </View>
 
-      {/* Standings Table Card */}
-      <View className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-        {/* Table Column Headers */}
-        <View className="flex-row items-center border-b border-slate-800 bg-slate-950/70 px-3 py-2">
-          <Text className="w-8 text-[10px] font-bold text-slate-500 uppercase">#</Text>
-          <Text className="flex-1 text-[10px] font-bold text-slate-500 uppercase">Team</Text>
-          <Text className="w-10 text-center text-[10px] font-bold text-slate-500 uppercase">P</Text>
-          <Text className="w-14 text-center text-[10px] font-bold text-slate-500 uppercase">W-D-L</Text>
-          <Text className="w-10 text-center text-[10px] font-bold text-slate-500 uppercase">Diff</Text>
-          <Text className="w-10 text-right text-[10px] font-bold text-slate-400 uppercase">Pts</Text>
-        </View>
-
-        {/* Rows */}
+      {/* Standings Cards List (Two rows per team card for full name visibility) */}
+      <View className="gap-2.5">
         {standings.map((row, idx) => {
           const rank = idx + 1;
           const isUpper = rank <= 4;
@@ -187,65 +180,108 @@ export function TournamentGroupStandings({ matches, competingTeams }: Tournament
           return (
             <View
               key={row.teamId}
-              className={`flex-row items-center px-3 py-2.5 border-b border-slate-800/50 ${
-                idx % 2 === 0 ? 'bg-slate-900' : 'bg-slate-900/60'
-              }`}
+              className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900"
             >
-              {/* Rank Position with Indicator */}
-              <View className="w-8 flex-row items-center gap-1">
-                <View
-                  className={`h-3 w-1 rounded-full ${
-                    isUpper ? 'bg-emerald-500' : isLower ? 'bg-cyan-400' : 'bg-transparent'
-                  }`}
-                />
-                <Text
-                  className={`text-xs font-bold font-mono ${
-                    isUpper ? 'text-emerald-400' : isLower ? 'text-cyan-300' : 'text-slate-500'
-                  }`}
-                >
-                  {rank}
-                </Text>
-              </View>
+              {/* Row 1: Rank Badge, Logo, Team Name & Points */}
+              <View className="flex-row items-center justify-between border-b border-slate-800/70 bg-slate-950/40 px-3.5 py-2.5">
+                <View className="flex-1 min-w-0 flex-row items-center gap-2.5 pr-2">
+                  {/* Rank Position Pill */}
+                  <View
+                    className={`h-6 w-6 items-center justify-center rounded-md border ${
+                      isUpper
+                        ? 'border-emerald-500/40 bg-emerald-500/15'
+                        : isLower
+                          ? 'border-cyan-500/40 bg-cyan-500/15'
+                          : 'border-slate-800 bg-slate-950'
+                    }`}
+                  >
+                    <Text
+                      className={`font-mono text-xs font-black ${
+                        isUpper ? 'text-emerald-400' : isLower ? 'text-cyan-300' : 'text-slate-400'
+                      }`}
+                    >
+                      {rank}
+                    </Text>
+                  </View>
 
-              {/* Team Info */}
-              <View className="flex-1 flex-row items-center gap-1.5 pr-1">
-                <View className="h-5 w-7 items-center justify-center rounded bg-slate-950 border border-slate-800">
-                  <Text className="text-[9px] font-black text-cyan-400 font-mono">
-                    {row.tag.substring(0, 3).toUpperCase()}
+                  {/* Team Logo */}
+                  <TeamLogo logoUrl={row.logoUrl} name={row.name} tag={row.tag} size={28} />
+
+                  {/* Team Name and Tag */}
+                  <View className="flex-1 min-w-0">
+                    <Text numberOfLines={1} className="text-xs font-bold text-white leading-4">
+                      {row.name}
+                    </Text>
+                    <Text className="text-[10px] font-mono text-cyan-300 font-medium">
+                      {row.tag}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Points Badge */}
+                <View className="shrink-0 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 items-center">
+                  <Text className="font-mono text-xs font-black text-cyan-300">
+                    {row.points} <Text className="text-[9px] font-semibold text-slate-400 uppercase">pts</Text>
                   </Text>
                 </View>
-                <Text numberOfLines={1} className="flex-1 text-xs font-semibold text-white">
-                  {row.name}
-                </Text>
               </View>
 
-              {/* Played */}
-              <Text className="w-10 text-center font-mono text-xs text-slate-400">
-                {row.seriesPlayed}
-              </Text>
+              {/* Row 2: Secondary Stats Strip (Played, W-D-L, Diff, Win %) */}
+              <View className="flex-row items-center justify-between px-3.5 py-2 bg-slate-900">
+                {/* Played */}
+                <View className="items-center flex-1">
+                  <Text className="text-[9px] font-medium uppercase tracking-wider text-slate-500">
+                    Played
+                  </Text>
+                  <Text className="font-mono text-xs font-bold text-slate-300 mt-0.5">
+                    {row.seriesPlayed}
+                  </Text>
+                </View>
 
-              {/* Series Record (W-D-L) */}
-              <Text className="w-14 text-center font-mono text-[11px] text-slate-300 font-medium">
-                {row.seriesWon}-{row.seriesDrawn}-{row.seriesLost}
-              </Text>
+                <View className="h-4 w-px bg-slate-800" />
 
-              {/* Differential */}
-              <Text
-                className={`w-10 text-center font-mono text-xs font-semibold ${
-                  row.gameDiff > 0
-                    ? 'text-emerald-400'
-                    : row.gameDiff < 0
-                    ? 'text-rose-400'
-                    : 'text-slate-500'
-                }`}
-              >
-                {row.gameDiff > 0 ? `+${row.gameDiff}` : `${row.gameDiff}`}
-              </Text>
+                {/* Series Record */}
+                <View className="items-center flex-1">
+                  <Text className="text-[9px] font-medium uppercase tracking-wider text-slate-500">
+                    W-D-L
+                  </Text>
+                  <Text className="font-mono text-xs font-bold text-white mt-0.5">
+                    {row.seriesWon}-{row.seriesDrawn}-{row.seriesLost}
+                  </Text>
+                </View>
 
-              {/* Points */}
-              <Text className="w-10 text-right font-mono text-xs font-black text-white">
-                {row.points}
-              </Text>
+                <View className="h-4 w-px bg-slate-800" />
+
+                {/* Game Differential */}
+                <View className="items-center flex-1">
+                  <Text className="text-[9px] font-medium uppercase tracking-wider text-slate-500">
+                    Diff
+                  </Text>
+                  <Text
+                    className={`font-mono text-xs font-bold mt-0.5 ${
+                      row.gameDiff > 0
+                        ? 'text-emerald-400'
+                        : row.gameDiff < 0
+                          ? 'text-rose-400'
+                          : 'text-slate-400'
+                    }`}
+                  >
+                    {row.gameDiff > 0 ? `+${row.gameDiff}` : row.gameDiff}
+                  </Text>
+                </View>
+
+                <View className="h-4 w-px bg-slate-800" />
+
+                {/* Win Rate */}
+                <View className="items-center flex-1">
+                  <Text className="text-[9px] font-medium uppercase tracking-wider text-slate-500">
+                    Win Rate
+                  </Text>
+                  <Text className="font-mono text-xs font-bold text-slate-300 mt-0.5">
+                    {row.winRate}%
+                  </Text>
+                </View>
+              </View>
             </View>
           );
         })}
@@ -253,4 +289,3 @@ export function TournamentGroupStandings({ matches, competingTeams }: Tournament
     </View>
   );
 }
-

@@ -12,8 +12,8 @@ export interface MatchSummary {
   dire_team_id: number | null;
   winner_team_id?: number | null;
   player_ids: number[];
-  radiant_team: { name: string; tag: string } | null;
-  dire_team: { name: string; tag: string } | null;
+  radiant_team: { name: string; tag: string; logo_url?: string | null } | null;
+  dire_team: { name: string; tag: string; logo_url?: string | null } | null;
   tournament: { id: number; name: string; tier: string | null } | null;
 }
 
@@ -153,6 +153,7 @@ function parseTeam(value: unknown): MatchSummary['radiant_team'] {
   return {
     name: value.name,
     tag: getTeamTag(value.name),
+    logo_url: typeof value.logo_url === 'string' ? value.logo_url : null,
   };
 }
 

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { TeamLogo } from '@/src/components/TeamLogo';
 import type { MatchSummary } from './api';
 
 interface TournamentSeriesTimelineProps {
@@ -13,8 +14,10 @@ interface SeriesNode {
   teamBId: number;
   teamAName: string;
   teamATag: string;
+  teamALogoUrl?: string | null;
   teamBName: string;
   teamBTag: string;
+  teamBLogoUrl?: string | null;
   scoreA: number;
   scoreB: number;
   winnerTeamId: number | null;
@@ -81,24 +84,30 @@ export function TournamentSeriesTimeline({ matches, onMatchPress }: TournamentSe
       // Find team details from radiant_team / dire_team
       let teamAName = 'Team ' + cluster.teamAId;
       let teamATag = 'TBA';
+      let teamALogoUrl: string | null = null;
       let teamBName = 'Team ' + cluster.teamBId;
       let teamBTag = 'TBA';
+      let teamBLogoUrl: string | null = null;
 
       for (const m of cluster.matches) {
         if (m.radiant_team_id === cluster.teamAId && m.radiant_team) {
           teamAName = m.radiant_team.name;
           teamATag = m.radiant_team.tag;
+          if (m.radiant_team.logo_url) teamALogoUrl = m.radiant_team.logo_url;
         } else if (m.dire_team_id === cluster.teamAId && m.dire_team) {
           teamAName = m.dire_team.name;
           teamATag = m.dire_team.tag;
+          if (m.dire_team.logo_url) teamALogoUrl = m.dire_team.logo_url;
         }
 
         if (m.radiant_team_id === cluster.teamBId && m.radiant_team) {
           teamBName = m.radiant_team.name;
           teamBTag = m.radiant_team.tag;
+          if (m.radiant_team.logo_url) teamBLogoUrl = m.radiant_team.logo_url;
         } else if (m.dire_team_id === cluster.teamBId && m.dire_team) {
           teamBName = m.dire_team.name;
           teamBTag = m.dire_team.tag;
+          if (m.dire_team.logo_url) teamBLogoUrl = m.dire_team.logo_url;
         }
       }
 
@@ -131,8 +140,10 @@ export function TournamentSeriesTimeline({ matches, onMatchPress }: TournamentSe
         teamBId: cluster.teamBId,
         teamAName,
         teamATag,
+        teamALogoUrl,
         teamBName,
         teamBTag,
+        teamBLogoUrl,
         scoreA,
         scoreB,
         winnerTeamId,
@@ -254,15 +265,16 @@ export function TournamentSeriesTimeline({ matches, onMatchPress }: TournamentSe
                     teamAWon ? 'bg-emerald-500/10' : ''
                   }`}
                 >
-                  <View className="flex-row items-center gap-2 flex-1 pr-2">
-                    <View className="h-7 w-7 items-center justify-center rounded-lg bg-slate-950 border border-slate-800">
-                      <Text className="text-[10px] font-black text-cyan-400 font-mono">
-                        {(node.teamATag || node.teamAName).substring(0, 3).toUpperCase()}
-                      </Text>
-                    </View>
+                  <View className="flex-row items-center gap-2.5 flex-1 pr-2 min-w-0">
+                    <TeamLogo
+                      logoUrl={node.teamALogoUrl}
+                      name={node.teamAName}
+                      tag={node.teamATag}
+                      size={28}
+                    />
                     <Text
                       numberOfLines={1}
-                      className={`text-xs ${teamAWon ? 'font-black text-emerald-300' : 'font-semibold text-white'}`}
+                      className={`text-xs flex-1 ${teamAWon ? 'font-black text-emerald-300' : 'font-semibold text-white'}`}
                     >
                       {node.teamAName}
                     </Text>
@@ -288,15 +300,16 @@ export function TournamentSeriesTimeline({ matches, onMatchPress }: TournamentSe
                     teamBWon ? 'bg-emerald-500/10' : ''
                   }`}
                 >
-                  <View className="flex-row items-center gap-2 flex-1 pr-2">
-                    <View className="h-7 w-7 items-center justify-center rounded-lg bg-slate-950 border border-slate-800">
-                      <Text className="text-[10px] font-black text-cyan-400 font-mono">
-                        {(node.teamBTag || node.teamBName).substring(0, 3).toUpperCase()}
-                      </Text>
-                    </View>
+                  <View className="flex-row items-center gap-2.5 flex-1 pr-2 min-w-0">
+                    <TeamLogo
+                      logoUrl={node.teamBLogoUrl}
+                      name={node.teamBName}
+                      tag={node.teamBTag}
+                      size={28}
+                    />
                     <Text
                       numberOfLines={1}
-                      className={`text-xs ${teamBWon ? 'font-black text-emerald-300' : 'font-semibold text-white'}`}
+                      className={`text-xs flex-1 ${teamBWon ? 'font-black text-emerald-300' : 'font-semibold text-white'}`}
                     >
                       {node.teamBName}
                     </Text>
@@ -331,4 +344,3 @@ export function TournamentSeriesTimeline({ matches, onMatchPress }: TournamentSe
     </View>
   );
 }
-

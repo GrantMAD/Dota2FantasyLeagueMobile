@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, RefreshControl, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Screen } from '@/src/components/Screen';
+import { TeamLogo } from '@/src/components/TeamLogo';
 import { getTournamentDetails } from '@/src/features/competition/api';
 import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
 import { TournamentSeriesTimeline } from '@/src/features/competition/TournamentSeriesTimeline';
@@ -32,6 +33,7 @@ export default function TournamentDetailScreen() {
   const validId = Number.isSafeInteger(tournamentId) && tournamentId > 0;
   const [activeTab, setActiveTab] = useState<TabMode>('matches');
   const [statusFilter, setStatusFilter] = useState<MatchStatusFilter>('all');
+  const [filterPickerVisible, setFilterPickerVisible] = useState(false);
 
   const query = useQuery({
     queryKey: ['tournament-detail', tournamentId],
@@ -44,13 +46,14 @@ export default function TournamentDetailScreen() {
 
   // Competing teams derived from matches
   const competingTeams = useMemo(() => {
-    const teamsMap = new Map<number, { id: number; name: string; tag: string }>();
+    const teamsMap = new Map<number, { id: number; name: string; tag: string; logo_url?: string | null }>();
     matches.forEach((m) => {
       if (m.radiant_team_id && m.radiant_team) {
         teamsMap.set(m.radiant_team_id, {
           id: m.radiant_team_id,
           name: m.radiant_team.name,
           tag: m.radiant_team.tag,
+          logo_url: m.radiant_team.logo_url,
         });
       }
       if (m.dire_team_id && m.dire_team) {
@@ -58,6 +61,7 @@ export default function TournamentDetailScreen() {
           id: m.dire_team_id,
           name: m.dire_team.name,
           tag: m.dire_team.tag,
+          logo_url: m.dire_team.logo_url,
         });
       }
     });
@@ -79,6 +83,18 @@ export default function TournamentDetailScreen() {
   const completionPct = matches.length > 0
     ? Math.round((completedMatches.length / matches.length) * 100)
     : 0;
+
+  const filterOptions = useMemo<
+    { key: MatchStatusFilter; label: string; count: number }[]
+  >(() => [
+    { key: 'all', label: 'All Matches', count: matches.length },
+    { key: 'live', label: 'Live Matches', count: liveMatches.length },
+    { key: 'upcoming', label: 'Upcoming Matches', count: upcomingMatches.length },
+    { key: 'completed', label: 'Completed Matches', count: completedMatches.length },
+  ], [matches.length, liveMatches.length, upcomingMatches.length, completedMatches.length]);
+
+  const selectedFilterOption =
+    filterOptions.find((opt) => opt.key === statusFilter) ?? filterOptions[0];
 
   const filteredMatches = useMemo(() => {
     return matches.filter((m) => {
@@ -146,23 +162,27 @@ export default function TournamentDetailScreen() {
                 </View>
               </View>
 
-              {/* 4-Stat Strip */}
-              <View className="flex-row gap-2 pt-1">
-                <View className="flex-1 rounded-xl bg-slate-950 p-2.5 text-center">
-                  <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-500 text-center">Teams</Text>
-                  <Text className="mt-1 text-base font-bold text-white text-center">{competingTeams.length}</Text>
+              {/* 4-Stat 2x2 Grid: Teams, Matches on row 1; Live, Done on row 2 */}
+              <View className="gap-2.5 pt-1">
+                <View className="flex-row gap-2.5">
+                  <View className="flex-1 rounded-xl bg-slate-950 p-3 items-center border border-slate-800/60">
+                    <Text className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Teams</Text>
+                    <Text className="mt-1 text-lg font-bold text-white font-mono">{competingTeams.length}</Text>
+                  </View>
+                  <View className="flex-1 rounded-xl bg-slate-950 p-3 items-center border border-slate-800/60">
+                    <Text className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Matches</Text>
+                    <Text className="mt-1 text-lg font-bold text-white font-mono">{matches.length}</Text>
+                  </View>
                 </View>
-                <View className="flex-1 rounded-xl bg-slate-950 p-2.5 text-center">
-                  <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-500 text-center">Matches</Text>
-                  <Text className="mt-1 text-base font-bold text-white text-center">{matches.length}</Text>
-                </View>
-                <View className="flex-1 rounded-xl bg-slate-950 p-2.5 text-center">
-                  <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-500 text-center">Live</Text>
-                  <Text className="mt-1 text-base font-bold text-amber-400 text-center">{liveMatches.length}</Text>
-                </View>
-                <View className="flex-1 rounded-xl bg-slate-950 p-2.5 text-center">
-                  <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-500 text-center">Done</Text>
-                  <Text className="mt-1 text-base font-bold text-emerald-400 text-center">{completedMatches.length}</Text>
+                <View className="flex-row gap-2.5">
+                  <View className="flex-1 rounded-xl bg-slate-950 p-3 items-center border border-slate-800/60">
+                    <Text className="text-[11px] font-medium uppercase tracking-wider text-amber-400/90">Live</Text>
+                    <Text className="mt-1 text-lg font-bold text-amber-400 font-mono">{liveMatches.length}</Text>
+                  </View>
+                  <View className="flex-1 rounded-xl bg-slate-950 p-3 items-center border border-slate-800/60">
+                    <Text className="text-[11px] font-medium uppercase tracking-wider text-emerald-400/90">Done</Text>
+                    <Text className="mt-1 text-lg font-bold text-emerald-400 font-mono">{completedMatches.length}</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -221,33 +241,33 @@ export default function TournamentDetailScreen() {
 
             {activeTab === 'matches' ? (
               <View className="gap-3">
-                {/* Match Status Filters */}
-                <View className="flex-row gap-1.5">
-                  {([
-                    ['all', `All (${matches.length})`],
-                    ['live', `Live (${liveMatches.length})`],
-                    ['upcoming', `Upcoming (${upcomingMatches.length})`],
-                    ['completed', `Done (${completedMatches.length})`],
-                  ] as const).map(([status, label]) => (
-                    <Pressable
-                      key={status}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: statusFilter === status }}
-                      className={`flex-1 items-center justify-center rounded-full border py-1.5 px-1 ${
-                        statusFilter === status
-                          ? 'border-brand-500 bg-brand-500/15'
-                          : 'border-slate-800 bg-slate-900'
+                {/* Match Status Picker Trigger Button */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filter matches: ${selectedFilterOption.label}`}
+                  accessibilityState={{ expanded: filterPickerVisible }}
+                  className="min-h-12 flex-row items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-4 py-3"
+                  onPress={() => setFilterPickerVisible(true)}
+                >
+                  <View className="flex-row items-center gap-2.5">
+                    <View
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        statusFilter === 'live'
+                          ? 'bg-rose-500'
+                          : statusFilter === 'completed'
+                            ? 'bg-emerald-500'
+                            : statusFilter === 'upcoming'
+                              ? 'bg-cyan-400'
+                              : 'bg-slate-500'
                       }`}
-                      onPress={() => setStatusFilter(status)}
-                    >
-                      <Text className={`text-[11px] font-semibold ${
-                        statusFilter === status ? 'text-brand-300' : 'text-slate-400'
-                      }`}>
-                        {label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
+                    />
+                    <Text className="text-xs font-medium text-slate-400">Filter Matches:</Text>
+                    <Text className="text-xs font-bold text-white">
+                      {selectedFilterOption.label} ({selectedFilterOption.count})
+                    </Text>
+                  </View>
+                  <Text className="text-xs font-semibold text-cyan-300">Choose ▾</Text>
+                </Pressable>
 
                 {/* Match Cards */}
                 {filteredMatches.length ? filteredMatches.map((match) => (
@@ -308,14 +328,10 @@ export default function TournamentDetailScreen() {
                         key={team.id}
                         className="min-w-[47%] flex-1 flex-row items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3.5"
                       >
-                        <View className="h-10 w-10 items-center justify-center rounded-xl bg-slate-950 border border-slate-800">
-                          <Text className="text-xs font-black text-cyan-400 font-mono">
-                            {(team.tag || team.name).substring(0, 3).toUpperCase()}
-                          </Text>
-                        </View>
-                        <View className="flex-1">
-                          <Text className="font-bold text-white" numberOfLines={1}>{team.name}</Text>
-                          <Text className="text-xs text-slate-400 font-mono">{team.tag || 'PRO'}</Text>
+                        <TeamLogo logoUrl={team.logo_url} name={team.name} tag={team.tag} size={40} />
+                        <View className="flex-1 min-w-0">
+                          <Text className="font-bold text-white text-xs leading-4" numberOfLines={1}>{team.name}</Text>
+                          <Text className="text-[10px] text-cyan-300 font-mono mt-0.5">{team.tag || 'PRO'}</Text>
                         </View>
                       </View>
                     ))}
@@ -330,6 +346,144 @@ export default function TournamentDetailScreen() {
           </>
         ) : null}
       </ScrollView>
+
+      {/* Filter Picker Modal - Outside ScrollView with explicit dark surface styles */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={filterPickerVisible}
+        onRequestClose={() => setFilterPickerVisible(false)}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.75)' }}>
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => setFilterPickerVisible(false)}
+          />
+          <View
+            style={{
+              backgroundColor: '#0f172a',
+              borderTopWidth: 1,
+              borderColor: '#334155',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 20,
+              gap: 16,
+            }}
+          >
+            {/* Modal Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottomWidth: 1, borderColor: '#1e293b' }}>
+              <View>
+                <Text style={{ fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, color: '#2dd4bf' }}>
+                  Filter Matches
+                </Text>
+                <Text style={{ marginTop: 2, fontSize: 12, color: '#94a3b8' }}>
+                  Choose which matches to display
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close filter picker"
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#1e293b',
+                  borderWidth: 1,
+                  borderColor: '#334155',
+                }}
+                onPress={() => setFilterPickerVisible(false)}
+              >
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#cbd5e1' }}>✕</Text>
+              </Pressable>
+            </View>
+
+            {/* Filter Options List */}
+            <View style={{ gap: 8, paddingBottom: 8 }}>
+              {filterOptions.map((opt) => {
+                const isSelected = statusFilter === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      borderRadius: 12,
+                      paddingVertical: 14,
+                      paddingHorizontal: 16,
+                      borderWidth: 1,
+                      backgroundColor: isSelected ? '#1e293b' : '#020617',
+                      borderColor: isSelected ? '#2dd4bf' : '#334155',
+                    }}
+                    onPress={() => {
+                      setStatusFilter(opt.key);
+                      setFilterPickerVisible(false);
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <View
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor:
+                            opt.key === 'live'
+                              ? '#f43f5e'
+                              : opt.key === 'completed'
+                                ? '#10b981'
+                                : opt.key === 'upcoming'
+                                  ? '#22d3ee'
+                                  : '#64748b',
+                        }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: isSelected ? '700' : '600',
+                          color: isSelected ? '#2dd4bf' : '#f8fafc',
+                        }}
+                      >
+                        {opt.label}
+                      </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View
+                        style={{
+                          backgroundColor: '#020617',
+                          borderWidth: 1,
+                          borderColor: '#334155',
+                          borderRadius: 6,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            fontWeight: '600',
+                            color: '#94a3b8',
+                          }}
+                        >
+                          {opt.count}
+                        </Text>
+                      </View>
+                      {isSelected ? (
+                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#2dd4bf' }}>✓</Text>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
