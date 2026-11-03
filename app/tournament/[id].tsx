@@ -6,6 +6,8 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { Screen } from '@/src/components/Screen';
 import { getTournamentDetails } from '@/src/features/competition/api';
 import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
+import { TournamentSeriesTimeline } from '@/src/features/competition/TournamentSeriesTimeline';
+import { TournamentGroupStandings } from '@/src/features/competition/TournamentGroupStandings';
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -20,7 +22,7 @@ function formatDate(value: string): string {
       });
 }
 
-type TabMode = 'matches' | 'teams';
+type TabMode = 'matches' | 'series' | 'standings' | 'teams';
 type MatchStatusFilter = 'all' | 'live' | 'upcoming' | 'completed';
 
 export default function TournamentDetailScreen() {
@@ -165,30 +167,54 @@ export default function TournamentDetailScreen() {
               </View>
             </View>
 
-            {/* Navigation Tabs: Matches vs Competing Teams */}
+            {/* Navigation Tabs: Matches | Series | Standings | Teams */}
             <View className="flex-row rounded-xl border border-slate-800 bg-slate-900 p-1">
               <Pressable
                 accessibilityRole="tab"
                 accessibilityState={{ selected: activeTab === 'matches' }}
-                className={`flex-1 items-center justify-center rounded-lg py-2.5 ${
+                className={`flex-1 items-center justify-center rounded-lg py-2 ${
                   activeTab === 'matches' ? 'bg-cyan-500/20 border border-cyan-500/50' : ''
                 }`}
                 onPress={() => setActiveTab('matches')}
               >
-                <Text className={`text-xs font-bold ${activeTab === 'matches' ? 'text-cyan-300' : 'text-slate-400'}`}>
-                  Matches ({matches.length})
+                <Text className={`text-[11px] font-bold ${activeTab === 'matches' ? 'text-cyan-300' : 'text-slate-400'}`}>
+                  Matches
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === 'series' }}
+                className={`flex-1 items-center justify-center rounded-lg py-2 ${
+                  activeTab === 'series' ? 'bg-cyan-500/20 border border-cyan-500/50' : ''
+                }`}
+                onPress={() => setActiveTab('series')}
+              >
+                <Text className={`text-[11px] font-bold ${activeTab === 'series' ? 'text-cyan-300' : 'text-slate-400'}`}>
+                  Series
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activeTab === 'standings' }}
+                className={`flex-1 items-center justify-center rounded-lg py-2 ${
+                  activeTab === 'standings' ? 'bg-cyan-500/20 border border-cyan-500/50' : ''
+                }`}
+                onPress={() => setActiveTab('standings')}
+              >
+                <Text className={`text-[11px] font-bold ${activeTab === 'standings' ? 'text-cyan-300' : 'text-slate-400'}`}>
+                  Standings
                 </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="tab"
                 accessibilityState={{ selected: activeTab === 'teams' }}
-                className={`flex-1 items-center justify-center rounded-lg py-2.5 ${
+                className={`flex-1 items-center justify-center rounded-lg py-2 ${
                   activeTab === 'teams' ? 'bg-cyan-500/20 border border-cyan-500/50' : ''
                 }`}
                 onPress={() => setActiveTab('teams')}
               >
-                <Text className={`text-xs font-bold ${activeTab === 'teams' ? 'text-cyan-300' : 'text-slate-400'}`}>
-                  Competing Teams ({competingTeams.length})
+                <Text className={`text-[11px] font-bold ${activeTab === 'teams' ? 'text-cyan-300' : 'text-slate-400'}`}>
+                  Teams
                 </Text>
               </Pressable>
             </View>
@@ -262,6 +288,16 @@ export default function TournamentDetailScreen() {
                   </View>
                 )}
               </View>
+            ) : activeTab === 'series' ? (
+              <TournamentSeriesTimeline
+                matches={matches}
+                onMatchPress={(matchId) => router.push(`/match/${matchId}`)}
+              />
+            ) : activeTab === 'standings' ? (
+              <TournamentGroupStandings
+                matches={matches}
+                competingTeams={competingTeams}
+              />
             ) : (
               /* Competing Teams Tab */
               <View className="gap-3">

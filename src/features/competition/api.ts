@@ -10,6 +10,7 @@ export interface MatchSummary {
   best_of: number;
   radiant_team_id: number | null;
   dire_team_id: number | null;
+  winner_team_id?: number | null;
   player_ids: number[];
   radiant_team: { name: string; tag: string } | null;
   dire_team: { name: string; tag: string } | null;
@@ -206,6 +207,13 @@ function parseMatch(value: unknown): MatchSummary {
     best_of: value.best_of,
     radiant_team_id: value.radiant_team_id,
     dire_team_id: value.dire_team_id,
+    winner_team_id:
+      typeof (value as Record<string, unknown>).winner_team_id === 'number'
+        ? ((value as Record<string, unknown>).winner_team_id as number)
+        : (value as Record<string, unknown>).winner_team_id != null &&
+          !Number.isNaN(Number((value as Record<string, unknown>).winner_team_id))
+        ? Number((value as Record<string, unknown>).winner_team_id)
+        : null,
     player_ids: [...new Set(playerIds)],
     radiant_team: parseTeam(value.radiant_team),
     dire_team: parseTeam(value.dire_team),
@@ -520,12 +528,40 @@ export async function getTournamentDetails(id: number): Promise<TournamentDetail
   ) {
     throw new ApiError('Tournament data was returned in an unexpected format.', 502);
   }
+  const rawMatches = result.matches as Record<string, unknown>[];
+  const needsWinners = rawMatches.some((m) => m.winner_team_id === undefined && m.status === 'completed');
+
+  if (needsWinners && rawMatches.length > 0) {
+    const matchIds = rawMatches.map((m) => Number(m.id)).filter((id) => Number.isInteger(id));
+    if (matchIds.length > 0) {
+      try {
+        const { data: winnerRows } = await getSupabaseClient()
+          .from('matches')
+          .select('id, winner_team_id')
+          .in('id', matchIds);
+
+        if (winnerRows && winnerRows.length > 0) {
+          const winnerMap = new Map<number, number | null>(
+            winnerRows.map((r: { id: number; winner_team_id: number | null }) => [r.id, r.winner_team_id])
+          );
+          for (const m of rawMatches) {
+            if (m.winner_team_id === undefined) {
+              m.winner_team_id = winnerMap.get(Number(m.id)) ?? null;
+            }
+          }
+        }
+      } catch {
+        // Fallback silently if table query fails
+      }
+    }
+  }
+
   return {
     tournament: {
       id: Number(tournament.id),
       name: tournament.name,
       tier: tournament.tier,
     },
-    matches: result.matches.map(parseMatch),
+    matches: rawMatches.map(parseMatch),
   };
 }
