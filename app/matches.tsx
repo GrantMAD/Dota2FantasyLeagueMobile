@@ -72,6 +72,14 @@ export default function MatchesScreen() {
   const matchingTournaments = (tournamentsQuery.data ?? []).filter((tournament) =>
     tournament.name.toLowerCase().includes(tournamentSearch.toLowerCase()),
   );
+  useEffect(() => {
+    if (filter === 'upcoming' && query.data?.counts.upcoming === 0) {
+      // Keep the selected tab consistent with refreshed server-side match counts.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFilter('all');
+      setPage(1);
+    }
+  }, [filter, query.data?.counts.upcoming]);
 
   return (
     <Screen>
@@ -114,7 +122,9 @@ export default function MatchesScreen() {
           className="min-h-12 rounded-xl border border-slate-700 bg-slate-900 px-4 text-white"
         />
         <View className="flex-row flex-wrap gap-2">
-          {filters.map((value) => (
+          {filters
+            .filter((value) => value !== 'upcoming' || (query.data?.counts.upcoming ?? 0) > 0)
+            .map((value) => (
             <Pressable
               key={value}
               accessibilityRole="button"
