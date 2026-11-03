@@ -14,6 +14,7 @@ describe('DashboardLiveMatches', () => {
       best_of: 3,
       radiant_team_id: 10,
       dire_team_id: 20,
+      player_ids: [101],
       radiant_team: { name: 'Team Spirit', tag: 'TS' },
       dire_team: { name: 'Team Liquid', tag: 'TL' },
       tournament: { id: 1, name: 'The International 2026', tier: 'Tier 1' },
@@ -27,6 +28,7 @@ describe('DashboardLiveMatches', () => {
       best_of: 2,
       radiant_team_id: 30,
       dire_team_id: 40,
+      player_ids: [],
       radiant_team: { name: 'Gaimin Gladiators', tag: 'GG' },
       dire_team: { name: 'BetBoom Team', tag: 'BB' },
       tournament: { id: 2, name: 'DreamLeague Season 25', tier: 'Tier 1' },
@@ -57,11 +59,51 @@ describe('DashboardLiveMatches', () => {
     expect(getByText('Bo2')).toBeTruthy();
   });
 
-  it('displays Starters in Action pill when user starter team matches', () => {
+  it('highlights a confirmed player from the full squad', () => {
     const { getByText } = render(
-      <DashboardLiveMatches matches={mockMatches} userStarterTeamIds={[10]} />
+      <DashboardLiveMatches
+        matches={mockMatches}
+        ownedPlayers={[{
+          id: 101,
+          name: 'Wang Chunyu',
+          in_game_name: 'Ame',
+          primary_role: 'carry',
+          profile_image_url: null,
+          professional_teams: { id: 10, name: 'Team Spirit', slug: null },
+          availability_status: null,
+          availability_reason: null,
+          current_price: 10,
+          last_gw_points: 0,
+          recent_points: 0,
+        }]}
+      />
     );
 
-    expect(getByText('Starters in Action')).toBeTruthy();
+    expect(getByText('Ame in Action')).toBeTruthy();
+  });
+
+  it('marks a team fixture unconfirmed when player statistics are not available', () => {
+    const { getByText } = render(
+      <DashboardLiveMatches
+        matches={mockMatches.map((match) =>
+          match.id === 801 ? { ...match, player_ids: [] } : match,
+        )}
+        ownedPlayers={[{
+          id: 101,
+          name: 'Wang Chunyu',
+          in_game_name: 'Ame',
+          primary_role: 'carry',
+          profile_image_url: null,
+          professional_teams: { id: 10, name: 'Team Spirit', slug: null },
+          availability_status: null,
+          availability_reason: null,
+          current_price: 10,
+          last_gw_points: 0,
+          recent_points: 0,
+        }]}
+      />
+    );
+
+    expect(getByText('Squad fixture · unconfirmed')).toBeTruthy();
   });
 });

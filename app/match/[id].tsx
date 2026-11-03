@@ -216,7 +216,11 @@ export default function MatchDetailScreen() {
                     <Pressable
                       key={player.id}
                       accessibilityRole="button"
-                      className="gap-2.5 rounded-xl border border-slate-800 bg-slate-900 p-4"
+                      className={`gap-2.5 rounded-xl border p-4 ${
+                        isOwned
+                          ? 'border-emerald-500/60 bg-emerald-950/30'
+                          : 'border-slate-800 bg-slate-900'
+                      }`}
                       onPress={() => router.push(`/player/${player.player_id}`)}
                     >
                       {/* Name, Hero, Team, Badges */}
@@ -238,9 +242,9 @@ export default function MatchDetailScreen() {
                               <Text className="text-[9px] font-bold text-purple-200">VC</Text>
                             </View>
                           )}
-                          {isOwned && !lineup && (
+                          {isOwned && (
                             <View className="bg-emerald-950 border border-emerald-500/40 px-1.5 py-0.5 rounded">
-                              <Text className="text-[9px] font-semibold text-emerald-300">OWNED</Text>
+                              <Text className="text-[9px] font-semibold text-emerald-300">IN SQUAD</Text>
                             </View>
                           )}
                         </View>

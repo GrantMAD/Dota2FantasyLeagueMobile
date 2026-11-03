@@ -10,6 +10,7 @@ export interface MatchSummary {
   best_of: number;
   radiant_team_id: number | null;
   dire_team_id: number | null;
+  player_ids: number[];
   radiant_team: { name: string; tag: string } | null;
   dire_team: { name: string; tag: string } | null;
   tournament: { id: number; name: string; tier: string | null } | null;
@@ -122,6 +123,10 @@ function nullableFiniteNumber(value: unknown): value is number | null | undefine
   return value === undefined || value === null || (typeof value === 'number' && Number.isFinite(value));
 }
 
+function positiveIntegerArray(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every((id) => typeof id === 'number' && Number.isInteger(id) && id > 0);
+}
+
 function parseStatPlayer(value: unknown): MatchPlayerStat['player'] {
   if (value === null || value === undefined) return null;
   if (
@@ -177,6 +182,10 @@ function parseMatch(value: unknown): MatchSummary {
   ) {
     throw new ApiError('Match data was returned in an unexpected format.', 502);
   }
+  const playerIds = value.player_ids === undefined ? [] : value.player_ids;
+  if (!positiveIntegerArray(playerIds)) {
+    throw new ApiError('Match data was returned in an unexpected format.', 502);
+  }
   const rawTournament = value.tournaments;
   if (
     rawTournament !== null &&
@@ -197,6 +206,7 @@ function parseMatch(value: unknown): MatchSummary {
     best_of: value.best_of,
     radiant_team_id: value.radiant_team_id,
     dire_team_id: value.dire_team_id,
+    player_ids: [...new Set(playerIds)],
     radiant_team: parseTeam(value.radiant_team),
     dire_team: parseTeam(value.dire_team),
     tournament: isRecord(rawTournament)
@@ -342,82 +352,103 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
 
   // User fantasy impact resolution
   let userFantasyImpact: UserFantasyImpact | null = null;
-  try {
-    const supabase = getSupabaseClient();
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData?.user?.id;
+  const supabase = getSupabaseClient();
+  const { data: userData, error: userError } = await supabase.auth.getSession();
+  if (userError) throw new ApiError(`Unable to load fantasy match details: ${userError.message}`, 500);
+  const userId = userData.session?.user.id;
 
-    if (userId && parsedMatch.gameweek_id) {
-      const { data: fantasySeasonData } = await supabase
-        .from('fantasy_seasons')
+  if (userId) {
+    const { data: fantasySeasonData, error: fantasySeasonError } = await supabase
+      .from('fantasy_seasons')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1);
+    if (fantasySeasonError) {
+      throw new ApiError(`Unable to load fantasy match details: ${fantasySeasonError.message}`, 500);
+    }
+
+    const fantasySeasonId = fantasySeasonData?.[0]?.id;
+    if (fantasySeasonId) {
+      const { data: squad, error: squadError } = await supabase
+        .from('fantasy_squads')
         .select('id')
-        .eq('user_id', userId)
-        .limit(1);
+        .eq('fantasy_season_id', fantasySeasonId)
+        .limit(1)
+        .maybeSingle();
+      if (squadError) {
+        throw new ApiError(`Unable to load fantasy match details: ${squadError.message}`, 500);
+      }
 
-      const fantasySeasonId = fantasySeasonData?.[0]?.id;
-      if (fantasySeasonId) {
-        const [{ data: lineupRow }, { data: squadMembers }] = await Promise.all([
-          supabase
-            .from('fantasy_lineups')
-            .select('carry_id, mid_id, offlane_id, support_id, hard_support_id, bench_1_id, bench_2_id, bench_3_id, captain_player_id, vice_captain_player_id')
-            .eq('fantasy_season_id', fantasySeasonId)
-            .eq('gameweek_id', parsedMatch.gameweek_id)
-            .maybeSingle(),
-          supabase
-            .from('fantasy_squad_members')
-            .select('player_id')
-            .eq('fantasy_season_id', fantasySeasonId),
+      const [{ data: squadMembers, error: membersError }, { data: lineupRow, error: lineupError }] =
+        await Promise.all([
+          squad
+            ? supabase
+                .from('fantasy_squad_members')
+                .select('player_id')
+                .eq('squad_id', squad.id)
+                .is('removed_date', null)
+            : Promise.resolve({ data: [], error: null }),
+          parsedMatch.gameweek_id
+            ? supabase
+                .from('fantasy_lineups')
+                .select('carry_id, mid_id, offlane_id, support_id, hard_support_id, bench_1_id, bench_2_id, bench_3_id, captain_player_id, vice_captain_player_id')
+                .eq('fantasy_season_id', fantasySeasonId)
+                .eq('gameweek_id', parsedMatch.gameweek_id)
+                .maybeSingle()
+            : Promise.resolve({ data: null, error: null }),
         ]);
+      if (membersError) {
+        throw new ApiError(`Unable to load fantasy match details: ${membersError.message}`, 500);
+      }
+      if (lineupError) {
+        throw new ApiError(`Unable to load fantasy match details: ${lineupError.message}`, 500);
+      }
 
-        const ownedIds = (squadMembers ?? []).map((m: { player_id: number }) => m.player_id);
-        const lineupDetails: UserLineupDetail[] = [];
+      const ownedIds = (squadMembers ?? []).map((member: { player_id: number }) => member.player_id);
+      const lineupDetails: UserLineupDetail[] = [];
+      if (lineupRow) {
+        const starterSlots: [string, number | null][] = [
+          ['Carry', lineupRow.carry_id],
+          ['Mid', lineupRow.mid_id],
+          ['Offlane', lineupRow.offlane_id],
+          ['Support', lineupRow.support_id],
+          ['Hard Support', lineupRow.hard_support_id],
+        ];
+        const benchSlots: [string, number | null][] = [
+          ['Bench 1', lineupRow.bench_1_id],
+          ['Bench 2', lineupRow.bench_2_id],
+          ['Bench 3', lineupRow.bench_3_id],
+        ];
 
-        if (lineupRow) {
-          const starterSlots: [string, number | null][] = [
-            ['Carry', lineupRow.carry_id],
-            ['Mid', lineupRow.mid_id],
-            ['Offlane', lineupRow.offlane_id],
-            ['Support', lineupRow.support_id],
-            ['Hard Support', lineupRow.hard_support_id],
-          ];
-          const benchSlots: [string, number | null][] = [
-            ['Bench 1', lineupRow.bench_1_id],
-            ['Bench 2', lineupRow.bench_2_id],
-            ['Bench 3', lineupRow.bench_3_id],
-          ];
-
-          for (const [slot, pId] of starterSlots) {
-            if (pId) {
-              lineupDetails.push({
-                playerId: pId,
-                slot,
-                isCaptain: lineupRow.captain_player_id === pId,
-                isViceCaptain: lineupRow.vice_captain_player_id === pId,
-                isStarter: true,
-              });
-            }
-          }
-          for (const [slot, pId] of benchSlots) {
-            if (pId) {
-              lineupDetails.push({
-                playerId: pId,
-                slot,
-                isCaptain: false,
-                isViceCaptain: false,
-                isStarter: false,
-              });
-            }
+        for (const [slot, playerId] of starterSlots) {
+          if (playerId) {
+            lineupDetails.push({
+              playerId,
+              slot,
+              isCaptain: lineupRow.captain_player_id === playerId,
+              isViceCaptain: lineupRow.vice_captain_player_id === playerId,
+              isStarter: true,
+            });
           }
         }
-
-        userFantasyImpact = {
-          userOwnedPlayerIds: ownedIds,
-          lineupDetails,
-        };
+        for (const [slot, playerId] of benchSlots) {
+          if (playerId) {
+            lineupDetails.push({
+              playerId,
+              slot,
+              isCaptain: false,
+              isViceCaptain: false,
+              isStarter: false,
+            });
+          }
+        }
       }
+
+      userFantasyImpact = {
+        userOwnedPlayerIds: ownedIds,
+        lineupDetails,
+      };
     }
-  } catch {
-    // Non-fatal if fantasy impact cannot be looked up
   }
 
   return {

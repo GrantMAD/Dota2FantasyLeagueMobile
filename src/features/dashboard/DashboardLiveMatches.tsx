@@ -3,15 +3,17 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Link } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import type { MatchSummary } from '@/src/features/competition/api';
+import { getMatchSquadAppearance } from '@/src/features/competition/match-squad-appearance';
+import type { FantasyPlayer } from '@/src/features/fantasy/api';
 
 interface DashboardLiveMatchesProps {
   matches: MatchSummary[];
-  userStarterTeamIds?: number[];
+  ownedPlayers?: FantasyPlayer[];
 }
 
 export function DashboardLiveMatches({
   matches,
-  userStarterTeamIds = [],
+  ownedPlayers = [],
 }: DashboardLiveMatchesProps) {
   if (!matches || matches.length === 0) {
     return null;
@@ -59,17 +61,19 @@ export function DashboardLiveMatches({
           const direName = match.dire_team?.name ?? 'Dire';
           const radiantTag = match.radiant_team?.tag ?? 'RAD';
           const direTag = match.dire_team?.tag ?? 'DIR';
-
-          const hasUserStarters =
-            (match.radiant_team_id !== null && userStarterTeamIds.includes(match.radiant_team_id)) ||
-            (match.dire_team_id !== null && userStarterTeamIds.includes(match.dire_team_id));
+          const appearance = getMatchSquadAppearance(match, ownedPlayers);
+          const hasSquadConnection = appearance.kind !== 'none';
 
           return (
             <Link key={match.id} href={`/match/${match.id}`} asChild>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`View live match ${radiantName} vs ${direName}`}
-                className="w-64 gap-2.5 rounded-xl border border-red-500/30 bg-slate-950/80 p-3.5"
+                className={`w-64 gap-2.5 rounded-xl border p-3.5 ${
+                  hasSquadConnection
+                    ? 'border-emerald-500/60 bg-emerald-950/30'
+                    : 'border-red-500/30 bg-slate-950/80'
+                }`}
               >
                 {/* Tournament & Bo Format */}
                 <View className="flex-row items-center justify-between border-b border-slate-800/80 pb-2">
@@ -119,7 +123,7 @@ export function DashboardLiveMatches({
 
                 {/* Footer: Fantasy Status Pill */}
                 <View className="flex-row items-center justify-between border-t border-slate-800/80 pt-2">
-                  {hasUserStarters ? (
+                  {appearance.kind === 'confirmed' ? (
                     <View className="flex-row items-center gap-1 rounded-full bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5">
                       <SymbolView
                         name={{ ios: 'shield.fill', android: 'shield', web: 'shield' }}
@@ -127,9 +131,13 @@ export function DashboardLiveMatches({
                         tintColor="#34d399"
                       />
                       <Text className="text-[10px] font-semibold text-emerald-300">
-                        Starters in Action
+                        {appearance.playerNames.join(', ')} in Action
                       </Text>
                     </View>
+                  ) : appearance.kind === 'unconfirmed' ? (
+                    <Text className="text-[10px] font-semibold text-amber-300">
+                      Squad fixture · unconfirmed
+                    </Text>
                   ) : (
                     <Text className="text-[10px] text-slate-400">Live Match Centre</Text>
                   )}

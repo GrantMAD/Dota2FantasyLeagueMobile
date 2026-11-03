@@ -979,6 +979,7 @@ describe('mobile data access', () => {
         best_of: 3,
         radiant_team_id: 4,
         dire_team_id: 5,
+        player_ids: [41, 52],
         radiant_team: { name: 'Radiant', tag: 'RAD' },
         dire_team: { name: 'Dire', tag: 'DIR' },
         tournaments: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
@@ -992,6 +993,7 @@ describe('mobile data access', () => {
     await expect(getMatches('upcoming')).resolves.toMatchObject([{
       id: 81,
       status: 'scheduled',
+      player_ids: [41, 52],
       radiant_team: { name: 'Radiant' },
       tournament: { id: 9, name: 'Autumn Cup' },
     }]);
@@ -1017,6 +1019,7 @@ describe('mobile data access', () => {
         best_of: 3,
         radiant_team_id: 4,
         dire_team_id: 5,
+        player_ids: [41],
         radiant_team: { name: 'Team Liquid', tag: 'TEAM' },
         dire_team: { name: 'T1', tag: 'wrong' },
         tournaments: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
@@ -1039,6 +1042,7 @@ describe('mobile data access', () => {
       counts: { all: 23, live: 2, upcoming: 9, completed: 12 },
       matches: [{
         status: 'live',
+        player_ids: [41],
         radiant_team: { name: 'Team Liquid', tag: 'TL' },
         dire_team: { name: 'T1', tag: 'T1' },
       }],
@@ -1055,6 +1059,7 @@ describe('mobile data access', () => {
   });
 
   it('validates match detail player statistics and fantasy points from the RPC', async () => {
+    getSession.mockResolvedValue({ data: { session: null }, error: null });
     mobileFantasyContextRpc.mockResolvedValue({ data: {
       match: {
         id: 81,
@@ -1123,6 +1128,31 @@ describe('mobile data access', () => {
     }, error: null });
 
     await expect(getMatchDetails(81)).rejects.toMatchObject({ name: 'ApiError', status: 502 });
+  });
+
+  it('rejects malformed match participant IDs from the paged RPC', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
+      matches: [{
+        id: 82,
+        status: 'live',
+        scheduled_at: '2026-10-07T10:00:00.000Z',
+        gameweek_id: 7,
+        match_number: 1,
+        best_of: 3,
+        radiant_team_id: 4,
+        dire_team_id: 5,
+        player_ids: ['invalid'],
+        radiant_team: null,
+        dire_team: null,
+        tournaments: null,
+      }],
+      total: 1,
+      page: 1,
+      limit: 24,
+      counts: { all: 1, live: 1, upcoming: 0, completed: 0 },
+    }, error: null });
+
+    await expect(getMatchesPage()).rejects.toMatchObject({ name: 'ApiError', status: 502 });
   });
 
   it('validates the tournament directory RPC response', async () => {

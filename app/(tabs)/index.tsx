@@ -655,11 +655,7 @@ export default function HomeScreen() {
             {liveMatchesQuery.data && liveMatchesQuery.data.length > 0 ? (
               <DashboardLiveMatches
                 matches={liveMatchesQuery.data}
-                userStarterTeamIds={
-                  starters
-                    .map((s) => s.professional_players?.professional_teams?.id)
-                    .filter((id): id is number => typeof id === 'number')
-                }
+                ownedPlayers={query.data?.ownedPlayers ?? []}
               />
             ) : null}
 

@@ -6,7 +6,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { getMatchesPage, getTournaments } from '@/src/features/competition/api';
+import { getMatchSquadAppearance } from '@/src/features/competition/match-squad-appearance';
 import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
+import { useFantasyContext } from '@/src/features/fantasy/hooks';
 
 const filters = ['all', 'live', 'upcoming', 'completed'] as const;
 type MatchFilter = (typeof filters)[number];
@@ -64,6 +66,8 @@ export default function MatchesScreen() {
     }),
     staleTime: 30_000,
   });
+  const fantasyQuery = useFantasyContext();
+  const ownedPlayers = fantasyQuery.data?.ownedPlayers ?? [];
   const totalPages = query.data ? Math.max(1, Math.ceil(query.data.total / query.data.limit)) : 1;
   const matchingTournaments = (tournamentsQuery.data ?? []).filter((tournament) =>
     tournament.name.toLowerCase().includes(tournamentSearch.toLowerCase()),
@@ -208,34 +212,59 @@ export default function MatchesScreen() {
           </View>
         ) : query.data.matches.length ? (
           <View className="gap-3">
-            {query.data.matches.map((match) => (
-              <Pressable
-                key={match.id}
-                accessibilityRole="button"
-                accessibilityLabel={`View ${match.radiant_team?.name ?? 'team'} versus ${match.dire_team?.name ?? 'team'} match details`}
-                className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4"
-                onPress={() => router.push(`/match/${match.id}`)}
-              >
-                <View className="flex-row items-center justify-between gap-2">
-                  <Text className={`text-xs font-semibold uppercase tracking-wider ${
-                    match.status === 'live' ? 'text-red-300' : 'text-slate-400'
-                  }`}>
-                    {match.status === 'live' ? '● Live' : match.status}
-                  </Text>
-                  <Text className="text-xs text-slate-500">
-                    {match.gameweek_id ? `GW ${match.gameweek_id}` : `Match ${match.match_number}`}
-                  </Text>
-                </View>
-                <TeamMatchup radiantTeam={match.radiant_team} direTeam={match.dire_team} />
-                <Text className="text-sm text-cyan-200">{formatDate(match.scheduled_at)}</Text>
-                <View className="flex-row items-center justify-between gap-3 border-t border-slate-800 pt-3">
-                  <Text numberOfLines={1} className="flex-1 text-xs text-slate-400">
-                    {match.tournament?.name ?? 'Tournament not announced'}
-                  </Text>
-                  <Text className="text-xs text-slate-500">Best of {match.best_of}</Text>
-                </View>
-              </Pressable>
-            ))}
+            {query.data.matches.map((match) => {
+              const appearance = getMatchSquadAppearance(match, ownedPlayers);
+              const hasSquadConnection = appearance.kind !== 'none';
+              const matchLabel = `View ${match.radiant_team?.name ?? 'team'} versus ${match.dire_team?.name ?? 'team'} match details`;
+              return (
+                <Pressable
+                  key={match.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={matchLabel}
+                  accessibilityHint={
+                    appearance.kind === 'confirmed'
+                      ? `Your players in this match: ${appearance.playerNames.join(', ')}`
+                      : appearance.kind === 'unconfirmed'
+                        ? 'A team in your squad is playing, but player appearances are not confirmed'
+                        : undefined
+                  }
+                  className={`gap-3 rounded-2xl border p-4 ${
+                    hasSquadConnection
+                      ? 'border-emerald-500/60 bg-emerald-950/20'
+                      : 'border-slate-800 bg-slate-900'
+                  }`}
+                  onPress={() => router.push(`/match/${match.id}`)}
+                >
+                  <View className="flex-row items-center justify-between gap-2">
+                    <Text className={`text-xs font-semibold uppercase tracking-wider ${
+                      match.status === 'live' ? 'text-red-300' : 'text-slate-400'
+                    }`}>
+                      {match.status === 'live' ? '● Live' : match.status}
+                    </Text>
+                    <Text className="text-xs text-slate-500">
+                      {match.gameweek_id ? `GW ${match.gameweek_id}` : `Match ${match.match_number}`}
+                    </Text>
+                  </View>
+                  <TeamMatchup radiantTeam={match.radiant_team} direTeam={match.dire_team} />
+                  {appearance.kind === 'confirmed' ? (
+                    <Text className="text-xs font-semibold text-emerald-300">
+                      Your players in match · {appearance.playerNames.join(', ')}
+                    </Text>
+                  ) : appearance.kind === 'unconfirmed' ? (
+                    <Text className="text-xs font-semibold text-amber-300">
+                      Squad team fixture · player appearance unconfirmed
+                    </Text>
+                  ) : null}
+                  <Text className="text-sm text-cyan-200">{formatDate(match.scheduled_at)}</Text>
+                  <View className="flex-row items-center justify-between gap-3 border-t border-slate-800 pt-3">
+                    <Text numberOfLines={1} className="flex-1 text-xs text-slate-400">
+                      {match.tournament?.name ?? 'Tournament not announced'}
+                    </Text>
+                    <Text className="text-xs text-slate-500">Best of {match.best_of}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         ) : (
           <View className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-6">
