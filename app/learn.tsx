@@ -2,6 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
+import { LearningResourcesNav } from '@/src/components/LearningResourcesNav';
 
 const learningPath = [
   { step: '01', icon: '📘', title: 'Start with Basics', description: 'Learn the rules, scoring, and gameweek deadlines.', href: '/rules' as const, action: 'Explore rules' },
@@ -132,17 +133,13 @@ export default function LearnScreen() {
         </View>
 
         <View className="flex-row gap-3">
-          <Link href="/help" asChild>
-            <Pressable className="min-h-11 flex-1 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 px-3">
-              <Text className="font-semibold text-slate-200">Help Center</Text>
-            </Pressable>
-          </Link>
           <Link href="/premium" asChild>
             <Pressable className="min-h-11 flex-1 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 px-3">
               <Text className="font-semibold text-amber-300">Premium Tools</Text>
             </Pressable>
           </Link>
         </View>
+        <LearningResourcesNav currentPage="learn" />
         <View className="rounded-2xl border border-cyan-900/60 bg-cyan-950/30 p-4">
           <Text className="font-semibold text-cyan-200">Server-enforced rules</Text>
           <Text className="mt-2 text-sm leading-5 text-slate-300">

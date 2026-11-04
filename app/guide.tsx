@@ -4,6 +4,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { Link } from 'expo-router';
 import type { Href } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
+import { LearningResourcesNav } from '@/src/components/LearningResourcesNav';
 
 type GuideCategory = 'Squad & Team Management' | 'Competition & Esports' | 'Intelligence & Management';
 type Difficulty = 'Beginner' | 'Tactical' | 'Advanced';
@@ -242,22 +243,7 @@ export default function GuideScreen() {
           })}
         </View>
 
-        <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-          <Text className="text-lg font-bold text-slate-50">Core destinations</Text>
-          {[
-            { label: 'Player discovery', href: '/discover' as const },
-            { label: 'Gameweek schedule', href: '/gameweeks' as const },
-            { label: 'Squad planner', href: '/squad-planner' as const },
-            { label: 'Help and FAQ', href: '/help' as const },
-          ].map((item) => (
-            <Link key={item.label} href={item.href} asChild>
-              <Pressable className="min-h-11 flex-row items-center justify-between border-t border-slate-800 pt-2">
-                <Text className="font-medium text-slate-200">{item.label}</Text>
-                <Text className="font-bold text-brand-300">›</Text>
-              </Pressable>
-            </Link>
-          ))}
-        </View>
+        <LearningResourcesNav currentPage="guide" />
       </ScrollView>
     </Screen>
   );
