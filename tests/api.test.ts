@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getPlayerMarket, getTransferHistory, getTransferHistoryAnalytics, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup, updateGoals } from '../src/features/fantasy/api';
+import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getFixtureDifficultyForTeams, getPlayerMarket, getTransferHistory, getTransferHistoryAnalytics, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup, updateGoals } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { getGameweekHistory, getGameweeks } from '../src/features/gameweeks/api';
 import {
@@ -690,6 +690,59 @@ describe('mobile data access', () => {
       failedTeamIds: [5],
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledTimes(2);
+  });
+
+  it('calculates fixture difficulty from the latest completed team results', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
+      matches: Array.from({ length: 5 }, (_, index) => ({
+        team_a_id: 8,
+        team_b_id: 9,
+        winner_team_id: index < 3 ? 9 : 8,
+        scheduled_at: new Date(Date.now() - index * 60_000).toISOString(),
+      })),
+    }, error: null });
+
+    await expect(getFixtureDifficultyForTeams([9])).resolves.toEqual({
+      9: {
+        games: 5,
+        wins: 3,
+        losses: 2,
+        winRate: 60,
+        rating: 4,
+        label: 'Hard',
+      },
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_matches', {
+      p_status: 'completed',
+      p_gameweek_id: null,
+      p_team_id: 9,
+      p_tournament_id: null,
+      p_search: null,
+      p_page: 1,
+      p_limit: 10,
+    });
+  });
+
+  it('returns unknown fixture difficulty when recent history is too small', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
+      matches: [{
+        team_a_id: 8,
+        team_b_id: 9,
+        winner_team_id: 8,
+        scheduled_at: new Date().toISOString(),
+      }],
+    }, error: null });
+
+    await expect(getFixtureDifficultyForTeams([9])).resolves.toEqual({
+      9: {
+        games: 1,
+        wins: 0,
+        losses: 0,
+        winRate: null,
+        rating: null,
+        label: 'Unknown',
+      },
+    });
   });
 
   it('queries and validates the authenticated player directory RPC contract', async () => {

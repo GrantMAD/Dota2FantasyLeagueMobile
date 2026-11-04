@@ -9,6 +9,11 @@ import {
   type TransferScoreHistory,
 } from './transfer-history-analytics';
 import { parseDashboardPointsBreakdown, type DashboardPointsBreakdown } from './points-breakdown';
+import {
+  calculateFixtureDifficulty,
+  type CompletedTeamMatch,
+  type FixtureDifficultyResult,
+} from './fixture-difficulty';
 
 export interface FantasyPlayer {
   id: number;
@@ -138,6 +143,52 @@ export interface TeamFixture {
   team_a: { name: string } | null;
   team_b: { name: string } | null;
   tournament_name: string | null;
+}
+
+export async function getFixtureDifficultyForTeams(
+  teamIds: number[],
+): Promise<Record<number, FixtureDifficultyResult>> {
+  const uniqueTeamIds = [...new Set(teamIds)];
+  const results = await Promise.all(uniqueTeamIds.map(async (teamId) => {
+    if (!Number.isSafeInteger(teamId) || teamId <= 0) {
+      throw new ApiError('A valid team ID is required to calculate fixture difficulty.', 400);
+    }
+
+    const { data, error } = await getSupabaseClient().rpc('mobile_get_matches', {
+      p_status: 'completed',
+      p_gameweek_id: null,
+      p_team_id: teamId,
+      p_tournament_id: null,
+      p_search: null,
+      p_page: 1,
+      p_limit: 10,
+    });
+    if (error) throw new ApiError(`Unable to load recent results for team ${teamId}: ${error.message}`, 500);
+    if (!isRecord(data) || !Array.isArray(data.matches)) {
+      throw new ApiError('Recent match data was returned in an unexpected format.', 502);
+    }
+
+    const matches: CompletedTeamMatch[] = data.matches.flatMap((value): CompletedTeamMatch[] => {
+      if (
+        !isRecord(value)
+        || !isNullableNumber(value.team_a_id)
+        || !isNullableNumber(value.team_b_id)
+        || !isNullableNumber(value.winner_team_id)
+        || typeof value.scheduled_at !== 'string'
+      ) {
+        throw new ApiError('Recent match data was returned in an unexpected format.', 502);
+      }
+      return [{
+        team_a_id: value.team_a_id,
+        team_b_id: value.team_b_id,
+        winner_team_id: value.winner_team_id,
+        scheduled_time: value.scheduled_at,
+      }];
+    });
+
+    return [teamId, calculateFixtureDifficulty(teamId, matches)] as const;
+  }));
+  return Object.fromEntries(results);
 }
 
 function parseTeamFixture(value: unknown): TeamFixture {

@@ -8,6 +8,7 @@ import type {
   MarketPlayer,
   TransferSuggestionResult,
 } from '../src/features/fantasy/api';
+import type { FixtureDifficultyResult } from '../src/features/fantasy/fixture-difficulty';
 import { LineupEditor } from '../src/features/fantasy/LineupEditor';
 import { SquadBuilder } from '../src/features/fantasy/SquadBuilder';
 import { TransferMarket } from '../src/features/fantasy/TransferMarket';
@@ -19,6 +20,8 @@ import {
   getPlayerMarket,
   getTransferHistory,
   getTransferSuggestions,
+  getFixtureDifficultyForTeams,
+  getUpcomingFixturesForTeams,
   processTransfer,
   saveLineup,
 } from '../src/features/fantasy/api';
@@ -26,7 +29,7 @@ import { getProfessionalTeams } from '../src/features/players/api';
 import { MobileFeedbackProvider } from '../src/components/MobileFeedbackProvider';
 
 jest.mock('../src/lib/theme', () => ({
-  useMobileTheme: () => ({ colors: { onAccent: '#ffffff', placeholder: '#999999' } }),
+  useMobileTheme: () => ({ colors: { onAccent: '#ffffff', placeholder: '#999999' }, theme: 'dark' }),
 }));
 
 jest.mock('../src/features/fantasy/api', () => ({
@@ -35,6 +38,8 @@ jest.mock('../src/features/fantasy/api', () => ({
   getPlayerMarket: jest.fn(),
   getTransferHistory: jest.fn(),
   getTransferSuggestions: jest.fn(),
+  getFixtureDifficultyForTeams: jest.fn(),
+  getUpcomingFixturesForTeams: jest.fn(),
   processTransfer: jest.fn(),
   saveLineup: jest.fn(),
 }));
@@ -50,6 +55,8 @@ const mockedActivateWildcard = jest.mocked(activateWildcard);
 const mockedGetPlayerMarket = jest.mocked(getPlayerMarket);
 const mockedGetTransferHistory = jest.mocked(getTransferHistory);
 const mockedGetTransferSuggestions = jest.mocked(getTransferSuggestions);
+const mockedGetFixtureDifficultyForTeams = jest.mocked(getFixtureDifficultyForTeams);
+const mockedGetUpcomingFixturesForTeams = jest.mocked(getUpcomingFixturesForTeams);
 const mockedGetProfessionalTeams = jest.mocked(getProfessionalTeams);
 let queryClients: QueryClient[] = [];
 
@@ -202,6 +209,8 @@ describe('fantasy management components', () => {
       pricedRoleMatchedCandidates: 4,
       recommendations: [],
     });
+    mockedGetFixtureDifficultyForTeams.mockReset().mockResolvedValue({});
+    mockedGetUpcomingFixturesForTeams.mockReset().mockResolvedValue({ fixtures: [], failedTeamIds: [] });
     mockedGetProfessionalTeams.mockReset().mockResolvedValue([
       { id: 8, name: 'Radiant', logo_url: null },
       { id: 9, name: 'Dire', logo_url: null },
@@ -248,11 +257,53 @@ describe('fantasy management components', () => {
     const context = createContext({
       ownedPlayers: [avatarPlayer, ...startingPlayers.slice(1)],
     });
+
     const view = renderWithQueryClient(<LineupEditor context={context} userId="manager-1" />);
 
     expect(view.getByLabelText('Player 1 avatar')).toBeTruthy();
     await fireEvent.press(view.getByRole('button', { name: 'Choose Bench 1 player' }));
     await waitFor(() => expect(view.getAllByLabelText('Player 1 avatar')).toHaveLength(2));
+  });
+
+  it('shows selected-gameweek fixtures and opponent difficulty in lineup slots', async () => {
+    const carry = {
+      ...startingPlayers[0],
+      professional_teams: { id: 8, name: 'Radiant', slug: 'radiant' },
+    };
+    const fixtureDate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const difficulty: FixtureDifficultyResult = {
+      games: 10,
+      wins: 7,
+      losses: 3,
+      winRate: 70,
+      rating: 5,
+      label: 'Very Hard',
+    };
+    mockedGetUpcomingFixturesForTeams.mockResolvedValue({
+      fixtures: [{
+        id: 31,
+        scheduled_time: fixtureDate,
+        team_a_id: 8,
+        team_b_id: 90,
+        team_a: { name: 'Radiant' },
+        team_b: { name: 'Dire' },
+        tournament_name: 'Autumn Cup',
+      }],
+      failedTeamIds: [],
+    });
+    mockedGetFixtureDifficultyForTeams.mockResolvedValue({ 90: difficulty });
+
+    const view = renderWithQueryClient(
+      <LineupEditor context={createContext({ ownedPlayers: [carry, ...startingPlayers.slice(1)] })} userId="manager-1" />,
+    );
+
+    await waitFor(() => {
+      expect(view.getByText('vs Dire')).toBeTruthy();
+      expect(view.getByText('5/5 · Very Hard')).toBeTruthy();
+      expect(view.getByText('Autumn Cup')).toBeTruthy();
+    });
+    expect(mockedGetUpcomingFixturesForTeams).toHaveBeenCalledWith([8], 24);
+    expect(mockedGetFixtureDifficultyForTeams).toHaveBeenCalledWith([90]);
   });
 
   it('requires confirmation before saving within two hours of the deadline', async () => {

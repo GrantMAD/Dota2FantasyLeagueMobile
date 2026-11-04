@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Image, Modal, Pressable, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
-import type { FantasyContext, FantasyLineupEntry, FantasyPlayer } from './api';
-import { saveLineup } from './api';
+import type { FantasyContext, FantasyLineupEntry, FantasyPlayer, TeamFixture } from './api';
+import { getFixtureDifficultyForTeams, getUpcomingFixturesForTeams, saveLineup } from './api';
+import { FixtureDifficultyBadge } from './FixtureDifficultyBadge';
+import type { FixtureDifficultyResult } from './fixture-difficulty';
 import { useMobileTheme } from '@/src/lib/theme';
 import { useMobileFeedback } from '@/src/components/MobileFeedbackProvider';
 
@@ -97,6 +99,95 @@ function lineupSlotColors(slot: LineupSlot): string {
   }
 }
 
+function formatFixtureDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? 'Time to be confirmed'
+    : date.toLocaleString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+}
+
+interface LineupFixtureDetailsProps {
+  player: FantasyPlayer;
+  fixturesByTeam: Map<number, TeamFixture[]>;
+  difficultyByTeam: Record<number, FixtureDifficultyResult> | undefined;
+  loading: boolean;
+  failed: boolean;
+  difficultyLoading: boolean;
+  difficultyFailed: boolean;
+  hasGameweek: boolean;
+}
+
+function LineupFixtureDetails({
+  player,
+  fixturesByTeam,
+  difficultyByTeam,
+  loading,
+  failed,
+  difficultyLoading,
+  difficultyFailed,
+  hasGameweek,
+}: LineupFixtureDetailsProps) {
+  const teamId = player.professional_teams?.id;
+  if (teamId === undefined) {
+    return <Text className="mt-2 text-xs text-slate-400">No team schedule available.</Text>;
+  }
+  if (loading) {
+    return <Text accessibilityLiveRegion="polite" className="mt-2 text-xs text-slate-400">Loading selected-gameweek fixtures...</Text>;
+  }
+  if (failed) {
+    return <Text accessibilityRole="alert" className="mt-2 text-xs text-amber-300">Unable to load fixtures for this team.</Text>;
+  }
+  if (!hasGameweek) {
+    return <Text className="mt-2 text-xs text-slate-400">Select a gameweek to view fixtures.</Text>;
+  }
+
+  const fixtures = fixturesByTeam.get(teamId) ?? [];
+  if (fixtures.length === 0) {
+    return <Text className="mt-2 text-xs text-slate-400">No scheduled fixture in this gameweek.</Text>;
+  }
+
+  return (
+    <View className="mt-3 gap-2 border-t border-slate-700/70 pt-3">
+      <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        Selected gameweek fixtures
+      </Text>
+      {fixtures.map((fixture) => {
+        const isTeamA = fixture.team_a_id === teamId;
+        const opponentId = isTeamA ? fixture.team_b_id : fixture.team_a_id;
+        const opponentName = isTeamA ? fixture.team_b?.name : fixture.team_a?.name;
+        return (
+          <View key={fixture.id} className="flex-row flex-wrap items-center justify-between gap-2">
+            <View className="min-w-0 flex-1">
+              <Text numberOfLines={1} className="text-xs font-medium text-slate-200">
+                vs {opponentName ?? 'Opponent TBA'}
+              </Text>
+              <Text className="mt-1 text-[11px] text-slate-500">{formatFixtureDate(fixture.scheduled_time)}</Text>
+              {fixture.tournament_name ? (
+                <Text numberOfLines={1} className="mt-0.5 text-[11px] text-slate-500">{fixture.tournament_name}</Text>
+              ) : null}
+            </View>
+            {opponentId === null ? (
+              <Text className="text-[11px] text-slate-400">Difficulty unavailable until opponent is confirmed.</Text>
+            ) : difficultyLoading ? (
+              <Text accessibilityLiveRegion="polite" className="text-[11px] text-slate-400">Loading difficulty...</Text>
+            ) : difficultyFailed ? (
+              <Text className="text-[11px] text-amber-300">Difficulty unavailable.</Text>
+            ) : (
+              <FixtureDifficultyBadge difficulty={difficultyByTeam?.[opponentId]} />
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 interface LineupEditorProps {
   context: FantasyContext;
   userId: string;
@@ -120,6 +211,49 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
     () => new Map(context.ownedPlayers.map((player) => [player.id, player])),
     [context.ownedPlayers]
   );
+  const teamIds = useMemo(
+    () => [...new Set(context.ownedPlayers
+      .map((player) => player.professional_teams?.id)
+      .filter((teamId): teamId is number => teamId !== undefined))].sort((a, b) => a - b),
+    [context.ownedPlayers]
+  );
+  const fixtureQuery = useQuery({
+    queryKey: ['lineup-fixtures', userId, context.gameweek?.id, teamIds],
+    queryFn: () => getUpcomingFixturesForTeams(teamIds, context.gameweek?.id),
+    enabled: Boolean(context.gameweek?.id && teamIds.length > 0),
+    staleTime: 60_000,
+  });
+  const fixturesByTeam = useMemo(() => {
+    const result = new Map<number, TeamFixture[]>();
+    for (const fixture of fixtureQuery.data?.fixtures ?? []) {
+      for (const teamId of [fixture.team_a_id, fixture.team_b_id]) {
+        if (teamId === null) continue;
+        const fixtures = result.get(teamId) ?? [];
+        fixtures.push(fixture);
+        result.set(teamId, fixtures);
+      }
+    }
+    return result;
+  }, [fixtureQuery.data?.fixtures]);
+  const opponentTeamIds = useMemo(() => {
+    const squadTeamIds = new Set(teamIds);
+    return [...new Set((fixtureQuery.data?.fixtures ?? []).flatMap((fixture) => {
+      const opponentIds: number[] = [];
+      if (fixture.team_a_id !== null && squadTeamIds.has(fixture.team_a_id) && fixture.team_b_id !== null) {
+        opponentIds.push(fixture.team_b_id);
+      }
+      if (fixture.team_b_id !== null && squadTeamIds.has(fixture.team_b_id) && fixture.team_a_id !== null) {
+        opponentIds.push(fixture.team_a_id);
+      }
+      return opponentIds;
+    }))].sort((a, b) => a - b);
+  }, [fixtureQuery.data?.fixtures, teamIds]);
+  const fixtureDifficultyQuery = useQuery({
+    queryKey: ['fixture-difficulty', userId, opponentTeamIds],
+    queryFn: () => getFixtureDifficultyForTeams(opponentTeamIds),
+    enabled: opponentTeamIds.length > 0,
+    staleTime: 5 * 60_000,
+  });
 
   const mutation = useMutation({
     mutationFn: saveLineup,
@@ -339,10 +473,73 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
                   />
                 </View>
               ) : null}
+              {player ? (
+                <LineupFixtureDetails
+                  player={player}
+                  fixturesByTeam={fixturesByTeam}
+                  difficultyByTeam={fixtureDifficultyQuery.data}
+                  loading={Boolean(context.gameweek?.id && fixtureQuery.isPending)}
+                  failed={fixtureQuery.isError
+                    || (fixtureQuery.data?.failedTeamIds.includes(player.professional_teams?.id ?? -1) ?? false)}
+                  difficultyLoading={fixtureDifficultyQuery.isPending}
+                  difficultyFailed={fixtureDifficultyQuery.isError}
+                  hasGameweek={Boolean(context.gameweek?.id)}
+                />
+              ) : null}
             </View>
           );
         })}
       </View>
+
+      {fixtureQuery.isError ? (
+        <View className="gap-2 rounded-xl border border-red-800/60 bg-red-950/30 p-3">
+          <Text accessibilityRole="alert" className="text-sm leading-5 text-red-200">
+            {fixtureQuery.error instanceof Error ? fixtureQuery.error.message : 'Unable to load selected-gameweek fixtures.'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: fixtureQuery.isFetching }}
+            disabled={fixtureQuery.isFetching}
+            onPress={() => void fixtureQuery.refetch()}
+          >
+            <Text className="font-semibold text-white">{fixtureQuery.isFetching ? 'Retrying fixtures...' : 'Retry fixtures'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {fixtureQuery.data?.failedTeamIds.length ? (
+        <View className="gap-2 rounded-xl border border-amber-700/60 bg-amber-950/20 p-3">
+          <Text className="text-sm leading-5 text-amber-200">
+            Fixtures could not be loaded for team IDs {fixtureQuery.data.failedTeamIds.join(', ')}. Available fixtures are still shown.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: fixtureQuery.isFetching }}
+            disabled={fixtureQuery.isFetching}
+            onPress={() => void fixtureQuery.refetch()}
+          >
+            <Text className="font-semibold text-white">{fixtureQuery.isFetching ? 'Retrying fixtures...' : 'Retry fixtures'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {fixtureDifficultyQuery.isError ? (
+        <View className="gap-2 rounded-xl border border-amber-700/60 bg-amber-950/20 p-3">
+          <Text accessibilityRole="alert" className="text-sm leading-5 text-amber-200">
+            {fixtureDifficultyQuery.error instanceof Error
+              ? fixtureDifficultyQuery.error.message
+              : 'Unable to load fixture difficulty.'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: fixtureDifficultyQuery.isFetching }}
+            disabled={fixtureDifficultyQuery.isFetching}
+            onPress={() => void fixtureDifficultyQuery.refetch()}
+          >
+            <Text className="font-semibold text-white">
+              {fixtureDifficultyQuery.isFetching ? 'Retrying difficulty...' : 'Retry difficulty'}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {lineupError ? <Text className="text-sm leading-5 text-amber-200">{lineupError}</Text> : null}
       {saveError ? <Text accessibilityRole="alert" className="text-sm leading-5 text-red-300">{saveError}</Text> : null}

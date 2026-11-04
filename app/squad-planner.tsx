@@ -6,8 +6,9 @@ import { useQuery } from '@tanstack/react-query';
 import { SymbolView } from 'expo-symbols';
 import { Screen } from '@/src/components/Screen';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
-import { getUpcomingFixturesForTeams } from '@/src/features/fantasy/api';
+import { getFixtureDifficultyForTeams, getUpcomingFixturesForTeams } from '@/src/features/fantasy/api';
 import type { FantasyPlayer, TeamFixture } from '@/src/features/fantasy/api';
+import { FixtureDifficultyBadge } from '@/src/features/fantasy/FixtureDifficultyBadge';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
@@ -102,6 +103,25 @@ export default function SquadPlannerScreen() {
     enabled: Boolean(session?.user.id && contextQuery.data && teamIds.length > 0),
     staleTime: 60_000,
   });
+  const opponentTeamIds = useMemo(() => {
+    const squadTeamIds = new Set(teamIds);
+    return [...new Set((fixtureQuery.data?.fixtures ?? []).flatMap((fixture) => {
+      const opponentIds: number[] = [];
+      if (fixture.team_a_id !== null && squadTeamIds.has(fixture.team_a_id) && fixture.team_b_id !== null) {
+        opponentIds.push(fixture.team_b_id);
+      }
+      if (fixture.team_b_id !== null && squadTeamIds.has(fixture.team_b_id) && fixture.team_a_id !== null) {
+        opponentIds.push(fixture.team_a_id);
+      }
+      return opponentIds;
+    }))].sort((a, b) => a - b);
+  }, [fixtureQuery.data?.fixtures, teamIds]);
+  const fixtureDifficultyQuery = useQuery({
+    queryKey: ['fixture-difficulty', session?.user.id, opponentTeamIds],
+    queryFn: () => getFixtureDifficultyForTeams(opponentTeamIds),
+    enabled: Boolean(session?.user.id && opponentTeamIds.length > 0),
+    staleTime: 5 * 60_000,
+  });
   const lineupByPlayer = useMemo(
     () => new Map((lineupContextQuery.data?.lineup ?? []).map((entry) => [entry.player_id, entry])),
     [lineupContextQuery.data?.lineup]
@@ -119,10 +139,18 @@ export default function SquadPlannerScreen() {
     return result;
   }, [fixtureQuery.data]);
   const unavailableCount = players.filter((player) => player.availability_status !== 'available').length;
-  const refreshing = contextQuery.isRefetching || lineupContextQuery.isRefetching || fixtureQuery.isRefetching;
+  const refreshing = contextQuery.isRefetching
+    || lineupContextQuery.isRefetching
+    || fixtureQuery.isRefetching
+    || fixtureDifficultyQuery.isRefetching;
 
   async function refresh() {
-    await Promise.all([contextQuery.refetch(), lineupContextQuery.refetch(), fixtureQuery.refetch()]);
+    await Promise.all([
+      contextQuery.refetch(),
+      lineupContextQuery.refetch(),
+      fixtureQuery.refetch(),
+      fixtureDifficultyQuery.refetch(),
+    ]);
   }
 
   return (
@@ -320,7 +348,9 @@ export default function SquadPlannerScreen() {
             <View className="gap-3">
               <View>
                 <Text className="text-lg font-bold text-white">Upcoming squad fixtures</Text>
-                <Text className="mt-1 text-sm text-slate-400">Next scheduled matches for teams represented in your squad.</Text>
+                <Text className="mt-1 text-sm leading-5 text-slate-400">
+                  Difficulty estimates opponent form from recent results, not match outcomes.
+                </Text>
               </View>
               {fixtureQuery.data?.failedTeamIds.length ? (
                 <View accessibilityRole="alert" className="gap-3 rounded-xl border border-amber-800 bg-amber-950/70 p-4">
@@ -340,6 +370,23 @@ export default function SquadPlannerScreen() {
                   </Pressable>
                 </View>
               ) : null}
+              {fixtureDifficultyQuery.isError ? (
+                <View accessibilityRole="alert" className="gap-2 rounded-xl border border-amber-800 bg-amber-950/70 p-4">
+                  <Text className="text-sm leading-5 text-amber-100">
+                    {fixtureDifficultyQuery.error instanceof Error
+                      ? fixtureDifficultyQuery.error.message
+                      : 'Unable to load fixture difficulty.'}
+                  </Text>
+                  <Pressable accessibilityRole="button" onPress={() => void fixtureDifficultyQuery.refetch()}>
+                    <Text className="font-semibold text-white">Retry difficulty</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {fixtureDifficultyQuery.isPending && opponentTeamIds.length > 0 ? (
+                <Text accessibilityLiveRegion="polite" className="text-xs text-slate-400">
+                  Loading opponent form…
+                </Text>
+              ) : null}
               {fixtureQuery.isPending ? (
                 <ActivityIndicator accessibilityLabel="Loading squad fixtures" color="#14b8a6" />
               ) : fixtureQuery.isError ? (
@@ -357,6 +404,22 @@ export default function SquadPlannerScreen() {
                     player.professional_teams?.id === fixture.team_a_id ||
                     player.professional_teams?.id === fixture.team_b_id
                   );
+                  const squadSides = [
+                    {
+                      teamId: fixture.team_a_id,
+                      opponentId: fixture.team_b_id,
+                      teamName: fixture.team_a?.name ?? 'Team TBA',
+                      opponentName: fixture.team_b?.name ?? 'Opponent TBA',
+                    },
+                    {
+                      teamId: fixture.team_b_id,
+                      opponentId: fixture.team_a_id,
+                      teamName: fixture.team_b?.name ?? 'Team TBA',
+                      opponentName: fixture.team_a?.name ?? 'Opponent TBA',
+                    },
+                  ].filter((side) => side.teamId !== null && involvedPlayers.some(
+                    (player) => player.professional_teams?.id === side.teamId,
+                  ));
                   return (
                     <View key={fixture.id} className="gap-2 rounded-2xl border border-slate-800 bg-slate-900 p-4">
                       <Text className="font-semibold text-white">
@@ -371,6 +434,18 @@ export default function SquadPlannerScreen() {
                           Your squad: {involvedPlayers.map(playerName).join(', ')}
                         </Text>
                       ) : null}
+                      {squadSides.map((side) => (
+                        <View key={side.teamId} className="flex-row flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-2">
+                          <Text className="min-w-0 flex-1 text-xs text-slate-400">
+                            {side.teamName} vs {side.opponentName}
+                          </Text>
+                          <FixtureDifficultyBadge
+                            difficulty={side.opponentId === null
+                              ? undefined
+                              : fixtureDifficultyQuery.data?.[side.opponentId]}
+                          />
+                        </View>
+                      ))}
                     </View>
                   );
                 })
