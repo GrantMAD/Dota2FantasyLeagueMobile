@@ -28,7 +28,6 @@ export interface ManagerProfileUpdate {
   bio?: string;
   countryCode?: string;
   timezone?: string;
-  emailNotifications: boolean;
   pushNotifications: boolean;
   bannerTheme?: string;
 }
@@ -224,7 +223,6 @@ export async function updateManagerProfile(update: ManagerProfileUpdate): Promis
   const updates: Record<string, unknown> = {
     username: update.username,
     display_name: update.displayName,
-    email_notifications: update.emailNotifications,
     push_notifications: update.pushNotifications,
   };
   if (update.bio !== undefined) updates.bio = update.bio;

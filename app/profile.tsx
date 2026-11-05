@@ -40,10 +40,7 @@ import {
   type SettingOption,
 } from '@/src/features/account/settingOptions';
 import { usePushNotificationStatus } from '@/src/lib/push-notifications';
-import {
-  requestAndRegisterPushNotifications,
-  unregisterDevicePushToken,
-} from '@/src/lib/push-token-registration';
+import { requestAndRegisterPushNotifications } from '@/src/lib/push-token-registration';
 import { useAuth } from '@/src/lib/auth';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { useMobileTheme } from '@/src/lib/theme';
@@ -54,21 +51,35 @@ function PreferenceToggle({
   description,
   value,
   onChange,
+  disabled = false,
+  unavailable = false,
 }: {
   label: string;
   description: string;
   value: boolean;
-  onChange: (value: boolean) => void;
+  onChange?: (value: boolean) => void;
+  disabled?: boolean;
+  unavailable?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="switch"
-      accessibilityState={{ checked: value }}
-      className="flex-row items-center justify-between gap-4 border-b border-slate-800 py-4"
-      onPress={() => onChange(!value)}
+      accessibilityState={{ checked: value, disabled: disabled || !onChange }}
+      className={`flex-row items-center justify-between gap-4 border-b border-slate-800 py-4 ${
+        disabled || !onChange ? 'opacity-60' : ''
+      }`}
+      disabled={disabled || !onChange}
+      onPress={() => onChange?.(!value)}
     >
       <View className="flex-1 gap-1">
-        <Text className="font-semibold text-white">{label}</Text>
+        <View className="flex-row flex-wrap items-center gap-2">
+          <Text className="font-semibold text-white">{label}</Text>
+          {unavailable ? (
+            <Text className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+              Coming Soon
+            </Text>
+          ) : null}
+        </View>
         <Text className="text-sm leading-5 text-slate-400">{description}</Text>
       </View>
       <View className={`h-7 w-12 justify-center rounded-full px-1 ${value ? 'bg-brand-500' : 'bg-slate-700'}`}>
@@ -735,28 +746,16 @@ function ProfileEditor({
   const [bio, setBio] = useState(profile.bio ?? '');
   const [countryCode, setCountryCode] = useState(profile.countryCode ?? '');
   const [timezone, setTimezone] = useState(profile.timezone ?? 'UTC');
-  const [emailNotifications, setEmailNotifications] = useState(profile.emailNotifications);
   const [pushNotifications, setPushNotifications] = useState(profile.pushNotifications);
   const [notice, setNotice] = useState<string | null>(null);
   const [enablingPush, setEnablingPush] = useState(false);
+  const [savingPushPreference, setSavingPushPreference] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const save = useMutation({
     mutationFn: updateManagerProfile,
-    onSuccess: async (profile) => {
+    onSuccess: (profile) => {
       queryClient.setQueryData<ManagerProfile | null>(['manager-profile'], profile);
-      if (!profile.pushNotifications) {
-        try {
-          await unregisterDevicePushToken(profile.id);
-        } catch (error: unknown) {
-          setNotice(
-            `Notification preference saved, but this device could not be unregistered: ${
-              error instanceof Error ? error.message : 'Please try again.'
-            }`,
-          );
-          return;
-        }
-      }
       onSaved('Your profile and preferences have been saved.');
     },
     onError: (error: Error) => setNotice(error.message),
@@ -770,9 +769,32 @@ function ProfileEditor({
       bio: bio.trim(),
       countryCode: countryCode.trim().toUpperCase(),
       timezone: timezone.trim(),
-      emailNotifications,
       pushNotifications,
     });
+  }
+
+  async function handlePushPreferenceChange(enabled: boolean) {
+    if (save.isPending || savingPushPreference) return;
+
+    const previousValue = pushNotifications;
+    setPushNotifications(enabled);
+    setSavingPushPreference(true);
+    setNotice(null);
+    try {
+      const updatedProfile = await updatePushNotificationPreference(enabled);
+      queryClient.setQueryData<ManagerProfile | null>(['manager-profile'], updatedProfile);
+      setPushNotifications(updatedProfile.pushNotifications);
+      setNotice(enabled
+        ? pushStatus.isDeviceRegistered
+          ? 'Push notifications are enabled for your account.'
+          : 'Push is enabled for your account. Register this device to receive alerts here.'
+        : 'Push notifications are off for your account.');
+    } catch (error: unknown) {
+      setPushNotifications(previousValue);
+      setNotice(error instanceof Error ? error.message : 'Unable to save the push notification preference.');
+    } finally {
+      setSavingPushPreference(false);
+    }
   }
 
   async function handleThemeChange(nextTheme: 'light' | 'dark') {
@@ -1012,16 +1034,20 @@ function ProfileEditor({
         <Text className="text-base font-semibold text-white">Preferences & Notifications</Text>
         <PreferenceToggle
           label="Email notifications"
-          description="This preference is saved, but email alert delivery is not currently available."
-          value={emailNotifications}
-          onChange={setEmailNotifications}
+          description="Email delivery is not available yet. Changing this preference will not send emails."
+          value={false}
+          unavailable
         />
         <PreferenceToggle
           label="Push notifications"
-          description="Native push alerts require this account preference and device registration."
+          description="Choose whether supported alerts are sent to your account. Register this iOS or Android device and allow notifications to receive them here."
           value={pushNotifications}
-          onChange={setPushNotifications}
+          disabled={savingPushPreference || save.isPending}
+          onChange={(enabled) => void handlePushPreferenceChange(enabled)}
         />
+        {savingPushPreference ? (
+          <Text className="text-xs text-slate-400">Saving push preference...</Text>
+        ) : null}
         <Text className={`text-xs leading-5 ${pushStatus.syncError ? 'text-amber-300' : 'text-slate-400'}`}>
           {pushStatus.syncError
             ? `Device registration issue: ${pushStatus.syncError}`
@@ -1035,7 +1061,7 @@ function ProfileEditor({
           <Pressable
             accessibilityRole="button"
             className="mt-2 rounded-xl border border-brand-500/30 bg-brand-500/10 py-3 items-center"
-            disabled={enablingPush}
+            disabled={enablingPush || savingPushPreference || save.isPending}
             onPress={handleEnablePush}
           >
             <Text className="text-sm font-semibold text-brand-300">
@@ -1051,7 +1077,7 @@ function ProfileEditor({
 
       <Button
         accessibilityLabel="Save profile changes"
-        disabled={save.isPending}
+        disabled={save.isPending || savingPushPreference}
         label={save.isPending ? 'Saving changes...' : 'Save Profile'}
         onPress={handleSave}
       />
