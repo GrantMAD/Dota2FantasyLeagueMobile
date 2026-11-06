@@ -29,17 +29,20 @@ export interface GameweekHistoryPlayer {
   name: string;
   role: string;
   points: number;
+  rawPoints?: number;
+  multiplier?: number;
   profileImageUrl: string | null;
   isCaptain: boolean;
   isViceCaptain: boolean;
 }
 
 export interface GameweekHistory {
-  gameweek: { id: number; number: number };
+  gameweek: { id: number; number: number; status?: string };
   managerScore: number | null;
   globalAverage: number | null;
   starters: GameweekHistoryPlayer[];
   bench: GameweekHistoryPlayer[];
+  activeChip?: 'triple_captain' | 'bench_boost' | 'wildcard' | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -73,6 +76,8 @@ function parseHistoryPlayer(value: unknown): GameweekHistoryPlayer {
     name: value.name,
     role: value.role,
     points: value.points,
+    rawPoints: typeof value.rawPoints === 'number' ? value.rawPoints : undefined,
+    multiplier: typeof value.multiplier === 'number' ? value.multiplier : undefined,
     profileImageUrl: value.profileImageUrl,
     isCaptain: value.isCaptain,
     isViceCaptain: value.isViceCaptain,
@@ -92,15 +97,23 @@ function parseGameweekHistory(value: unknown): GameweekHistory {
   ) {
     throw new ApiError('Gameweek history was returned in an unexpected format.', 502);
   }
+  const activeChip =
+    value.activeChip === 'triple_captain' ||
+    value.activeChip === 'bench_boost' ||
+    value.activeChip === 'wildcard'
+      ? value.activeChip
+      : null;
   return {
     gameweek: {
       id: Number(value.gameweek.id),
       number: Number(value.gameweek.number),
+      status: typeof value.gameweek.status === 'string' ? value.gameweek.status : undefined,
     },
     managerScore: value.managerScore,
     globalAverage: value.globalAverage,
     starters: value.starters.map(parseHistoryPlayer),
     bench: value.bench.map(parseHistoryPlayer),
+    activeChip,
   };
 }
 

@@ -5,7 +5,8 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { Screen } from '@/src/components/Screen';
 import { getMatchesByFilters } from '@/src/features/competition/api';
 import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
-import { getGameweeks } from '@/src/features/gameweeks/api';
+import { getGameweekHistory, getGameweeks } from '@/src/features/gameweeks/api';
+import { GameweekSquadLineup } from '@/src/features/gameweeks/GameweekSquadLineup';
 
 function formatDate(value: string | null): string {
   if (!value) return 'Date not announced';
@@ -13,13 +14,13 @@ function formatDate(value: string | null): string {
   return Number.isNaN(date.getTime())
     ? 'Date not announced'
     : date.toLocaleString(undefined, {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        timeZoneName: 'short',
-      });
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
 }
 
 function formatDeadline(value: string | null): string {
@@ -28,13 +29,13 @@ function formatDeadline(value: string | null): string {
   return Number.isNaN(date.getTime())
     ? 'Not announced'
     : date.toLocaleString(undefined, {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        timeZoneName: 'short',
-      });
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
 }
 
 export default function GameweekDetailScreen() {
@@ -61,6 +62,14 @@ export default function GameweekDetailScreen() {
     enabled: validId,
     staleTime: 30_000,
   });
+
+  const historyQuery = useQuery({
+    queryKey: ['gameweek-history', gameweekId],
+    queryFn: () => getGameweekHistory(gameweekId),
+    enabled: validId,
+    staleTime: 30_000,
+  });
+
   const teamFlags = query.data?.gameweek?.flags ?? [];
 
   return (
@@ -69,7 +78,14 @@ export default function GameweekDetailScreen() {
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
-          <RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor="#14b8a6" />
+          <RefreshControl
+            refreshing={query.isRefetching || historyQuery.isRefetching}
+            onRefresh={() => {
+              void query.refetch();
+              void historyQuery.refetch();
+            }}
+            tintColor="#14b8a6"
+          />
         }
       >
         <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={goBackToGameweeks}>
@@ -176,6 +192,14 @@ export default function GameweekDetailScreen() {
                 </Text>
               </View>
             ) : null}
+            <GameweekSquadLineup
+              gameweekId={query.data.gameweek.id}
+              gameweekNumber={query.data.gameweek.gameweek_number}
+              gameweekStatus={query.data.gameweek.status}
+              deadline={query.data.gameweek.deadline}
+              history={historyQuery.data ?? null}
+              isLoading={historyQuery.isLoading}
+            />
             <View className="gap-3">
               <Text className="text-xl font-bold text-white">Schedule</Text>
               {query.data.matches.length ? query.data.matches.map((match) => (
