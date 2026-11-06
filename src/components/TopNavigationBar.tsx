@@ -19,6 +19,7 @@ import { getManagerAvatarUrl, getManagerProfile } from '@/src/features/account/a
 import { getPlayers } from '@/src/features/players/api';
 import {
   getNotifications,
+  markAllNotificationsRead,
   markNotificationRead,
   notificationActionFor,
   notificationCategoryForType,
@@ -105,6 +106,7 @@ export function TopNavigationBar() {
   const [premiumTooltipVisible, setPremiumTooltipVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [debouncedSearchText, setDebouncedSearchText] = useState('');
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<number[]>([]);
   const user = session?.user;
   const profileQuery = useQuery({
     queryKey: ['manager-profile'],
@@ -132,6 +134,13 @@ export function TopNavigationBar() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
     onError: (error) => setNotificationActionError(
       error instanceof Error ? error.message : 'Unable to open this notification.'
+    ),
+  });
+  const markAllRead = useMutation({
+    mutationFn: markAllNotificationsRead,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onError: (error) => setNotificationActionError(
+      error instanceof Error ? error.message : 'Unable to mark all notifications as read.'
     ),
   });
   const playerSearchQuery = useQuery({
@@ -164,7 +173,8 @@ export function TopNavigationBar() {
     (typeof metadata?.full_name === 'string' ? metadata.full_name : null) ||
     user.email?.split('@')[0] ||
     'Manager';
-  const notifications = notificationsQuery.data?.notifications ?? [];
+  const rawNotifications = notificationsQuery.data?.notifications ?? [];
+  const notifications = rawNotifications.filter((n) => !dismissedNotificationIds.includes(n.id));
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
   const dropdownWidth = Math.min(360, width - 24);
   const palette = theme === 'dark'
@@ -528,8 +538,32 @@ export function TopNavigationBar() {
             ) : openDropdown === 'notifications' ? (
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: palette.border, paddingHorizontal: 16, paddingVertical: 12 }}>
-                  <Text style={{ color: palette.text, fontWeight: '600' }}>Notifications</Text>
-                  {unreadCount ? <Text style={{ color: palette.accent, fontSize: 12, fontWeight: '600' }}>{unreadCount} unread</Text> : null}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ color: palette.text, fontWeight: '700', fontSize: 14 }}>Notifications</Text>
+                    {unreadCount ? (
+                      <View style={{ borderRadius: 999, backgroundColor: theme === 'dark' ? '#134e4a' : '#ccfbf1', paddingHorizontal: 8, paddingVertical: 2 }}>
+                        <Text style={{ color: palette.accent, fontSize: 11, fontWeight: '700' }}>{unreadCount} unread</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {unreadCount > 0 ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Mark all notifications as read"
+                      disabled={markAllRead.isPending}
+                      style={{ minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      onPress={() => markAllRead.mutate()}
+                    >
+                      <SymbolView
+                        name={{ ios: 'checkmark.circle.fill', android: 'done_all', web: 'done_all' }}
+                        size={14}
+                        tintColor={palette.accent}
+                      />
+                      <Text style={{ color: palette.accent, fontSize: 12, fontWeight: '600' }}>
+                        {markAllRead.isPending ? 'Marking...' : 'Mark all read'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
                 {notificationsQuery.isPending ? (
                   <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
@@ -548,35 +582,127 @@ export function TopNavigationBar() {
                     </Pressable>
                   </View>
                 ) : notifications.length ? (
-                  <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                  <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
                     {notifications.map((notification) => (
-                      <Pressable
+                      <View
                         key={notification.id}
-                        accessibilityRole="button"
                         style={{
                           flexDirection: 'row',
+                          alignItems: 'flex-start',
                           borderBottomWidth: 1,
                           borderBottomColor: palette.border,
                           paddingHorizontal: 16,
                           paddingVertical: 12,
+                          backgroundColor: notification.is_read
+                            ? 'transparent'
+                            : (theme === 'dark' ? 'rgba(30, 41, 59, 0.4)' : 'rgba(241, 245, 249, 0.7)'),
                         }}
-                        disabled={markRead.isPending}
-                        onPress={() => openNotification(notification)}
                       >
-                        <View style={{ width: 8, height: 8, marginTop: 6, marginRight: 12, borderRadius: 4, backgroundColor: '#67e8f9', opacity: notification.is_read ? 0 : 1 }} />
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text style={{ flex: 1, color: palette.text, fontWeight: '600' }} numberOfLines={1}>{notification.title}</Text>
-                            <Text style={{ color: palette.mutedText, fontSize: 10 }}>{relativeTime(notification.created_at)}</Text>
+                        <Pressable
+                          accessibilityRole="button"
+                          style={{ flexDirection: 'row', flex: 1, minWidth: 0, paddingRight: 8 }}
+                          disabled={markRead.isPending}
+                          onPress={() => openNotification(notification)}
+                        >
+                          <View
+                            style={{
+                              width: 8,
+                              height: 8,
+                              marginTop: 6,
+                              marginRight: 10,
+                              borderRadius: 4,
+                              backgroundColor: palette.accent,
+                              opacity: notification.is_read ? 0 : 1,
+                            }}
+                          />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                              <Text
+                                style={{
+                                  flex: 1,
+                                  color: palette.text,
+                                  fontWeight: notification.is_read ? '600' : '700',
+                                  fontSize: 13,
+                                }}
+                                numberOfLines={1}
+                              >
+                                {notification.title}
+                              </Text>
+                              <Text style={{ color: palette.mutedText, fontSize: 10, flexShrink: 0 }}>
+                                {relativeTime(notification.created_at)}
+                              </Text>
+                            </View>
+                            <Text
+                              style={{
+                                marginTop: 3,
+                                color: notification.is_read ? palette.mutedText : palette.secondaryText,
+                                fontSize: 12,
+                                lineHeight: 18,
+                              }}
+                              numberOfLines={2}
+                            >
+                              {notification.message}
+                            </Text>
+                            <Text
+                              style={{
+                                marginTop: 4,
+                                color: palette.mutedText,
+                                fontSize: 10,
+                                letterSpacing: 0.5,
+                                textTransform: 'uppercase',
+                                fontWeight: '600',
+                              }}
+                            >
+                              {notificationCategoryForType(notification.type) ?? 'Update'}
+                            </Text>
                           </View>
-                          <Text style={{ marginTop: 4, color: palette.secondaryText, fontSize: 12, lineHeight: 20 }} numberOfLines={2}>
-                            {notification.message}
-                          </Text>
-                          <Text style={{ marginTop: 4, color: palette.mutedText, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' }}>
-                            {notificationCategoryForType(notification.type) ?? 'Update'}
-                          </Text>
+                        </Pressable>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 2 }}>
+                          {!notification.is_read ? (
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`Mark "${notification.title}" as read`}
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 14,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: theme === 'dark' ? 'rgba(94, 234, 212, 0.15)' : 'rgba(15, 118, 110, 0.1)',
+                              }}
+                              onPress={() => markRead.mutate(notification.id)}
+                            >
+                              <SymbolView
+                                name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+                                size={13}
+                                tintColor={palette.accent}
+                              />
+                            </Pressable>
+                          ) : null}
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Dismiss "${notification.title}"`}
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 14,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: theme === 'dark' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(100, 116, 139, 0.1)',
+                            }}
+                            onPress={() => {
+                              setDismissedNotificationIds((prev) => [...prev, notification.id]);
+                            }}
+                          >
+                            <SymbolView
+                              name={{ ios: 'xmark', android: 'close', web: 'close' }}
+                              size={12}
+                              tintColor={palette.mutedText}
+                            />
+                          </Pressable>
                         </View>
-                      </Pressable>
+                      </View>
                     ))}
                   </ScrollView>
                 ) : (
