@@ -420,126 +420,269 @@ export default function HomeScreen() {
 
               {/* Feed items */}
               <View className="gap-2">
-                {/* Friend moves */}
-                {(whatsNewTab === 'all' || whatsNewTab === 'friends') &&
-                  friendActivityQuery.data?.activities?.slice(0, 5).map((activity) => (
-                    <Link key={`f-${activity.activity_id}`} href="/friends" asChild>
-                      <Pressable
-                        className="flex-row items-start gap-3 rounded-xl p-3"
-                        style={{
-                          borderLeftWidth: 3,
-                          borderLeftColor: '#14b8a6',
-                          backgroundColor: isDark ? 'rgba(20, 184, 166, 0.08)' : 'rgba(13, 148, 136, 0.07)',
-                        }}
-                      >
-                        <SymbolView
-                          name={activity.activity_type === 'transfer'
-                            ? { ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }
-                            : activity.activity_type === 'chip'
-                              ? { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }
-                              : activity.activity_type === 'lineup'
-                                ? { ios: 'list.clipboard.fill', android: 'assignment', web: 'assignment' }
-                                : { ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }}
-                          size={17}
-                          tintColor="#2dd4bf"
-                        />
-                        <View className="flex-1 gap-1">
-                          <View className="flex-row items-center gap-1.5">
-                            <Text className="text-[10px] font-bold uppercase tracking-wider text-teal-300">Friend Move</Text>
-                            <Text className="text-xs text-slate-500">·</Text>
-                            <Text className="text-xs font-bold text-slate-200">
-                              {activity.display_name?.trim() || activity.username}
+                {(() => {
+                  const friendsList = friendActivityQuery.data?.activities ?? [];
+                  const tournamentsList = whatsNewQuery.data.events ?? [];
+                  const priceChanges = dashboardUpdates.filter((u) => u.kind === 'price_change');
+                  const availabilityUpdates = dashboardUpdates.filter((u) => u.kind === 'availability');
+
+                  const shouldCollapseFriends = whatsNewTab === 'all' && friendsList.length >= 5;
+                  const shouldCollapsePrice = whatsNewTab === 'all' && priceChanges.length >= 5;
+                  const shouldCollapseAvail = whatsNewTab === 'all' && availabilityUpdates.length >= 5;
+                  const shouldCollapseTournaments = whatsNewTab === 'all' && tournamentsList.length >= 5;
+
+                  const visibleFriends = whatsNewTab === 'all'
+                    ? (shouldCollapseFriends ? friendsList.slice(0, 4) : friendsList)
+                    : friendsList;
+
+                  const visiblePrice = whatsNewTab === 'all'
+                    ? (shouldCollapsePrice ? priceChanges.slice(0, 4) : priceChanges)
+                    : priceChanges;
+
+                  const visibleAvail = whatsNewTab === 'all'
+                    ? (shouldCollapseAvail ? availabilityUpdates.slice(0, 4) : availabilityUpdates)
+                    : availabilityUpdates;
+
+                  const visibleTournaments = whatsNewTab === 'all'
+                    ? (shouldCollapseTournaments ? tournamentsList.slice(0, 4) : tournamentsList.slice(0, 3))
+                    : tournamentsList;
+
+                  return (
+                    <>
+                      {/* Friend moves */}
+                      {(whatsNewTab === 'all' || whatsNewTab === 'friends') &&
+                        visibleFriends.map((activity) => (
+                          <Link key={`f-${activity.activity_id}`} href="/friends" asChild>
+                            <Pressable
+                              className="flex-row items-start gap-3 rounded-xl p-3"
+                              style={{
+                                borderLeftWidth: 3,
+                                borderLeftColor: '#14b8a6',
+                                backgroundColor: isDark ? 'rgba(20, 184, 166, 0.08)' : 'rgba(13, 148, 136, 0.07)',
+                              }}
+                            >
+                              <SymbolView
+                                name={activity.activity_type === 'transfer'
+                                  ? { ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }
+                                  : activity.activity_type === 'chip'
+                                    ? { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }
+                                    : activity.activity_type === 'lineup'
+                                      ? { ios: 'list.clipboard.fill', android: 'assignment', web: 'assignment' }
+                                      : { ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }}
+                                size={17}
+                                tintColor="#2dd4bf"
+                              />
+                              <View className="flex-1 gap-1">
+                                <View className="flex-row items-center gap-1.5">
+                                  <Text className="text-[10px] font-bold uppercase tracking-wider text-teal-300">Friend Move</Text>
+                                  <Text className="text-xs text-slate-500">·</Text>
+                                  <Text className="text-xs font-bold text-slate-200">
+                                    {activity.display_name?.trim() || activity.username}
+                                  </Text>
+                                </View>
+                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{activity.title}</Text>
+                                {activity.activity_type === 'transfer' && (activity.players_in?.length || activity.players_out?.length) ? (
+                                  <View className="flex-row flex-wrap gap-1.5 mt-0.5">
+                                    {activity.players_in?.map((p) => (
+                                      <Text key={`in-${p}`} className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                                        +{p}
+                                      </Text>
+                                    ))}
+                                    {activity.players_out?.map((p) => (
+                                      <Text key={`out-${p}`} className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
+                                        -{p}
+                                      </Text>
+                                    ))}
+                                  </View>
+                                ) : null}
+                                {activity.activity_type === 'gameweek_score' && activity.gameweek_points !== null ? (
+                                  <Text className="text-xs font-semibold text-teal-300">
+                                    {activity.gameweek_points.toLocaleString()} pts scored
+                                    {activity.gameweek_rank ? ` · Rank #${activity.gameweek_rank.toLocaleString()}` : ''}
+                                  </Text>
+                                ) : null}
+                              </View>
+                              <Text className="pt-1 font-bold text-teal-200">›</Text>
+                            </Pressable>
+                          </Link>
+                        ))}
+
+                      {/* Friend overflow note */}
+                      {shouldCollapseFriends && (
+                        <Pressable
+                          onPress={() => setWhatsNewTab('friends')}
+                          className="flex-row items-center justify-between rounded-xl p-3 border-l-3"
+                          style={{
+                            borderLeftWidth: 3,
+                            borderLeftColor: '#14b8a6',
+                            backgroundColor: isDark ? 'rgba(20, 184, 166, 0.12)' : 'rgba(13, 148, 136, 0.10)',
+                          }}
+                        >
+                          <View className="flex-row items-center gap-2.5 flex-1 pr-2">
+                            <SymbolView name={{ ios: 'person.2.fill', android: 'group', web: 'group' }} size={16} tintColor="#2dd4bf" />
+                            <Text className="text-xs text-slate-200 flex-1">
+                              There are <Text className="font-bold text-teal-300">{friendsList.length - 4} more friend moves</Text>.{' '}
+                              <Text className="font-bold underline text-teal-300">Click here to view all</Text>
                             </Text>
                           </View>
-                          <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{activity.title}</Text>
-                          {activity.activity_type === 'transfer' && (activity.players_in?.length || activity.players_out?.length) ? (
-                            <View className="flex-row flex-wrap gap-1.5 mt-0.5">
-                              {activity.players_in?.map((p) => (
-                                <Text key={`in-${p}`} className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                                  +{p}
+                          <Text className="text-xs font-bold text-teal-300">Friends ›</Text>
+                        </Pressable>
+                      )}
+
+                      {/* Squad availability updates */}
+                      {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
+                        visibleAvail.map((update) => (
+                          <Link key={`${update.kind}-${update.id}`} href={`/player/${update.playerId}`} asChild>
+                            <Pressable
+                              className="flex-row items-start gap-3 rounded-xl p-3"
+                              style={{
+                                borderLeftWidth: 3,
+                                borderLeftColor: '#f43f5e',
+                                backgroundColor: isDark ? 'rgba(244, 63, 94, 0.08)' : 'rgba(225, 29, 72, 0.06)',
+                              }}
+                            >
+                              <SymbolView
+                                name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
+                                size={17}
+                                tintColor="#fb7185"
+                              />
+                              <View className="flex-1 gap-1">
+                                <Text className="text-[10px] font-bold uppercase tracking-wider text-rose-300">
+                                  Squad availability
                                 </Text>
-                              ))}
-                              {activity.players_out?.map((p) => (
-                                <Text key={`out-${p}`} className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
-                                  -{p}
-                                </Text>
-                              ))}
-                            </View>
-                          ) : null}
-                          {activity.activity_type === 'gameweek_score' && activity.gameweek_points !== null ? (
-                            <Text className="text-xs font-semibold text-teal-300">
-                              {activity.gameweek_points.toLocaleString()} pts scored
-                              {activity.gameweek_rank ? ` · Rank #${activity.gameweek_rank.toLocaleString()}` : ''}
+                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{update.title}</Text>
+                                <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
+                              </View>
+                              <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                            </Pressable>
+                          </Link>
+                        ))}
+
+                      {/* Availability overflow note */}
+                      {shouldCollapseAvail && (
+                        <Pressable
+                          onPress={() => setWhatsNewTab('squad')}
+                          className="flex-row items-center justify-between rounded-xl p-3 border-l-3"
+                          style={{
+                            borderLeftWidth: 3,
+                            borderLeftColor: '#f43f5e',
+                            backgroundColor: isDark ? 'rgba(244, 63, 94, 0.12)' : 'rgba(225, 29, 72, 0.10)',
+                          }}
+                        >
+                          <View className="flex-row items-center gap-2.5 flex-1 pr-2">
+                            <SymbolView name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }} size={16} tintColor="#fb7185" />
+                            <Text className="text-xs text-slate-200 flex-1">
+                              There are <Text className="font-bold text-rose-300">{availabilityUpdates.length - 4} more availability alerts</Text>.{' '}
+                              <Text className="font-bold underline text-rose-300">Click here to view all</Text>
                             </Text>
-                          ) : null}
-                        </View>
-                        <Text className="pt-1 font-bold text-teal-200">›</Text>
-                      </Pressable>
-                    </Link>
-                  ))}
+                          </View>
+                          <Text className="text-xs font-bold text-rose-300">Squad ›</Text>
+                        </Pressable>
+                      )}
 
-                {/* Squad updates */}
-                {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
-                  dashboardUpdates.map((update) => (
-                    <Link key={`${update.kind}-${update.id}`} href={`/player/${update.playerId}`} asChild>
-                      <Pressable
-                        className="flex-row items-start gap-3 rounded-xl p-3"
-                        style={{
-                          borderLeftWidth: 3,
-                          borderLeftColor: update.kind === 'availability' ? '#f43f5e' : '#10b981',
-                          backgroundColor: update.kind === 'availability'
-                            ? (isDark ? 'rgba(244, 63, 94, 0.08)' : 'rgba(225, 29, 72, 0.06)')
-                            : (isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(5, 150, 105, 0.06)'),
-                        }}
-                      >
-                        <SymbolView
-                          name={update.kind === 'availability'
-                            ? { ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }
-                            : { ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
-                          size={17}
-                          tintColor={update.kind === 'availability' ? '#fb7185' : '#34d399'}
-                        />
-                        <View className="flex-1 gap-1">
-                          <Text className={`text-[10px] font-bold uppercase tracking-wider ${
-                            update.kind === 'availability' ? 'text-rose-300' : 'text-emerald-300'
-                          }`}>
-                            {update.kind === 'availability' ? 'Squad availability' : 'Player price'}
-                          </Text>
-                          <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{update.title}</Text>
-                          <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
-                        </View>
-                        <Text className="pt-1 font-bold text-cyan-200">›</Text>
-                      </Pressable>
-                    </Link>
-                  ))}
+                      {/* Player price changes */}
+                      {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
+                        visiblePrice.map((update) => (
+                          <Link key={`${update.kind}-${update.id}`} href={`/player/${update.playerId}`} asChild>
+                            <Pressable
+                              className="flex-row items-start gap-3 rounded-xl p-3"
+                              style={{
+                                borderLeftWidth: 3,
+                                borderLeftColor: '#10b981',
+                                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(5, 150, 105, 0.06)',
+                              }}
+                            >
+                              <SymbolView
+                                name={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
+                                size={17}
+                                tintColor="#34d399"
+                              />
+                              <View className="flex-1 gap-1">
+                                <Text className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                                  Player price
+                                </Text>
+                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{update.title}</Text>
+                                <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
+                              </View>
+                              <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                            </Pressable>
+                          </Link>
+                        ))}
 
-                {/* Tournaments */}
-                {(whatsNewTab === 'all' || whatsNewTab === 'tournaments') &&
-                  whatsNewQuery.data.events.slice(0, 3).map((event) => (
-                    <Link key={event.id} href={`/tournament/${event.id}`} asChild>
-                      <Pressable
-                        className="flex-row items-start gap-3 rounded-xl p-3"
-                        style={{
-                          borderLeftWidth: 3,
-                          borderLeftColor: '#f59e0b',
-                          backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
-                        }}
-                      >
-                        <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={17} tintColor="#fbbf24" />
-                        <View className="flex-1 gap-1">
-                          <Text className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Tournament active</Text>
-                          <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{event.title}</Text>
-                          <Text className="text-xs leading-5" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-                            {[event.tier, `${event.seriesCount} series`, `${event.matchCount} matches`,
-                              ...(event.bestOfFormats.length ? [`Bo${event.bestOfFormats.join(' / Bo')}`] : [])]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </Text>
-                        </View>
-                        <Text className="pt-1 font-bold text-cyan-200">›</Text>
-                      </Pressable>
-                    </Link>
-                  ))}
+                      {/* Price change overflow note */}
+                      {shouldCollapsePrice && (
+                        <Pressable
+                          onPress={() => setWhatsNewTab('squad')}
+                          className="flex-row items-center justify-between rounded-xl p-3 border-l-3"
+                          style={{
+                            borderLeftWidth: 3,
+                            borderLeftColor: '#10b981',
+                            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(5, 150, 105, 0.10)',
+                          }}
+                        >
+                          <View className="flex-row items-center gap-2.5 flex-1 pr-2">
+                            <SymbolView name={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }} size={16} tintColor="#34d399" />
+                            <Text className="text-xs text-slate-200 flex-1">
+                              There are <Text className="font-bold text-emerald-300">{priceChanges.length - 4} more price changes</Text>.{' '}
+                              <Text className="font-bold underline text-emerald-300">Click here to view all</Text>
+                            </Text>
+                          </View>
+                          <Text className="text-xs font-bold text-emerald-300">Squad ›</Text>
+                        </Pressable>
+                      )}
+
+                      {/* Tournaments */}
+                      {(whatsNewTab === 'all' || whatsNewTab === 'tournaments') &&
+                        visibleTournaments.map((event) => (
+                          <Link key={event.id} href={`/tournament/${event.id}`} asChild>
+                            <Pressable
+                              className="flex-row items-start gap-3 rounded-xl p-3"
+                              style={{
+                                borderLeftWidth: 3,
+                                borderLeftColor: '#f59e0b',
+                                backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+                              }}
+                            >
+                              <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={17} tintColor="#fbbf24" />
+                              <View className="flex-1 gap-1">
+                                <Text className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Tournament active</Text>
+                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{event.title}</Text>
+                                <Text className="text-xs leading-5" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
+                                  {[event.tier, `${event.seriesCount} series`, `${event.matchCount} matches`,
+                                    ...(event.bestOfFormats.length ? [`Bo${event.bestOfFormats.join(' / Bo')}`] : [])]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </Text>
+                              </View>
+                              <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                            </Pressable>
+                          </Link>
+                        ))}
+
+                      {/* Tournaments overflow note */}
+                      {shouldCollapseTournaments && (
+                        <Pressable
+                          onPress={() => setWhatsNewTab('tournaments')}
+                          className="flex-row items-center justify-between rounded-xl p-3 border-l-3"
+                          style={{
+                            borderLeftWidth: 3,
+                            borderLeftColor: '#f59e0b',
+                            backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(217, 119, 6, 0.10)',
+                          }}
+                        >
+                          <View className="flex-row items-center gap-2.5 flex-1 pr-2">
+                            <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={16} tintColor="#fbbf24" />
+                            <Text className="text-xs text-slate-200 flex-1">
+                              There are <Text className="font-bold text-amber-300">{tournamentsList.length - 4} more active tournaments</Text>.{' '}
+                              <Text className="font-bold underline text-amber-300">Click here to view all</Text>
+                            </Text>
+                          </View>
+                          <Text className="text-xs font-bold text-amber-300">Tournaments ›</Text>
+                        </Pressable>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Empty states for selected tab */}
                 {whatsNewTab === 'friends' && (friendActivityQuery.data?.activities?.length ?? 0) === 0 ? (
