@@ -1,3 +1,4 @@
+import { formatPlayerPrice } from '../src/lib/format-price';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView as NativeScrollView, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
@@ -332,7 +333,7 @@ export default function SquadPlannerScreen() {
                       {lineupEntry?.is_captain ? <Text className="text-xs font-medium text-amber-300">Captain</Text> : null}
                       {lineupEntry?.is_vice_captain ? <Text className="text-xs font-medium text-amber-200">Vice-captain</Text> : null}
                       <Text className="text-xs text-slate-400">
-                        {player.current_price > 0 ? `$${player.current_price.toFixed(1)}M` : 'Price unavailable'}
+                        {player.current_price > 0 ? formatPlayerPrice(player.current_price) : 'Price unavailable'}
                       </Text>
                       <Text className="text-xs text-slate-400">
                         {fixturesUnavailable

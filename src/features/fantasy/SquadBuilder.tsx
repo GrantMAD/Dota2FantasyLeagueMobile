@@ -1,3 +1,4 @@
+import { formatPlayerPriceCompact } from '../../lib/format-price';
 import { useDeferredValue, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
@@ -271,7 +272,7 @@ export function SquadBuilder({
                   {isSelected ? <Text className="mt-1 text-xs font-semibold text-brand-300">Selected for your squad</Text> : null}
                   <Text className="mt-1 text-xs text-slate-400">
                     {player.primary_role ?? 'Role unavailable'} ·{' '}
-                    {player.current_price === null ? 'Price unavailable' : `${player.current_price.toFixed(1)}M`}
+                    {player.current_price === null ? 'Price unavailable' : formatPlayerPriceCompact(player.current_price)}
                     {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
                   </Text>
                   {player.price_history?.length ? (

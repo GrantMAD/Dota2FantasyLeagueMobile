@@ -419,7 +419,7 @@ describe('fantasy management components', () => {
     expect(view.getByLabelText('Player 1 avatar')).toBeTruthy();
     expect(view.getByText('Radiant')).toBeTruthy();
     expect(view.getByText('carry')).toBeTruthy();
-    expect(view.getAllByText('10.0M').length).toBeGreaterThan(0);
+    expect(view.getAllByText('10.00M').length).toBeGreaterThan(0);
     await waitFor(() => expect(view.getByText('Choose a professional team above to see eligible replacement players.')).toBeTruthy());
     await fireEvent.press(view.getByRole('button', { name: /Sell Player 1/ }));
     expect(view.getByText('Selected')).toBeTruthy();

@@ -1,3 +1,4 @@
+import { formatPlayerPriceCompact } from '../../lib/format-price';
 import { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { Link } from 'expo-router';
@@ -122,7 +123,7 @@ function PlayerCard({
         </View>
         <View className="flex-row flex-wrap items-center gap-1.5">
           <Badge label={roleLabel(player.primary_role)} colors={colors} />
-          <Badge label={`${player.current_price.toFixed(1)}M`} colors={colors} />
+          <Badge label={formatPlayerPriceCompact(player.current_price)} colors={colors} />
           {entry?.is_captain ? <Badge label="Captain" highlighted /> : null}
           {entry?.is_vice_captain ? <Badge label="Vice-captain" highlighted /> : null}
           {player.availability_status ? <Badge label={player.availability_status.replaceAll('_', ' ')} colors={colors} /> : null}
@@ -180,7 +181,7 @@ function PitchStarterRow({
               </Text>
             </View>
             <View className="items-end">
-              <Text className="font-mono text-sm font-bold text-slate-200">{player.current_price.toFixed(1)}M</Text>
+              <Text className="font-mono text-sm font-bold text-slate-200">{formatPlayerPriceCompact(player.current_price)}</Text>
               {player.professional_teams?.name ? (
                 <Text className="mt-0.5 text-[10px] text-slate-500">
                   {player.last_gw_points} GW · {player.recent_points} avg

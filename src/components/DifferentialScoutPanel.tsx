@@ -1,3 +1,4 @@
+import { formatPlayerPriceCompact } from '../lib/format-price';
 import { useState, useMemo } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SymbolView } from 'expo-symbols';
@@ -320,7 +321,7 @@ export function DifferentialScoutPanel({
                           </View>
                         </View>
                         <Text className="text-[11px] text-slate-400 mt-0.5">
-                          {player.primary_role ?? 'Role'} · {player.team_name ?? 'Team'} · {player.current_price?.toFixed(1) ?? '—'}M · {player.ownership_percentage.toFixed(1)}% owned
+                          {player.primary_role ?? 'Role'} · {player.team_name ?? 'Team'} · {player.current_price != null ? formatPlayerPriceCompact(player.current_price) : '—'} · {player.ownership_percentage.toFixed(1)}% owned
                         </Text>
                       </View>
 

@@ -1,3 +1,4 @@
+import { formatPlayerPriceCompact } from '../src/lib/format-price';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
@@ -143,7 +144,7 @@ export default function ComparePlayersScreen() {
                       return `vs ${oppName}`;
                     })}
                   />
-                  <ComparisonRow label="Price" values={query.data.map((player) => `${player.current_price?.toFixed(1) ?? '—'}M`)} />
+                  <ComparisonRow label="Price" values={query.data.map((player) => player.current_price != null ? formatPlayerPriceCompact(player.current_price) : '—')} />
                   <ComparisonRow label="Season points" values={query.data.map((player) => `${player.total_season_points.toFixed(1)}`)} />
                   <ComparisonRow label="Latest gameweek" values={query.data.map((player) => `${player.last_gw_points.toFixed(1)}`)} />
                   <ComparisonRow label="Recent average" values={query.data.map((player) => `${player.recent_points.toFixed(1)}`)} />

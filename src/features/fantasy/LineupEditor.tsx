@@ -1,3 +1,4 @@
+import { formatPlayerPriceCompact } from '../../lib/format-price';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Image, Modal, Pressable, Text, View } from 'react-native';
@@ -440,7 +441,7 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
                   </View>
                   {player ? (
                     <Text className="mt-1 text-xs text-slate-400">
-                      {player.primary_role ?? 'Role unavailable'} · {player.current_price.toFixed(1)}
+                      {player.primary_role ?? 'Role unavailable'} · {formatPlayerPriceCompact(player.current_price)}
                     </Text>
                   ) : null}
                 </View>
@@ -619,7 +620,7 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
                     <View className="min-w-0 flex-1">
                       <Text className="font-semibold text-white">{player.in_game_name || player.name}</Text>
                       <Text className="mt-1 text-xs text-slate-400">
-                        {player.primary_role ?? 'Role unavailable'} · {player.current_price.toFixed(1)}
+                        {player.primary_role ?? 'Role unavailable'} · {formatPlayerPriceCompact(player.current_price)}
                         {assignedSlot && assignedSlot !== activeSlot ? ` · Currently ${SLOT_LABELS[assignedSlot as LineupSlot] ?? assignedSlot}` : ''}
                       </Text>
                     </View>

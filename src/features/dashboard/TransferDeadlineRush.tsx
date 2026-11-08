@@ -1,3 +1,4 @@
+import { formatPlayerPrice } from '../../lib/format-price';
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
 import { Link } from 'expo-router';
@@ -293,7 +294,7 @@ export function TransferDeadlineRush({ data }: TransferDeadlineRushProps) {
                     {activeTab === 'in' ? `+${player.transfer_count}` : `-${player.transfer_count}`}
                   </Text>
                   <Text className="text-[10px] text-slate-400">
-                    ${Number(player.current_price).toFixed(1)}M
+                    {formatPlayerPrice(player.current_price)}
                   </Text>
                 </View>
               </Pressable>

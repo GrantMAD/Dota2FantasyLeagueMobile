@@ -1,3 +1,4 @@
+import { formatPlayerPriceCompact } from '../../lib/format-price';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -274,7 +275,7 @@ export function TransferMarket({
                 <Text className="text-emerald-300">{suggestion.playerInName}</Text>
               </Text>
               <Text className="text-xs text-slate-400">
-                {suggestion.playerInRole} · {suggestion.playerInCurrentPrice.toFixed(1)}M ·
+                {suggestion.playerInRole} · {formatPlayerPriceCompact(suggestion.playerInCurrentPrice)} ·
                 {' '}estimated bank after swap {suggestion.budgetAfter.toFixed(1)}M
               </Text>
               {suggestion.reasons.map((reason) => (
@@ -431,7 +432,7 @@ export function TransferMarket({
                   </View>
                   <View className="rounded-full bg-slate-800 px-2 py-0.5">
                     <Text className="text-[10px] font-semibold text-slate-300">
-                      {player.current_price.toFixed(1)}M
+                      {formatPlayerPriceCompact(player.current_price)}
                     </Text>
                   </View>
                   {player.availability_status ? (
@@ -787,7 +788,7 @@ export function TransferMarket({
                         </View>
                         <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }}>
                           <Text className="text-[10px] font-semibold" style={{ color: isDark ? '#cbd5e1' : '#475569' }}>
-                            {player.current_price === null ? 'Price unavailable' : `${player.current_price.toFixed(1)}M`}
+                            {player.current_price === null ? 'Price unavailable' : formatPlayerPriceCompact(player.current_price)}
                           </Text>
                         </View>
                         {player.recent_points !== null ? (

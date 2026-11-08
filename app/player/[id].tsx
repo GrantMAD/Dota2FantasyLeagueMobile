@@ -1,3 +1,4 @@
+import { formatPlayerPriceCompact } from '../../src/lib/format-price';
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';

@@ -1,4 +1,5 @@
-import { useDeferredValue, useState } from 'react';
+import { formatPlayerPriceCompact } from '../../src/lib/format-price';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
@@ -6,7 +7,7 @@ import { Link, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
-import { getPlayers, getProfessionalTeams } from '@/src/features/players/api';
+import { getPlayers, getProfessionalTeams, type DirectoryPlayer } from '@/src/features/players/api';
 import { useMobileTheme } from '@/src/lib/theme';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
@@ -45,7 +46,7 @@ export default function DiscoverScreen() {
   const [role, setRole] = useState('');
   const [teamId, setTeamId] = useState<number | null>(null);
   const [availableOnly, setAvailableOnly] = useState(true);
-  const [pinOwnedFirst, setPinOwnedFirst] = useState(false);
+  const [pinOwnedFirst, setPinOwnedFirst] = useState(true);
   const [sortBy, setSortBy] = useState<SortField>('price');
   const [sortDesc, setSortDesc] = useState(true);
   const [compareMode, setCompareMode] = useState(false);
@@ -77,10 +78,106 @@ export default function DiscoverScreen() {
     query.data.total !== null &&
     query.data.offset + query.data.players.length < query.data.total
   );
-  const ownedPlayerIds = new Set((fantasyContext.data?.ownedPlayers ?? []).map((player) => player.id));
-  const displayedPlayers = (query.data?.players ?? []).filter((player) =>
-    !availableOnly || player.availability_status === 'available'
+  const ownedPlayerIds = useMemo(
+    () => new Set((fantasyContext.data?.ownedPlayers ?? []).map((player) => player.id)),
+    [fantasyContext.data?.ownedPlayers],
   );
+
+  const displayedPlayers: DirectoryPlayer[] = useMemo(() => {
+    const serverPlayers = (query.data?.players ?? []).filter((player) =>
+      !availableOnly || player.availability_status === 'available'
+    );
+
+    const serverPlayerMap = new Map((query.data?.players ?? []).map((p) => [p.id, p]));
+
+    let list: DirectoryPlayer[];
+    if (!pinOwnedFirst || !fantasyContext.data?.ownedPlayers?.length) {
+      list = [...serverPlayers];
+    } else {
+      const matchingOwnedSquad: DirectoryPlayer[] = (fantasyContext.data.ownedPlayers ?? [])
+        .map((p) => {
+          const team = p.professional_teams;
+          const serverPlayer = serverPlayerMap.get(p.id);
+          const ownership =
+            p.ownership_percentage ??
+            serverPlayer?.ownership_percentage ??
+            (p as any).ownership_percentage ??
+            null;
+
+          return {
+            id: p.id,
+            name: p.name,
+            in_game_name: p.in_game_name,
+            primary_role: p.primary_role,
+            availability_status: p.availability_status ?? 'available',
+            current_price: p.current_price ?? serverPlayer?.current_price ?? 0,
+            ownership_percentage: ownership,
+            gameweek_points: p.last_gw_points ?? serverPlayer?.gameweek_points ?? 0,
+            recent_points: p.recent_points ?? serverPlayer?.recent_points ?? 0,
+            team_name: team ? team.name : (serverPlayer?.team_name ?? null),
+            profile_image_url: p.profile_image_url ?? serverPlayer?.profile_image_url ?? null,
+          };
+        })
+        .filter((p) => {
+          if (availableOnly && p.availability_status !== 'available') return false;
+          if (deferredSearch.trim()) {
+            const q = deferredSearch.trim().toLowerCase();
+            const matchesName =
+              p.name.toLowerCase().includes(q) ||
+              Boolean(p.in_game_name && p.in_game_name.toLowerCase().includes(q));
+            if (!matchesName) return false;
+          }
+          if (role) {
+            if (role === 'Support' || role === 'Hard Support') {
+              if (p.primary_role !== 'Support' && p.primary_role !== 'Hard Support') return false;
+            } else if (p.primary_role !== role) {
+              return false;
+            }
+          }
+          if (teamId !== null) {
+            const t = teamsQuery.data?.find((item) => item.id === teamId);
+            if (t && p.team_name !== t.name) return false;
+          }
+          return true;
+        });
+
+      const ownedIdSet = new Set(matchingOwnedSquad.map((p) => p.id));
+      const nonOwned = serverPlayers.filter((p) => !ownedIdSet.has(p.id) && !ownedPlayerIds.has(p.id));
+
+      list = [...matchingOwnedSquad, ...nonOwned];
+    }
+
+    const multiplier = sortDesc ? 1 : -1;
+    list.sort((a, b) => {
+      if (pinOwnedFirst) {
+        const ownedDiff = Number(ownedPlayerIds.has(b.id)) - Number(ownedPlayerIds.has(a.id));
+        if (ownedDiff !== 0) return ownedDiff;
+      }
+      if (sortBy === 'ownership') {
+        const aOwn = a.ownership_percentage ?? 0;
+        const bOwn = b.ownership_percentage ?? 0;
+        return (bOwn - aOwn) * multiplier;
+      }
+      if (sortBy === 'points') {
+        return ((b.recent_points ?? 0) - (a.recent_points ?? 0)) * multiplier;
+      }
+      return ((b.current_price ?? 0) - (a.current_price ?? 0)) * multiplier;
+    });
+
+    return list;
+  }, [
+    query.data?.players,
+    availableOnly,
+    pinOwnedFirst,
+    fantasyContext.data?.ownedPlayers,
+    deferredSearch,
+    role,
+    teamId,
+    teamsQuery.data,
+    ownedPlayerIds,
+    sortBy,
+    sortDesc,
+  ]);
 
   const activeFilterCount = (search.trim() ? 1 : 0) + (role ? 1 : 0) + (teamId !== null ? 1 : 0);
 
@@ -97,23 +194,7 @@ export default function DiscoverScreen() {
     setOffset(0);
   };
 
-  displayedPlayers.sort((a, b) => {
-    if (pinOwnedFirst) {
-      const ownedDiff = Number(ownedPlayerIds.has(b.id)) - Number(ownedPlayerIds.has(a.id));
-      if (ownedDiff !== 0) return ownedDiff;
-    }
-    const multiplier = sortDesc ? 1 : -1;
-    if (sortBy === 'ownership') {
-      const aOwn = a.ownership_percentage ?? 0;
-      const bOwn = b.ownership_percentage ?? 0;
-      return (bOwn - aOwn) * multiplier;
-    }
-    if (sortBy === 'points') {
-      return ((b.recent_points ?? 0) - (a.recent_points ?? 0)) * multiplier;
-    }
-    // Default 'price'
-    return ((b.current_price ?? 0) - (a.current_price ?? 0)) * multiplier;
-  });
+  
 
   return (
     <Screen>
@@ -354,8 +435,16 @@ export default function DiscoverScreen() {
               const ownPresentation = getOwnershipPresentation(player.ownership_percentage);
               const ownVal = player.ownership_percentage != null ? `${player.ownership_percentage.toFixed(1)}%` : '—';
               const roleBadge = getRoleBadgeClass(player.primary_role);
+              const isOwned = ownedPlayerIds.has(player.id);
               return (
-                <View key={player.id} className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                <View
+                  key={player.id}
+                  className={`gap-3 rounded-2xl border p-4 ${
+                    isOwned
+                      ? 'border-emerald-500/50 bg-emerald-950/20'
+                      : 'border-slate-800 bg-slate-900'
+                  }`}
+                >
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`View ${playerName(player)} details`}
@@ -364,7 +453,14 @@ export default function DiscoverScreen() {
                     <View className="flex-row items-start justify-between gap-3">
                       <PlayerAvatar uri={player.profile_image_url} label={playerName(player)} size={48} />
                       <View className="flex-1">
-                        <Text className="font-semibold text-white">{playerName(player)}</Text>
+                        <View className="flex-row items-center gap-2 flex-wrap">
+                          <Text className="font-semibold text-white">{playerName(player)}</Text>
+                          {isOwned ? (
+                            <View className="flex-row items-center rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5">
+                              <Text className="text-[10px] font-bold text-emerald-300">✓ In Squad</Text>
+                            </View>
+                          ) : null}
+                        </View>
                         {player.in_game_name && player.name !== player.in_game_name ? (
                           <Text className="mt-1 text-xs text-slate-400">{player.name}</Text>
                         ) : null}
@@ -393,7 +489,7 @@ export default function DiscoverScreen() {
                     </View>
                     <Text className="text-xs text-slate-400">{player.team_name ?? 'Free agent'}</Text>
                     <View className="flex-row flex-wrap gap-2">
-                      <PlayerMetric label="Price" value={player.current_price === null ? '—' : `${player.current_price.toFixed(1)}M`} />
+                      <PlayerMetric label="Price" value={player.current_price === null ? '—' : formatPlayerPriceCompact(player.current_price)} />
                       <PlayerMetric label="Latest" value={`${player.gameweek_points.toFixed(1)} pts`} />
                       <PlayerMetric label="Recent avg" value={`${player.recent_points.toFixed(1)} pts`} />
                       <PlayerMetric label="Ownership" value={ownVal} />

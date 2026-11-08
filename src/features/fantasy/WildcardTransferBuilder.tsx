@@ -1,3 +1,4 @@
+import { formatPlayerPriceCompact } from '../../lib/format-price';
 import { useDeferredValue, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
@@ -149,7 +150,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
               }}
             >
               <Text className="font-semibold text-white">{playerName(player)}{paired ? ' · Selected' : ''}</Text>
-              <Text className="mt-1 text-xs text-slate-400">{player.primary_role ?? 'Role unavailable'} · {player.current_price.toFixed(1)}M</Text>
+              <Text className="mt-1 text-xs text-slate-400">{player.primary_role ?? 'Role unavailable'} · {formatPlayerPriceCompact(player.current_price)}</Text>
             </Pressable>
           );
         })}
@@ -198,7 +199,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
                 ) : null}
               </View>
               <Text className="mt-1 text-xs text-slate-400">
-                {player.primary_role ?? 'Role unavailable'} · {player.current_price?.toFixed(1)}M
+                {player.primary_role ?? 'Role unavailable'} · {formatPlayerPriceCompact(player.current_price)}
                 {player.recent_points === null ? '' : ` · Recent ${player.recent_points} pts`}
               </Text>
             </Pressable>
@@ -220,7 +221,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
                   {playerName(pair.playerOut)} → {playerName(pair.playerIn)}
                 </Text>
                 <Text className="mt-1 text-xs text-slate-400">
-                  {pair.playerOut.primary_role} · {pair.playerOut.current_price.toFixed(1)}M → {pair.playerIn.current_price?.toFixed(1)}M
+                  {pair.playerOut.primary_role} · {formatPlayerPriceCompact(pair.playerOut.current_price)} → {formatPlayerPriceCompact(pair.playerIn.current_price)}
                 </Text>
               </View>
               <Pressable accessibilityRole="button" onPress={() => removePair(pair.playerOut.id)}>

@@ -1,3 +1,4 @@
+import { formatPlayerPriceCompact } from '../lib/format-price';
 import { useEffect, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { SymbolView } from 'expo-symbols';
@@ -800,7 +801,7 @@ export function TopNavigationBar() {
                       </Text>
                       <Text style={{ marginTop: 3, color: palette.mutedText, fontSize: 12 }}>
                         {player.team_name || 'Free Agent'} · {player.primary_role || 'Player'}
-                        {player.current_price === null ? '' : ` · ${player.current_price.toFixed(1)}M`}
+                        {player.current_price === null ? '' : ` · ${formatPlayerPriceCompact(player.current_price)}`}
                       </Text>
                     </Pressable>
                     ))

@@ -29,6 +29,7 @@ export interface FantasyPlayer {
   availability_status: string | null;
   availability_reason: string | null;
   current_price: number;
+  ownership_percentage?: number | null;
   current_gw_points?: number;
   last_gw_points: number;
   recent_points: number;
@@ -129,6 +130,10 @@ function parsePlayer(value: unknown): FantasyPlayer {
     availability_status: typeof value.availability_status === 'string' ? value.availability_status : null,
     availability_reason: typeof value.availability_reason === 'string' ? value.availability_reason : null,
     current_price: value.current_price,
+    ownership_percentage:
+      typeof value.ownership_percentage === 'number' && Number.isFinite(value.ownership_percentage)
+        ? value.ownership_percentage
+        : null,
     current_gw_points: typeof value.current_gw_points === 'number' ? value.current_gw_points : 0,
     last_gw_points: value.last_gw_points,
     recent_points: value.recent_points,
