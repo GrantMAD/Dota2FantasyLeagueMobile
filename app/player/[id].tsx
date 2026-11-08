@@ -110,7 +110,7 @@ export default function PlayerDetailScreen() {
                       <View>
                         <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-500">Price</Text>
                         <Text className="mt-1 text-sm font-semibold text-slate-200">
-                          {`${query.data.current_price?.toFixed(1) ?? '—'}M`}
+                          {formatPlayerPriceCompact(query.data.current_price)}
                         </Text>
                       </View>
                       {priceHistory.length > 0 ? (

@@ -78,9 +78,10 @@ export default function DiscoverScreen() {
     query.data.total !== null &&
     query.data.offset + query.data.players.length < query.data.total
   );
+  const ownedPlayers = fantasyContext.data?.ownedPlayers;
   const ownedPlayerIds = useMemo(
-    () => new Set((fantasyContext.data?.ownedPlayers ?? []).map((player) => player.id)),
-    [fantasyContext.data?.ownedPlayers],
+    () => new Set((ownedPlayers ?? []).map((player) => player.id)),
+    [ownedPlayers],
   );
 
   const displayedPlayers: DirectoryPlayer[] = useMemo(() => {
@@ -91,10 +92,10 @@ export default function DiscoverScreen() {
     const serverPlayerMap = new Map((query.data?.players ?? []).map((p) => [p.id, p]));
 
     let list: DirectoryPlayer[];
-    if (!pinOwnedFirst || !fantasyContext.data?.ownedPlayers?.length) {
+    if (!pinOwnedFirst || !ownedPlayers?.length) {
       list = [...serverPlayers];
     } else {
-      const matchingOwnedSquad: DirectoryPlayer[] = (fantasyContext.data.ownedPlayers ?? [])
+      const matchingOwnedSquad: DirectoryPlayer[] = (ownedPlayers ?? [])
         .map((p) => {
           const team = p.professional_teams;
           const serverPlayer = serverPlayerMap.get(p.id);
@@ -169,7 +170,7 @@ export default function DiscoverScreen() {
     query.data?.players,
     availableOnly,
     pinOwnedFirst,
-    fantasyContext.data?.ownedPlayers,
+    ownedPlayers,
     deferredSearch,
     role,
     teamId,
