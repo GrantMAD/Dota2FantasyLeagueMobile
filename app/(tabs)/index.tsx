@@ -20,6 +20,7 @@ import { getMatches } from '@/src/features/competition/api';
 import { getDashboardSquadSummary, type FantasyLineupEntry } from '@/src/features/fantasy/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { getLeagues } from '@/src/features/leagues/api';
+import { markNotificationRead } from '@/src/features/notifications/api';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
 
@@ -534,6 +535,9 @@ export default function HomeScreen() {
                         visibleAvail.map((update) => (
                           <Link key={`${update.kind}-${update.id}`} href={`/player/${update.playerId}`} asChild>
                             <Pressable
+                              onPress={() => {
+                                void markNotificationRead(update.id).catch(() => {});
+                              }}
                               className="flex-row items-start gap-3 rounded-xl p-3"
                               style={{
                                 borderLeftWidth: 3,
@@ -585,6 +589,9 @@ export default function HomeScreen() {
                         visiblePrice.map((update) => (
                           <Link key={`${update.kind}-${update.id}`} href={`/player/${update.playerId}`} asChild>
                             <Pressable
+                              onPress={() => {
+                                void markNotificationRead(update.id).catch(() => {});
+                              }}
                               className="flex-row items-start gap-3 rounded-xl p-3"
                               style={{
                                 borderLeftWidth: 3,

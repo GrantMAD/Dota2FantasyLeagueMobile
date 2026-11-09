@@ -177,6 +177,10 @@ export function notificationActionFor(notification: ManagerNotification): Notifi
   if (matchId) {
     return { label: 'View match', href: { pathname: '/match/[id]', params: { id: matchId } } };
   }
+  const leagueId = metadataId(notification.metadata, 'league_id');
+  if (leagueId) {
+    return { label: 'View league', href: { pathname: '/league/[id]', params: { id: leagueId } } };
+  }
   const playerId = metadataId(notification.metadata, 'player_id');
   if (['player_unavailable', 'system'].includes(notification.type) && playerId) {
     return { label: 'View player', href: { pathname: '/player/[id]', params: { id: playerId } } };

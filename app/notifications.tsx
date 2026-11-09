@@ -87,7 +87,7 @@ function notificationPresentation(notification: ManagerNotification): Notificati
       row: falling ? 'border-l-rose-500' : 'border-l-emerald-500',
     };
   }
-  if (notificationCategoryForType(type) === 'league') {
+  if (notificationCategoryForType(type) === 'league' || metadata?.league_id) {
     return {
       label: 'League',
       icon: { ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' },
