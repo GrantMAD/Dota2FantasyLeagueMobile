@@ -4,10 +4,16 @@ import * as Sharing from 'expo-sharing';
 import { SvgXml } from 'react-native-svg';
 import { captureRef, type ViewShotRef } from 'react-native-view-shot';
 import ViewShot from 'react-native-view-shot';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
-import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/src/components/Screen';
-import { getSeasonRecaps, type SeasonRecap } from '@/src/features/season-recap/api';
+import {
+  getSeasonRecaps,
+  getSeasonRecapSharingConsent,
+  updateSeasonRecapSharingConsent,
+  type SeasonRecap,
+} from '@/src/features/season-recap/api';
+import { useAuth } from '@/src/lib/auth';
 import {
   createSeasonRecapShareCardSvg,
   SEASON_RECAP_CARD_THEMES,
@@ -39,22 +45,51 @@ function privacySafeSummary(recap: SeasonRecap): string {
 }
 
 export default function SeasonRecapScreen() {
-  const [sharingConsent, setSharingConsent] = useState(false);
   const [showPrivacyDetails, setShowPrivacyDetails] = useState(false);
   const [cardTheme, setCardTheme] = useState<SeasonRecapCardTheme>('radiant');
   const [sharingId, setSharingId] = useState<number | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [consentSaving, setConsentSaving] = useState(false);
+  const queryClient = useQueryClient();
+  const { session } = useAuth();
+  const userId = session?.user.id ?? null;
+  const consentQueryKey = ['season-recap-sharing-consent', userId] as const;
   const cardRefs = useRef(new Map<number, ViewShotRef>());
   const query = useQuery({
     queryKey: ['season-recaps'],
     queryFn: getSeasonRecaps,
     staleTime: 60_000,
   });
+  const consentQuery = useQuery({
+    queryKey: consentQueryKey,
+    queryFn: getSeasonRecapSharingConsent,
+    enabled: userId !== null,
+    staleTime: 60_000,
+  });
+  const sharingConsent = consentQuery.data === true;
   const recaps: SeasonRecap[] = query.data ?? [];
 
+  async function saveSharingConsent(enabled: boolean) {
+    if (consentSaving) return;
+    setConsentSaving(true);
+    setShareError(null);
+    setShareMessage(null);
+    try {
+      const savedConsent = await updateSeasonRecapSharingConsent(enabled);
+      queryClient.setQueryData(consentQueryKey, savedConsent);
+      setShareMessage(enabled
+        ? 'Recap sharing is enabled for your account on web and mobile.'
+        : 'Recap sharing has been disabled for your account.');
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : 'Unable to save recap sharing preference.');
+    } finally {
+      setConsentSaving(false);
+    }
+  }
+
   async function shareRecap(recap: SeasonRecap) {
-    if (!sharingConsent || sharingId !== null) return;
+    if (!sharingConsent || consentSaving || consentQuery.isPending || consentQuery.isError || sharingId !== null) return;
     setSharingId(recap.fantasySeasonId);
     setShareError(null);
     setShareMessage(null);
@@ -72,7 +107,7 @@ export default function SeasonRecapScreen() {
   }
 
   async function shareCard(recap: SeasonRecap) {
-    if (!sharingConsent || sharingId !== null) return;
+    if (!sharingConsent || consentSaving || consentQuery.isPending || consentQuery.isError || sharingId !== null) return;
     setSharingId(recap.fantasySeasonId);
     setShareError(null);
     setShareMessage(null);
@@ -144,9 +179,13 @@ export default function SeasonRecapScreen() {
             <View className="gap-3 rounded-xl border border-slate-700 bg-slate-900 p-4">
               <Pressable
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked: sharingConsent }}
+                accessibilityState={{
+                  checked: sharingConsent,
+                  disabled: consentQuery.isPending || consentQuery.isError || consentSaving,
+                }}
                 className="flex-row items-start gap-3"
-                onPress={() => setSharingConsent((current) => !current)}
+                disabled={consentQuery.isPending || consentQuery.isError || consentSaving}
+                onPress={() => void saveSharingConsent(!sharingConsent)}
               >
                 <View className={`mt-0.5 h-5 w-5 items-center justify-center rounded border ${
                   sharingConsent ? 'border-cyan-400 bg-cyan-500/20' : 'border-slate-600'
@@ -157,10 +196,29 @@ export default function SeasonRecapScreen() {
                   <Text className="font-semibold text-white">I choose to enable recap sharing and downloads</Text>
                   <Text className="mt-1 text-xs leading-5 text-slate-400">
                     Sharing or saving creates a copy you can give to others. Nothing is published automatically, and
-                    both actions stay disabled until you opt in.
+                    both actions stay disabled until you opt in. Your preference is saved to your account and applies
+                    on web and mobile.
                   </Text>
                 </View>
               </Pressable>
+              {consentQuery.isPending ? (
+                <Text accessibilityRole="alert" className="ml-8 text-xs text-slate-400">
+                  Loading your saved preference…
+                </Text>
+              ) : consentQuery.isError ? (
+                <View accessibilityRole="alert" className="ml-8 gap-2">
+                  <Text className="text-xs leading-5 text-red-300">
+                    {consentQuery.error instanceof Error
+                      ? consentQuery.error.message
+                      : 'Unable to load your recap sharing preference.'}
+                  </Text>
+                  <Pressable accessibilityRole="button" onPress={() => void consentQuery.refetch()}>
+                    <Text className="text-sm font-semibold text-cyan-300">Try again</Text>
+                  </Pressable>
+                </View>
+              ) : consentSaving ? (
+                <Text accessibilityRole="alert" className="ml-8 text-xs text-slate-400">Saving your preference…</Text>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 accessibilityState={{ expanded: showPrivacyDetails }}
@@ -297,11 +355,11 @@ export default function SeasonRecapScreen() {
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: !sharingConsent || sharingId !== null }}
+                  accessibilityState={{ disabled: !sharingConsent || consentQuery.isPending || consentQuery.isError || consentSaving || sharingId !== null }}
                   className={`min-h-12 items-center justify-center rounded-xl border px-4 ${
                     sharingConsent ? 'border-cyan-700/60 bg-cyan-950/40' : 'border-slate-700 bg-slate-950'
                   }`}
-                  disabled={!sharingConsent || sharingId !== null}
+                  disabled={!sharingConsent || consentQuery.isPending || consentQuery.isError || consentSaving || sharingId !== null}
                   onPress={() => void shareRecap(recap)}
                 >
                   <Text className={`font-semibold ${sharingConsent ? 'text-cyan-200' : 'text-slate-500'}`}>
@@ -310,11 +368,11 @@ export default function SeasonRecapScreen() {
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: !sharingConsent || sharingId !== null }}
+                  accessibilityState={{ disabled: !sharingConsent || consentQuery.isPending || consentQuery.isError || consentSaving || sharingId !== null }}
                   className={`min-h-12 items-center justify-center rounded-xl border px-4 ${
                     sharingConsent ? 'border-amber-700/60 bg-amber-950/40' : 'border-slate-700 bg-slate-950'
                   }`}
-                  disabled={!sharingConsent || sharingId !== null}
+                  disabled={!sharingConsent || consentQuery.isPending || consentQuery.isError || consentSaving || sharingId !== null}
                   onPress={() => void shareCard(recap)}
                 >
                   <Text className={`font-semibold ${sharingConsent ? 'text-amber-200' : 'text-slate-500'}`}>

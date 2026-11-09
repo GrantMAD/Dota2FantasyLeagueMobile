@@ -113,3 +113,23 @@ export async function getSeasonRecaps(): Promise<SeasonRecap[]> {
   }
   return result.recaps.map(parseRecap);
 }
+
+export async function getSeasonRecapSharingConsent(): Promise<boolean> {
+  const { data, error } = await getSupabaseClient().rpc('mobile_get_season_recap_sharing_consent');
+  if (error) throw new ApiError(`Unable to load recap sharing preference: ${error.message}`, 500);
+  if (typeof data !== 'boolean') {
+    throw new ApiError('Recap sharing preference was returned in an unexpected format.', 502);
+  }
+  return data;
+}
+
+export async function updateSeasonRecapSharingConsent(enabled: boolean): Promise<boolean> {
+  const { data, error } = await getSupabaseClient().rpc('mobile_set_season_recap_sharing_consent', {
+    p_enabled: enabled,
+  });
+  if (error) throw new ApiError(`Unable to save recap sharing preference: ${error.message}`, 500);
+  if (data !== enabled) {
+    throw new ApiError('Recap sharing preference was not saved correctly.', 502);
+  }
+  return data;
+}

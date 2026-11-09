@@ -6,9 +6,23 @@ const mockUseQuery = jest.fn();
 const mockCaptureRef = jest.fn();
 const mockIsSharingAvailable = jest.fn();
 const mockShareAsync = jest.fn();
+const mockSetQueryData = jest.fn();
+const mockUpdateConsent = jest.fn();
+let mockConsent = false;
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
+  useQueryClient: () => ({ setQueryData: mockSetQueryData }),
+}));
+
+jest.mock('../src/features/season-recap/api', () => ({
+  getSeasonRecaps: jest.fn(),
+  getSeasonRecapSharingConsent: jest.fn(),
+  updateSeasonRecapSharingConsent: (...args: unknown[]) => mockUpdateConsent(...args),
+}));
+
+jest.mock('@/src/lib/auth', () => ({
+  useAuth: () => ({ session: { user: { id: 'test-user' } } }),
 }));
 
 jest.mock('react-native-view-shot', () => {
@@ -74,13 +88,29 @@ const recap: SeasonRecap = {
 
 describe('season recap screen card sharing', () => {
   beforeEach(() => {
-    mockUseQuery.mockReturnValue({
-      data: [recap],
-      isPending: false,
-      isError: false,
-      isRefetching: false,
-      refetch: jest.fn(),
+    mockConsent = false;
+    mockUpdateConsent.mockClear();
+    mockSetQueryData.mockImplementation((_key: readonly unknown[], value: boolean) => {
+      mockConsent = value;
     });
+    mockUseQuery.mockImplementation((options: { queryKey?: readonly unknown[] }) => {
+      if (options.queryKey?.[0] === 'season-recap-sharing-consent') {
+        return {
+          data: mockConsent,
+          isPending: false,
+          isError: false,
+          refetch: jest.fn(),
+        };
+      }
+      return {
+        data: [recap],
+        isPending: false,
+        isError: false,
+        isRefetching: false,
+        refetch: jest.fn(),
+      };
+    });
+    mockUpdateConsent.mockResolvedValue(true);
     mockCaptureRef.mockResolvedValue('file:///recap.png');
     mockIsSharingAvailable.mockResolvedValue(true);
     mockShareAsync.mockResolvedValue(undefined);
@@ -103,25 +133,22 @@ describe('season recap screen card sharing', () => {
     expect(textShare.props.accessibilityState.disabled).toBe(true);
     expect(cardShare.props.accessibilityState.disabled).toBe(true);
 
-    await fireEvent.press(screen.getByRole('checkbox'));
     await fireEvent.press(screen.getByRole('button', { name: 'What information is included?' }));
     expect(screen.getByText(/Included: season results and selected player statistics/)).toBeTruthy();
     expect(screen.getByText(/Excluded: manager name, account details, squad name, league name, and public links/)).toBeTruthy();
 
     await fireEvent.press(screen.getByText('Dire'));
     expect(screen.getByTestId('season-recap-svg').props.children).toContain('#fb7185');
-    expect(screen.getByRole('button', { name: 'Share / save recap card' }).props.accessibilityState.disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Share / save recap card' }).props.accessibilityState.disabled).toBe(true);
   });
 
   it('captures and opens the selected recap card in the native share sheet only after consent', async () => {
+    mockConsent = true;
     const screen = renderScreen();
     await waitFor(() => expect(screen.getByTestId('season-recap-svg')).toBeTruthy());
     const cardShare = screen.getByRole('button', { name: 'Share / save recap card' });
+    await waitFor(() => expect(cardShare.props.accessibilityState.disabled).toBe(false));
     await fireEvent.press(cardShare);
-    expect(mockCaptureRef).not.toHaveBeenCalled();
-
-    await fireEvent.press(screen.getByRole('checkbox'));
-    await fireEvent.press(screen.getByRole('button', { name: 'Share / save recap card' }));
     await waitFor(() => expect(mockShareAsync).toHaveBeenCalledWith(
       'file:///recap.png',
       expect.objectContaining({

@@ -20,7 +20,11 @@ import { createLeague, getLeagueActivity, getLeagues, joinLeague } from '../src/
 import { getLeaderboard, getLeaderboardCountries } from '../src/features/leaderboard/api';
 import { getAnalytics } from '../src/features/analytics/api';
 import { getDashboardWhatsNew, getTransferRush } from '../src/features/dashboard/api';
-import { getSeasonRecaps } from '../src/features/season-recap/api';
+import {
+  getSeasonRecaps,
+  getSeasonRecapSharingConsent,
+  updateSeasonRecapSharingConsent,
+} from '../src/features/season-recap/api';
 import {
   getPremiumWaitlistStatus,
   joinPremiumWaitlist,
@@ -1519,6 +1523,24 @@ describe('mobile data access', () => {
       transferCount: 7,
     }]);
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_season_recaps');
+  });
+
+  it('loads and updates account-persisted Season Recap sharing consent', async () => {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({ data: false, error: null })
+      .mockResolvedValueOnce({ data: true, error: null });
+
+    await expect(getSeasonRecapSharingConsent()).resolves.toBe(false);
+    await expect(updateSeasonRecapSharingConsent(true)).resolves.toBe(true);
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(
+      1,
+      'mobile_get_season_recap_sharing_consent',
+    );
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(
+      2,
+      'mobile_set_season_recap_sharing_consent',
+      { p_enabled: true },
+    );
   });
 
   it('loads manager notifications and unread count by category', async () => {
