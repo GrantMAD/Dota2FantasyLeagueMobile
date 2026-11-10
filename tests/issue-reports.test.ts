@@ -14,6 +14,7 @@ const report = {
   user_id: 'user-123',
   title: 'Button does not save',
   category: 'bug',
+  severity: 'medium',
   description: 'Pressing the save button does not save the changes.',
   page_url: '/settings',
   screenshot_path: null,
@@ -82,7 +83,7 @@ describe('mobile issue reporting API', () => {
     mockFrom.mockReturnValueOnce(reportQuery).mockReturnValueOnce(historyQuery);
 
     await expect(getIssueReports(42)).resolves.toMatchObject({
-      reports: [{ id: 42, status: 'new', screenshot_url: null }],
+      reports: [{ id: 42, status: 'new', screenshot_url: null, severity: 'medium' }],
       history: [{ issue_report_id: 42, new_status: 'new' }],
     });
     expect(mockFrom).toHaveBeenNthCalledWith(1, 'issue_reports');
@@ -93,18 +94,23 @@ describe('mobile issue reporting API', () => {
   });
 
   it('submits a validated report through the authenticated Supabase RPC', async () => {
-    mockRpc.mockResolvedValueOnce({ data: report, error: null });
+    mockRpc.mockResolvedValueOnce({
+      data: { ...report, category: 'feature_request', severity: 'high' },
+      error: null,
+    });
 
     await expect(submitIssueReport({
       title: report.title,
-      category: 'bug',
+      category: 'feature_request',
+      severity: 'high',
       description: report.description,
       pageUrl: report.page_url,
-    })).resolves.toMatchObject({ id: 42, status: 'new' });
+    })).resolves.toMatchObject({ id: 42, status: 'new', category: 'feature_request', severity: 'high' });
 
     expect(mockRpc).toHaveBeenCalledWith('mobile_create_issue_report', {
       p_title: report.title,
-      p_category: 'bug',
+      p_category: 'feature_request',
+      p_severity: 'high',
       p_description: report.description,
       p_page_url: '/settings',
       p_screenshot_path: null,
@@ -126,6 +132,7 @@ describe('mobile issue reporting API', () => {
     await expect(submitIssueReport({
       title: report.title,
       category: 'bug',
+      severity: 'medium',
       description: report.description,
       pageUrl: report.page_url,
       screenshot: {
@@ -158,6 +165,7 @@ describe('mobile issue reporting API', () => {
     await expect(submitIssueReport({
       title: report.title,
       category: 'bug',
+      severity: 'medium',
       description: report.description,
       pageUrl: report.page_url,
       screenshot: {
@@ -174,9 +182,22 @@ describe('mobile issue reporting API', () => {
     await expect(submitIssueReport({
       title: 'Bad',
       category: 'bug',
+      severity: 'medium',
       description: 'Description long enough.',
       pageUrl: '/settings',
     })).rejects.toThrow('Title must be between 5 and 120 characters.');
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid impact levels before sending requests', async () => {
+    await expect(submitIssueReport({
+      title: report.title,
+      category: 'performance',
+      severity: 'urgent' as Parameters<typeof submitIssueReport>[0]['severity'],
+      description: report.description,
+      pageUrl: '/settings',
+    })).rejects.toThrow('Choose a valid impact level.');
     expect(mockRpc).not.toHaveBeenCalled();
     expect(mockFetch).not.toHaveBeenCalled();
   });
@@ -189,6 +210,7 @@ describe('mobile issue reporting API', () => {
     await expect(submitIssueReport({
       title: report.title,
       category: 'bug',
+      severity: 'medium',
       description: report.description,
       pageUrl: '/settings',
       screenshot: {

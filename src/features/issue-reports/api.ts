@@ -4,15 +4,18 @@ import { getSupabaseClient } from '@/src/lib/supabase';
 const MAX_SCREENSHOT_SIZE = 5 * 1024 * 1024;
 const SIGNED_URL_SECONDS = 60 * 60;
 const statuses = ['new', 'under_review', 'in_progress', 'resolved', 'closed'] as const;
-const categories = ['bug', 'error', 'ui'] as const;
+const categories = ['bug', 'error', 'ui', 'feature_request', 'performance'] as const;
+const severities = ['low', 'medium', 'high', 'critical'] as const;
 
 export type IssueReportStatus = typeof statuses[number];
 export type IssueReportCategory = typeof categories[number];
+export type IssueReportSeverity = typeof severities[number];
 
 export interface IssueReport {
   id: number;
   title: string;
   category: IssueReportCategory;
+  severity: IssueReportSeverity;
   description: string;
   page_url: string | null;
   screenshot_url: string | null;
@@ -46,6 +49,7 @@ export interface IssueScreenshot {
 interface IssueReportSubmission {
   title: string;
   category: IssueReportCategory;
+  severity: IssueReportSeverity;
   description: string;
   pageUrl: string;
   screenshot?: IssueScreenshot | null;
@@ -55,6 +59,7 @@ interface ReportRow {
   id: number;
   title: string;
   category: IssueReportCategory;
+  severity: IssueReportSeverity;
   description: string;
   page_url: string | null;
   screenshot_path: string | null;
@@ -78,6 +83,7 @@ function parseReport(value: unknown): ReportRow {
     !Number.isSafeInteger(value.id) ||
     typeof value.title !== 'string' ||
     !categories.includes(value.category as IssueReportCategory) ||
+    !severities.includes(value.severity as IssueReportSeverity) ||
     typeof value.description !== 'string' ||
     !isNullableString(value.page_url) ||
     !isNullableString(value.screenshot_path) ||
@@ -92,6 +98,7 @@ function parseReport(value: unknown): ReportRow {
     id: Number(value.id),
     title: value.title,
     category: value.category as IssueReportCategory,
+    severity: value.severity as IssueReportSeverity,
     description: value.description,
     page_url: value.page_url,
     screenshot_path: value.screenshot_path,
@@ -148,6 +155,7 @@ async function withSignedScreenshot(row: ReportRow): Promise<IssueReport> {
     id: row.id,
     title: row.title,
     category: row.category,
+    severity: row.severity,
     description: row.description,
     page_url: row.page_url,
     screenshot_url: screenshotUrl,
@@ -167,7 +175,7 @@ export async function getIssueReports(reportId?: number): Promise<IssueReportPag
   const supabase = getSupabaseClient();
   let reportQuery = supabase
     .from('issue_reports')
-    .select('id, title, category, description, page_url, screenshot_path, status, resolution_note, created_at, updated_at')
+    .select('id, title, category, severity, description, page_url, screenshot_path, status, resolution_note, created_at, updated_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   if (reportId !== undefined) reportQuery = reportQuery.eq('id', reportId);
@@ -229,6 +237,9 @@ export async function submitIssueReport(input: IssueReportSubmission): Promise<I
   if (!categories.includes(input.category)) {
     throw new ApiError('Choose a valid report category.', 400);
   }
+  if (!severities.includes(input.severity)) {
+    throw new ApiError('Choose a valid impact level.', 400);
+  }
   if (description.length < 10 || description.length > 5000) {
     throw new ApiError('Description must be between 10 and 5,000 characters.', 400);
   }
@@ -289,6 +300,7 @@ export async function submitIssueReport(input: IssueReportSubmission): Promise<I
   const { data, error } = await supabase.rpc('mobile_create_issue_report', {
     p_title: title,
     p_category: input.category,
+    p_severity: input.severity,
     p_description: description,
     p_page_url: pageUrl,
     p_screenshot_path: screenshotPath,

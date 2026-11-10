@@ -11,6 +11,7 @@ import {
   getIssueReports,
   submitIssueReport,
   type IssueReportCategory,
+  type IssueReportSeverity,
   type IssueReportStatus,
   type IssueReportStatusHistory,
   type IssueScreenshot,
@@ -20,7 +21,23 @@ const categories: { value: IssueReportCategory; label: string }[] = [
   { value: 'bug', label: 'Bug' },
   { value: 'error', label: 'Error message' },
   { value: 'ui', label: 'UI problem' },
+  { value: 'feature_request', label: 'Feature request' },
+  { value: 'performance', label: 'Performance' },
 ];
+
+const severities: { value: IssueReportSeverity; label: string }[] = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'critical', label: 'Critical' },
+];
+
+const severityColors: Record<IssueReportSeverity, string> = {
+  low: 'text-slate-300',
+  medium: 'text-amber-300',
+  high: 'text-orange-300',
+  critical: 'text-rose-300',
+};
 
 const statusLabels: Record<IssueReportStatus, string> = {
   new: 'New',
@@ -63,6 +80,7 @@ export default function ReportIssueScreen() {
   });
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<IssueReportCategory>('bug');
+  const [severity, setSeverity] = useState<IssueReportSeverity>('medium');
   const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [description, setDescription] = useState('');
   const [screenshot, setScreenshot] = useState<IssueScreenshot | null>(null);
@@ -78,10 +96,11 @@ export default function ReportIssueScreen() {
   }
 
   const submitMutation = useMutation({
-    mutationFn: () => submitIssueReport({ title, category, description, pageUrl, screenshot }),
+    mutationFn: () => submitIssueReport({ title, category, severity, description, pageUrl, screenshot }),
     onSuccess: async (report) => {
       setTitle('');
       setCategory('bug');
+      setSeverity('medium');
       setDescription('');
       setScreenshot(null);
       setFormError(null);
@@ -156,7 +175,7 @@ export default function ReportIssueScreen() {
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Help us improve</Text>
           <Text className="text-3xl font-bold text-slate-50">Report an issue</Text>
           <Text className="text-sm leading-6 text-slate-400">
-            Tell us about a bug, error, or interface problem. Your report is private to you and the support team, and you can follow its status here.
+            Report a bug, error, interface problem, feature request, or performance issue. Your report is private to you and the support team, and you can follow its status here.
           </Text>
         </View>
 
@@ -176,6 +195,34 @@ export default function ReportIssueScreen() {
               </Text>
               <Text className="text-lg font-semibold text-slate-400">⌄</Text>
             </Pressable>
+          </View>
+
+          <View className="gap-2">
+            <Text className="text-sm font-semibold text-slate-200">Estimated impact</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {severities.map((item) => {
+                const isSelected = severity === item.value;
+                return (
+                  <Pressable
+                    key={item.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    className={`min-h-10 justify-center rounded-full border px-4 ${
+                      isSelected ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-950'
+                    }`}
+                    onPress={() => {
+                      setSeverity(item.value);
+                      setSuccessMessage(null);
+                    }}
+                  >
+                    <Text className={`font-semibold ${isSelected ? 'text-brand-300' : 'text-slate-300'}`}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text className="text-xs leading-5 text-slate-500">This is your estimate of impact; the support team will confirm priority.</Text>
           </View>
 
           <View className="gap-2">
@@ -300,7 +347,7 @@ export default function ReportIssueScreen() {
                 </View>
                 <View className="flex-row items-center justify-between gap-3">
                   <Text className="flex-1 text-xs text-slate-500">
-                    {report.category === 'ui' ? 'UI problem' : report.category === 'error' ? 'Error message' : 'Bug'}
+                    {categories.find((item) => item.value === report.category)?.label ?? 'Bug'}
                     {' · '}Submitted {formatDate(report.created_at)}
                   </Text>
                   <Text className="text-xs font-semibold text-brand-300">
@@ -311,6 +358,9 @@ export default function ReportIssueScreen() {
               {expandedReportId === report.id ? (
                 <View className="gap-3 border-t border-slate-800 px-5 pb-5 pt-4">
                   {report.page_url ? <Text className="text-xs text-slate-500">{report.page_url}</Text> : null}
+                  <Text className={`text-xs font-semibold ${severityColors[report.severity]}`}>
+                    {severities.find((item) => item.value === report.severity)?.label ?? 'Medium'} reported impact
+                  </Text>
                   <Text className="text-sm leading-6 text-slate-300">{report.description}</Text>
                   {report.screenshot_url ? (
                     <Image accessibilityLabel={`Screenshot attached to report ${report.id}`} source={{ uri: report.screenshot_url }} className="h-48 w-full rounded-xl" resizeMode="contain" />
