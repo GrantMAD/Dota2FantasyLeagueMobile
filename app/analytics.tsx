@@ -1,5 +1,7 @@
 import { useState, type ComponentProps } from 'react';
 import { ActivityIndicator, Platform, Pressable, RefreshControl, Text, View, type LayoutChangeEvent } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { SymbolView } from 'expo-symbols';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
@@ -8,7 +10,12 @@ import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { getAnalytics } from '@/src/features/analytics/api';
 import type { AnalyticsPlayer, AnalyticsRole, AnalyticsTrend } from '@/src/features/analytics/api';
-import { getAnalyticsTrendForRange, getCaptainEfficiencyAssessment, type AnalyticsTrendRange } from '@/src/features/analytics/presentation';
+import {
+  getAnalyticsTrendForRange,
+  getCaptainEfficiencyAssessment,
+  serializeAnalyticsCsv,
+  type AnalyticsTrendRange,
+} from '@/src/features/analytics/presentation';
 
 const roleColors = ['#06b6d4', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'];
 
@@ -176,6 +183,8 @@ function getDreamTeamLineup(players: AnalyticsPlayer[]) {
 export default function AnalyticsScreen() {
   const [tab, setTab] = useState<'my' | 'market' | 'dream'>('my');
   const [trendRange, setTrendRange] = useState<AnalyticsTrendRange>('all');
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportFeedback, setExportFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
   const query = useQuery({
     queryKey: ['analytics'],
     queryFn: getAnalytics,
@@ -183,6 +192,60 @@ export default function AnalyticsScreen() {
   });
   const visibleTrend = getAnalyticsTrendForRange(query.data?.trend ?? [], trendRange);
   const maxTrend = Math.max(1, ...visibleTrend.map((item) => item.userScore));
+
+  async function exportAnalyticsCsv() {
+    const analytics = query.data;
+    if (!analytics || exportingCsv) return;
+    setExportingCsv(true);
+    setExportFeedback(null);
+    try {
+      const csv = serializeAnalyticsCsv(analytics);
+      const date = new Date().toISOString().slice(0, 10);
+      const fileName = `fantasy-analytics-${date}.csv`;
+
+      if (Platform.OS === 'web') {
+        let objectUrl: string | null = null;
+        let link: HTMLAnchorElement | null = null;
+        try {
+          objectUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+          link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = fileName;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+        } finally {
+          link?.remove();
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+        }
+      } else {
+        if (!await Sharing.isAvailableAsync()) {
+          throw new Error('CSV sharing is unavailable on this device.');
+        }
+        const directory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+        if (!directory) throw new Error('A temporary file location is unavailable.');
+        const fileUri = `${directory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          UTI: 'public.comma-separated-values-text',
+          dialogTitle: 'Export fantasy analytics',
+        });
+      }
+
+      setExportFeedback({
+        type: 'success',
+        message: Platform.OS === 'web' ? 'Analytics CSV downloaded.' : 'Analytics CSV ready to share or save.',
+      });
+    } catch (error) {
+      setExportFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Unable to export analytics.',
+      });
+    } finally {
+      setExportingCsv(false);
+    }
+  }
 
   return (
     <Screen>
@@ -285,6 +348,28 @@ export default function AnalyticsScreen() {
                   </View>
                 </Pressable>
               ))}
+            </View>
+
+            <View className="gap-2">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Export all analytics data as CSV"
+                disabled={exportingCsv}
+                className="min-h-10 items-center justify-center self-start rounded-lg border border-brand-500/40 bg-brand-500/10 px-4 disabled:opacity-50"
+                onPress={() => void exportAnalyticsCsv()}
+              >
+                <Text className="text-xs font-semibold text-brand-300">
+                  {exportingCsv ? 'Preparing CSV...' : 'Export Analytics CSV'}
+                </Text>
+              </Pressable>
+              {exportFeedback ? (
+                <Text
+                  accessibilityRole={exportFeedback.type === 'error' ? 'alert' : 'text'}
+                  className={`text-xs ${exportFeedback.type === 'error' ? 'text-rose-300' : 'text-emerald-300'}`}
+                >
+                  {exportFeedback.message}
+                </Text>
+              ) : null}
             </View>
 
             {tab === 'my' ? (

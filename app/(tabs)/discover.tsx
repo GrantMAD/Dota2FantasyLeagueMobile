@@ -2,12 +2,18 @@ import { formatPlayerPriceCompact } from '../../src/lib/format-price';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
-import { getPlayers, getProfessionalTeams, type DirectoryPlayer } from '@/src/features/players/api';
+import {
+  getPlayerWatchlist,
+  getPlayers,
+  getProfessionalTeams,
+  setPlayerWatchlisted,
+  type DirectoryPlayer,
+} from '@/src/features/players/api';
 import { useMobileTheme } from '@/src/lib/theme';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
@@ -42,6 +48,7 @@ export default function DiscoverScreen() {
   const { colors, theme } = useMobileTheme();
   const isDark = theme === 'dark';
   const fantasyContext = useFantasyContext();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('');
   const [teamId, setTeamId] = useState<number | null>(null);
@@ -52,6 +59,7 @@ export default function DiscoverScreen() {
   const [compareMode, setCompareMode] = useState(false);
   const [offset, setOffset] = useState(0);
   const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [watchlistExpanded, setWatchlistExpanded] = useState(false);
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [teamModalVisible, setTeamModalVisible] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
@@ -60,6 +68,18 @@ export default function DiscoverScreen() {
     queryKey: ['professional-teams'],
     queryFn: getProfessionalTeams,
     staleTime: 30 * 60_000,
+  });
+  const watchlistQuery = useQuery({
+    queryKey: ['player-watchlist'],
+    queryFn: getPlayerWatchlist,
+    staleTime: 60_000,
+  });
+  const watchlistMutation = useMutation({
+    mutationFn: ({ playerId, watchlisted }: { playerId: number; watchlisted: boolean }) =>
+      setPlayerWatchlisted(playerId, watchlisted),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['player-watchlist'] });
+    },
   });
   const query = useQuery({
     queryKey: ['player-directory', deferredSearch, role, teamId, availableOnly, offset],
@@ -342,6 +362,66 @@ export default function DiscoverScreen() {
           </Pressable>
         ) : null}
 
+        <View className="overflow-hidden rounded-2xl border border-amber-500/25 bg-slate-900">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: watchlistExpanded }}
+            className="min-h-12 flex-row items-center justify-between px-4"
+            onPress={() => setWatchlistExpanded((current) => !current)}
+          >
+            <Text className="font-semibold text-amber-200">
+              Your Watchlist {watchlistQuery.data ? `(${watchlistQuery.data.length})` : ''}
+            </Text>
+            <Text className="text-sm font-semibold text-slate-400">{watchlistExpanded ? 'Hide' : 'Show'}</Text>
+          </Pressable>
+          {watchlistExpanded ? (
+            <View className="gap-2 border-t border-slate-800 p-3">
+              {watchlistQuery.isPending ? (
+                <ActivityIndicator accessibilityLabel="Loading watchlist" color="#fbbf24" />
+              ) : watchlistQuery.isError ? (
+                <View accessibilityRole="alert" className="gap-2">
+                  <Text className="text-sm text-rose-200">{watchlistQuery.error.message}</Text>
+                  <Pressable accessibilityRole="button" onPress={() => void watchlistQuery.refetch()}>
+                    <Text className="font-semibold text-brand-300">Retry</Text>
+                  </Pressable>
+                </View>
+              ) : watchlistQuery.data.length === 0 ? (
+                <Text className="text-sm text-slate-400">Save players to keep them handy across web and mobile.</Text>
+              ) : watchlistQuery.data.map((player) => (
+                <View key={player.id} className="flex-row items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                  <Pressable
+                    accessibilityRole="button"
+                    className="min-h-12 flex-1 flex-row items-center gap-3"
+                    onPress={() => router.push(`/player/${player.id}`)}
+                  >
+                    <PlayerAvatar uri={player.profile_image_url} label={playerName(player)} size={40} />
+                    <View className="flex-1">
+                      <Text className="font-semibold text-white">{playerName(player)}</Text>
+                      <Text className="mt-1 text-xs text-slate-400">
+                        {[player.primary_role, player.team_name ?? 'Free agent'].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${playerName(player)} from watchlist`}
+                    disabled={watchlistMutation.isPending}
+                    className="min-h-10 justify-center rounded-lg border border-amber-500/30 px-3 disabled:opacity-50"
+                    onPress={() => watchlistMutation.mutate({ playerId: player.id, watchlisted: false })}
+                  >
+                    <Text className="text-xs font-semibold text-amber-200">Remove</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+        {watchlistMutation.isError ? (
+          <Text accessibilityRole="alert" className="text-sm text-rose-200">
+            {watchlistMutation.error.message}
+          </Text>
+        ) : null}
+
         <View className="flex-row items-center justify-between gap-3">
           <Pressable
             accessibilityRole="checkbox"
@@ -511,6 +591,21 @@ export default function DiscoverScreen() {
                     ) : null}
 
                     <Text className="mt-3 text-xs font-semibold text-brand-300">View player details</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: watchlistQuery.data?.some((saved) => saved.id === player.id) ?? false }}
+                    accessibilityLabel={`${watchlistQuery.data?.some((saved) => saved.id === player.id) ? 'Remove' : 'Add'} ${playerName(player)} ${watchlistQuery.data?.some((saved) => saved.id === player.id) ? 'from' : 'to'} watchlist`}
+                    disabled={watchlistMutation.isPending || watchlistQuery.isError}
+                    className="min-h-10 items-center justify-center rounded-lg border border-amber-500/35 bg-amber-500/10"
+                    onPress={() => watchlistMutation.mutate({
+                      playerId: player.id,
+                      watchlisted: !(watchlistQuery.data?.some((saved) => saved.id === player.id) ?? false),
+                    })}
+                  >
+                    <Text className="text-sm font-semibold text-amber-200">
+                      {watchlistQuery.data?.some((saved) => saved.id === player.id) ? '★ Saved to watchlist' : '☆ Add to watchlist'}
+                    </Text>
                   </Pressable>
                   {compareMode ? (
                     <Pressable

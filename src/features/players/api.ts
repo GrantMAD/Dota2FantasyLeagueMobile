@@ -23,6 +23,16 @@ export interface PlayerPage {
   offset: number;
 }
 
+export interface WatchlistedPlayer {
+  id: number;
+  name: string;
+  in_game_name: string | null;
+  primary_role: string | null;
+  availability_status: string | null;
+  team_name: string | null;
+  profile_image_url: string | null;
+}
+
 export interface ProfessionalTeam {
   id: number;
   name: string;
@@ -86,6 +96,14 @@ export function normalizePlayerComparisonIds(value: string): number[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function getAuthenticatedUserId(): Promise<string> {
+  const { data, error } = await getSupabaseClient().auth.getSession();
+  if (error || !data.session?.user.id) {
+    throw new ApiError('Sign in again before using the player watchlist.', 401);
+  }
+  return data.session.user.id;
 }
 
 const SCORE_BREAKDOWN_FIELDS = [
@@ -246,6 +264,63 @@ export async function getProfessionalTeams(): Promise<ProfessionalTeam[]> {
       logo_url: typeof team.logo_url === 'string' ? team.logo_url : null,
     };
   });
+}
+
+export async function getPlayerWatchlist(): Promise<WatchlistedPlayer[]> {
+  const userId = await getAuthenticatedUserId();
+  const { data, error } = await getSupabaseClient()
+    .from('player_watchlist')
+    .select('player_id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw new ApiError(`Unable to load player watchlist: ${error.message}`, 500);
+  if (!Array.isArray(data)) {
+    throw new ApiError('Player watchlist data was returned in an unexpected format.', 502);
+  }
+
+  const playerIds = data.map((entry): number => {
+    const playerId = isRecord(entry) ? Number(entry.player_id) : Number.NaN;
+    if (!Number.isSafeInteger(playerId) || playerId <= 0) {
+      throw new ApiError('Player watchlist data was returned in an unexpected format.', 502);
+    }
+    return playerId;
+  });
+
+  return Promise.all(playerIds.map(async (playerId): Promise<WatchlistedPlayer> => {
+    const player = await getPlayerDetail(playerId);
+    return {
+      id: player.id,
+      name: player.name,
+      in_game_name: player.in_game_name,
+      primary_role: player.primary_role,
+      availability_status: player.availability_status,
+      team_name: player.team_name,
+      profile_image_url: player.profile_image_url,
+    };
+  }));
+}
+
+export async function setPlayerWatchlisted(playerId: number, watchlisted: boolean): Promise<void> {
+  if (!Number.isSafeInteger(playerId) || playerId <= 0) {
+    throw new ApiError('A valid player ID is required.', 400);
+  }
+  const userId = await getAuthenticatedUserId();
+  const supabase = getSupabaseClient();
+  const result = watchlisted
+    ? await supabase.from('player_watchlist').upsert(
+      { user_id: userId, player_id: playerId },
+      { onConflict: 'user_id,player_id', ignoreDuplicates: true },
+    )
+    : await supabase.from('player_watchlist')
+      .delete()
+      .eq('user_id', userId)
+      .eq('player_id', playerId);
+  if (result.error) {
+    throw new ApiError(
+      `${watchlisted ? 'Unable to save player to' : 'Unable to remove player from'} watchlist: ${result.error.message}`,
+      500,
+    );
+  }
 }
 
 export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {

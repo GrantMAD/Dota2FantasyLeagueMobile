@@ -1,13 +1,19 @@
 import { formatPlayerPriceCompact } from '../../src/lib/format-price';
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Modal, Pressable, RefreshControl, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { PriceSparkline } from '@/src/components/PriceSparkline';
 import { Screen } from '@/src/components/Screen';
-import { aggregateLatestGameweekScoreBreakdown, getPlayerDetail, PlayerPerformance } from '@/src/features/players/api';
+import {
+  aggregateLatestGameweekScoreBreakdown,
+  getPlayerDetail,
+  getPlayerWatchlist,
+  PlayerPerformance,
+  setPlayerWatchlisted,
+} from '@/src/features/players/api';
 import { getManagerProfile } from '@/src/features/account/api';
 import { isPremiumUser } from '@/src/lib/premium';
 import { getOwnershipPresentation } from '@/src/lib/ownership';
@@ -23,6 +29,7 @@ export default function PlayerDetailScreen() {
   const { theme } = useMobileTheme();
   const isDark = theme === 'dark';
   const fantasyContext = useFantasyContext();
+  const queryClient = useQueryClient();
   const [selectedPerformance, setSelectedPerformance] = useState<PlayerPerformance | null>(null);
   const params = useLocalSearchParams<{ id: string }>();
   const playerId = Number(params.id);
@@ -39,6 +46,18 @@ export default function PlayerDetailScreen() {
     queryFn: getManagerProfile,
     staleTime: 60_000,
   });
+  const watchlistQuery = useQuery({
+    queryKey: ['player-watchlist'],
+    queryFn: getPlayerWatchlist,
+    staleTime: 60_000,
+  });
+  const watchlistMutation = useMutation({
+    mutationFn: (watchlisted: boolean) => setPlayerWatchlisted(playerId, watchlisted),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['player-watchlist'] });
+    },
+  });
+  const isWatchlisted = watchlistQuery.data?.some((player) => player.id === playerId) ?? false;
   const hasPremium = isPremiumUser(profileQuery.data);
   const latestScore = query.data
     ? aggregateLatestGameweekScoreBreakdown(query.data.performances)
@@ -178,6 +197,17 @@ export default function PlayerDetailScreen() {
               {query.data.availability_reason ? (
                 <Text className="text-sm leading-5 text-amber-200/80">{query.data.availability_reason}</Text>
               ) : null}
+              {watchlistQuery.isError ? (
+                <View accessibilityRole="alert" className="flex-row items-center justify-between gap-3 rounded-xl border border-rose-900 bg-rose-950 p-3">
+                  <Text className="flex-1 text-xs text-rose-200">{watchlistQuery.error.message}</Text>
+                  <Pressable accessibilityRole="button" onPress={() => void watchlistQuery.refetch()}>
+                    <Text className="font-semibold text-white">Retry</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {watchlistMutation.isError ? (
+                <Text accessibilityRole="alert" className="text-xs text-rose-200">{watchlistMutation.error.message}</Text>
+              ) : null}
               <View className="flex-row gap-2">
                 {isOwned ? (
                   <Pressable
@@ -202,6 +232,17 @@ export default function PlayerDetailScreen() {
                     <Text className="font-bold text-emerald-300">Transfer In</Text>
                   </Pressable>
                 ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isWatchlisted, disabled: watchlistMutation.isPending || watchlistQuery.isError }}
+                  disabled={watchlistMutation.isPending || watchlistQuery.isError}
+                  className="min-h-11 flex-1 items-center justify-center rounded-xl border border-amber-600/50 bg-amber-950/30 disabled:opacity-50"
+                  onPress={() => watchlistMutation.mutate(!isWatchlisted)}
+                >
+                  <Text className="font-semibold text-amber-200">
+                    {watchlistMutation.isPending ? 'Saving...' : isWatchlisted ? '★ In Watchlist' : '☆ Watchlist'}
+                  </Text>
+                </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   className="min-h-11 flex-1 items-center justify-center rounded-xl border border-cyan-700/60 bg-cyan-950/40"
