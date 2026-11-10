@@ -56,13 +56,31 @@ const jobs = [
 function RuleSection({
   id,
   title,
+  expanded,
+  onToggle,
   onLayout,
   children,
-}: PropsWithChildren<{ id: RuleSectionId; title: string; onLayout: (event: LayoutChangeEvent) => void }>) {
+}: PropsWithChildren<{
+  id: RuleSectionId;
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  onLayout: (event: LayoutChangeEvent) => void;
+}>) {
   return (
     <View onLayout={onLayout} className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-      <Text accessibilityRole="header" className="text-xl font-bold text-slate-50">{title}</Text>
-      {children}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${title} rules`}
+        accessibilityHint={`Section ${id}. Tap to ${expanded ? 'collapse' : 'expand'} its rules.`}
+        accessibilityState={{ expanded }}
+        onPress={onToggle}
+        className="min-h-11 flex-row items-center justify-between gap-3"
+      >
+        <Text accessibilityRole="header" className="flex-1 text-xl font-bold text-slate-50">{title}</Text>
+        <Text className="text-xl font-bold text-slate-400">{expanded ? '⌃' : '⌄'}</Text>
+      </Pressable>
+      {expanded ? children : null}
     </View>
   );
 }
@@ -86,17 +104,29 @@ export default function RulesScreen() {
   const [sectionOffsets, setSectionOffsets] = useState<Partial<Record<RuleSectionId, number>>>({});
   const sectionParam = Array.isArray(params.section) ? params.section[0] : params.section;
   const selectedSection = ruleSections.find((section) => section.id === sectionParam)?.id;
+  const [expandedSections, setExpandedSections] = useState<RuleSectionId[]>(
+    () => ruleSections
+      .filter((section) => section.id !== 'hood' || section.id === selectedSection)
+      .map((section) => section.id)
+  );
 
   useEffect(() => {
-    if (selectedSection !== undefined) {
-      const offset = sectionOffsets[selectedSection];
-      if (offset !== undefined) scrollRef.current?.scrollTo({ y: offset, animated: true });
-    }
+    if (selectedSection === undefined) return;
+    const offset = sectionOffsets[selectedSection];
+    if (offset === undefined) return;
+    scrollRef.current?.scrollTo({ y: offset, animated: true });
   }, [sectionOffsets, selectedSection]);
 
   function goToSection(id: RuleSectionId) {
+    if (!expandedSections.includes(id)) setExpandedSections((current) => [...current, id]);
     const offset = sectionOffsets[id];
     if (offset !== undefined) scrollRef.current?.scrollTo({ y: offset, animated: true });
+  }
+
+  function toggleSection(id: RuleSectionId) {
+    setExpandedSections((current) => current.includes(id)
+      ? current.filter((sectionId) => sectionId !== id)
+      : [...current, id]);
   }
 
   function onSectionLayout(id: RuleSectionId, event: LayoutChangeEvent) {
@@ -145,7 +175,7 @@ export default function RulesScreen() {
           </Pressable>
         </Link>
 
-        <RuleSection id="squad" title="Squad structure" onLayout={(event) => onSectionLayout('squad', event)}>
+        <RuleSection id="squad" title="Squad structure" expanded={expandedSections.includes('squad')} onToggle={() => toggleSection('squad')} onLayout={(event) => onSectionLayout('squad', event)}>
           <View className="flex-row flex-wrap gap-2">
             {[
               ['Budget', '$45.0M'],
@@ -172,7 +202,7 @@ export default function RulesScreen() {
           </View>
         </RuleSection>
 
-        <RuleSection id="captain" title="Captaincy & vice-captain" onLayout={(event) => onSectionLayout('captain', event)}>
+        <RuleSection id="captain" title="Captaincy & vice-captain" expanded={expandedSections.includes('captain')} onToggle={() => toggleSection('captain')} onLayout={(event) => onSectionLayout('captain', event)}>
           <Bullet>Choose one captain and a different vice-captain from the five starters before the deadline.</Bullet>
           <Bullet>The captain receives a 2× multiplier.</Bullet>
           <Bullet>If the captain has no recorded match participation, the vice-captain receives the captain multiplier.</Bullet>
@@ -183,7 +213,7 @@ export default function RulesScreen() {
           </View>
         </RuleSection>
 
-        <RuleSection id="scoring" title="Default fantasy scoring" onLayout={(event) => onSectionLayout('scoring', event)}>
+        <RuleSection id="scoring" title="Default fantasy scoring" expanded={expandedSections.includes('scoring')} onToggle={() => toggleSection('scoring')} onLayout={(event) => onSectionLayout('scoring', event)}>
           {scoringRows.map(([event, points, category, detail]) => (
             <View key={event} className="gap-1 border-b border-slate-800 py-3">
               <View className="flex-row items-start justify-between gap-3">
@@ -200,7 +230,7 @@ export default function RulesScreen() {
           </RuleText>
         </RuleSection>
 
-        <RuleSection id="chips" title="Seasonal chips & boosters" onLayout={(event) => onSectionLayout('chips', event)}>
+        <RuleSection id="chips" title="Seasonal chips & boosters" expanded={expandedSections.includes('chips')} onToggle={() => toggleSection('chips')} onLayout={(event) => onSectionLayout('chips', event)}>
           <Bullet>Wildcard: once per season; make unlimited transfers for one gameweek without transfer hits.</Bullet>
           <Bullet>Triple Captain: once per season; the selected captain earns 3× points instead of the usual 2×.</Bullet>
           <Bullet>Bench Boost: once per season; selected bench players contribute their points to the gameweek total.</Bullet>
@@ -209,7 +239,7 @@ export default function RulesScreen() {
           <Bullet>Wildcard does not remove role-matching, budget, or squad-size requirements.</Bullet>
         </RuleSection>
 
-        <RuleSection id="transfers" title="Transfers & free allowances" onLayout={(event) => onSectionLayout('transfers', event)}>
+        <RuleSection id="transfers" title="Transfers & free allowances" expanded={expandedSections.includes('transfers')} onToggle={() => toggleSection('transfers')} onLayout={(event) => onSectionLayout('transfers', event)}>
           <Bullet>A new season starts with 2 free transfers.</Bullet>
           <Bullet>One additional free transfer is added at each gameweek rollover; unused transfers roll over up to a maximum bank of 2.</Bullet>
           <Bullet>Each transfer beyond the free allowance is recorded as a 4-point hit. The current gameweek score calculation does not subtract this recorded transfer penalty.</Bullet>
@@ -227,7 +257,7 @@ export default function RulesScreen() {
           </View>
         </RuleSection>
 
-        <RuleSection id="deadlines" title="Lock deadlines & lineup validation" onLayout={(event) => onSectionLayout('deadlines', event)}>
+        <RuleSection id="deadlines" title="Lock deadlines & lineup validation" expanded={expandedSections.includes('deadlines')} onToggle={() => toggleSection('deadlines')} onLayout={(event) => onSectionLayout('deadlines', event)}>
           <Bullet>The lock is set for 30 minutes before the first scheduled fixture in the gameweek. Check Gameweeks for the authoritative timestamp.</Bullet>
           <Bullet>Deadlines are enforced by the backend; changes attempted after the timestamp are rejected.</Bullet>
           <Bullet>After the deadline, lineup changes, transfers, and chip activation for that gameweek are locked. Unsaved changes are not saved.</Bullet>
@@ -237,7 +267,7 @@ export default function RulesScreen() {
           <Bullet>Saving again overwrites the manager’s lineup for that gameweek until it locks.</Bullet>
         </RuleSection>
 
-        <RuleSection id="hood" title="Under the hood: system mechanics" onLayout={(event) => onSectionLayout('hood', event)}>
+        <RuleSection id="hood" title="Under the hood: system mechanics" expanded={expandedSections.includes('hood')} onToggle={() => toggleSection('hood')} onLayout={(event) => onSectionLayout('hood', event)}>
           <RuleText>
             Match data, scoring, gameweek totals, pricing, and standings are processed by recurring background jobs.
             New scores and rankings may take time to appear while match data is ingested and jobs complete.
