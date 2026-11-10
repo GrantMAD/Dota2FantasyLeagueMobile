@@ -31,4 +31,32 @@ describe('mobile Rules screen', () => {
     expect(screen.getByRole('button', { name: 'Under the hood: system mechanics rules' }).props.accessibilityState.expanded).toBe(true);
     expect(screen.getByText('Automated job schedule')).toBeTruthy();
   });
+
+  it('searches and expands the matching league rules', () => {
+    const screen = render(<RulesScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Search the rules'), 'head to head');
+
+    expect(screen.getByRole('button', { name: 'Jump to Leagues rules' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'League formats rules' }).props.accessibilityState.expanded).toBe(true);
+    expect(screen.getByText(/higher score wins; equal scores are a draw/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Jump to Squad rules' })).toBeNull();
+  });
+
+  it('updates the default score calculator as match stats change', () => {
+    const screen = render(<RulesScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Kills'), '2');
+
+    expect(screen.getByText('Estimated total')).toBeTruthy();
+    expect(screen.getByText('3.00')).toBeTruthy();
+  });
+
+  it('expands individual FAQ answers', () => {
+    const screen = render(<RulesScreen />);
+
+    fireEvent.press(screen.getByText('When does my lineup lock?'));
+
+    expect(screen.getByText(/Check the gameweek countdown for the current time/)).toBeTruthy();
+  });
 });
