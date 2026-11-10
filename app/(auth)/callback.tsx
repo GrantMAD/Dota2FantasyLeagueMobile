@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import { Text, View } from 'react-native';
+import * as Linking from 'expo-linking';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { AuthBackground } from '@/src/components/auth/AuthBackground';
 import { AuthCard } from '@/src/components/auth/AuthCard';
 import { Button } from '@/src/components/Button';
-import { exchangeMobileAuthCode } from '@/src/features/account/api';
+import { exchangeMobileAuthCode, resendManagerConfirmation } from '@/src/features/account/api';
 
 type CallbackStatus = 'verifying' | 'confirmed' | 'error';
 
@@ -21,6 +22,9 @@ export default function AuthCallbackScreen() {
   const code = firstParam(params.code);
   const errorCode = firstParam(params.error_code);
   const [verification, setVerification] = useState<{ code: string; error?: string } | null>(null);
+  const [email, setEmail] = useState('');
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
   const processedCode = useRef<string | null>(null);
 
   useEffect(() => {
@@ -55,6 +59,19 @@ export default function AuthCallbackScreen() {
       ? 'confirmed'
       : 'verifying';
 
+  async function resendConfirmation() {
+    setResending(true);
+    setResendMessage(null);
+    try {
+      await resendManagerConfirmation(email, Linking.createURL('callback'));
+      setResendMessage('If this email needs confirmation, a new link will arrive shortly. Check your inbox and spam folder.');
+    } catch (error) {
+      setResendMessage(error instanceof Error ? error.message : 'Unable to resend the confirmation email.');
+    } finally {
+      setResending(false);
+    }
+  }
+
   return (
     <AuthBackground>
       <View className="flex-1 justify-center px-5 py-8">
@@ -82,6 +99,33 @@ export default function AuthCallbackScreen() {
                 <Text accessibilityRole="alert" className="text-sm leading-6 text-red-200">
                   {errorMessage}
                 </Text>
+                <Text className="text-sm leading-5 text-slate-300">
+                  If the link expired, enter your signup email and request a fresh confirmation link.
+                </Text>
+                <TextInput
+                  accessibilityLabel="Email address for confirmation resend"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  placeholderTextColor="#64748b"
+                  value={email}
+                  className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-slate-100"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: resending || !email.trim(), busy: resending }}
+                  disabled={resending || !email.trim()}
+                  onPress={() => void resendConfirmation()}
+                  className="min-h-11 items-center justify-center rounded-xl border border-amber-400/40 px-4"
+                >
+                  <Text className="font-bold text-amber-200">
+                    {resending ? 'Sending…' : 'Resend confirmation email'}
+                  </Text>
+                </Pressable>
+                {resendMessage ? <Text accessibilityRole="alert" className="text-sm leading-5 text-emerald-200">{resendMessage}</Text> : null}
                 <Link href="/sign-in" asChild>
                   <Button label="Back to sign in" />
                 </Link>

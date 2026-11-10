@@ -1,4 +1,5 @@
 import { Link, Redirect, useLocalSearchParams } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '@/src/components/auth/AuthBackground';
 import { AuthCard } from '@/src/components/auth/AuthCard';
 import { AuthInput } from '@/src/components/auth/AuthInput';
+import { resendManagerConfirmation } from '@/src/features/account/api';
 import { useAuth } from '@/src/lib/auth';
 import { managerReturnRoute } from '@/src/lib/deep-links';
 import { NetworkStatusBanner } from '@/src/lib/connectivity';
@@ -27,18 +29,41 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmationRequired, setConfirmationRequired] = useState(false);
+  const [resendingConfirmation, setResendingConfirmation] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   if (ready && session) return <Redirect href={returnRoute} />;
 
   async function handleSignIn() {
     setErrorMessage(null);
+    setConfirmationRequired(false);
+    setResendMessage(null);
     setSubmitting(true);
     try {
       await signIn(email, password);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
+      if (error instanceof Error && error.name === 'EmailNotConfirmedError') {
+        setConfirmationRequired(true);
+        setErrorMessage('Confirm your email before signing in. Check your inbox and spam folder.');
+      } else {
+        setErrorMessage(error instanceof Error ? error.message : 'Unable to sign in. Please try again.');
+      }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    setResendingConfirmation(true);
+    setResendMessage(null);
+    try {
+      await resendManagerConfirmation(email, Linking.createURL('callback'));
+      setResendMessage('If this email needs confirmation, a new link will arrive shortly. Check your inbox and spam folder.');
+    } catch (error) {
+      setResendMessage(error instanceof Error ? error.message : 'Unable to resend the confirmation email.');
+    } finally {
+      setResendingConfirmation(false);
     }
   }
 
@@ -111,6 +136,26 @@ export default function SignInScreen() {
                       value={password}
                       error={errorMessage}
                     />
+
+                    {confirmationRequired ? (
+                      <View className="gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                        <Text className="text-sm leading-5 text-amber-100">
+                          Request a new confirmation email for {email.trim().toLowerCase()} if the original link expired or did not arrive.
+                        </Text>
+                        <Pressable
+                          onPress={() => void resendConfirmation()}
+                          disabled={resendingConfirmation}
+                          accessibilityRole="button"
+                          accessibilityState={{ disabled: resendingConfirmation, busy: resendingConfirmation }}
+                          className="min-h-11 items-center justify-center rounded-lg border border-amber-400/40 px-3"
+                        >
+                          <Text className="text-sm font-bold text-amber-200">
+                            {resendingConfirmation ? 'Sending…' : 'Resend confirmation email'}
+                          </Text>
+                        </Pressable>
+                        {resendMessage ? <Text accessibilityRole="alert" className="text-xs leading-5 text-emerald-200">{resendMessage}</Text> : null}
+                      </View>
+                    ) : null}
 
                     <Link href="/forgot-password" style={styles.forgotLink}>
                       Forgot password?

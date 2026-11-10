@@ -2,7 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
 import { AppState, Pressable, Text, View, type AppStateStatus } from 'react-native';
-import { AuthProvider, useAuth } from '../src/lib/auth';
+import { AuthProvider, EmailNotConfirmedError, useAuth } from '../src/lib/auth';
 import { queryClient } from '../src/lib/query-client';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { unregisterDevicePushToken } from '../src/lib/push-token-registration';
@@ -42,12 +42,16 @@ function createSession(userId: string): Session {
 
 function AuthProbe() {
   const { configurationError, ready, session, signIn, signOut } = useAuth();
+  const [signInError, setSignInError] = React.useState<string | null>(null);
   return (
     <View>
       <Text>{ready ? 'ready' : 'loading'}</Text>
       <Text>{session?.user.id ?? 'signed-out'}</Text>
       {configurationError ? <Text>{configurationError}</Text> : null}
-      <Pressable onPress={() => void signIn(' Manager@Example.Test ', 'secret')}>
+      {signInError ? <Text>{signInError}</Text> : null}
+      <Pressable onPress={() => void signIn(' Manager@Example.Test ', 'secret').catch((error: unknown) => setSignInError(
+        error instanceof Error ? error.name : 'unknown',
+      ))}>
         <Text>Sign in</Text>
       </Pressable>
       <Pressable onPress={() => void signOut()}>
@@ -160,5 +164,22 @@ describe('mobile authentication provider', () => {
     expect(
       jest.mocked(unregisterDevicePushToken).mock.invocationCallOrder[0]
     ).toBeLessThan(signOut.mock.invocationCallOrder[0]);
+  });
+
+  it('identifies an unconfirmed email with a dedicated actionable error', async () => {
+    signInWithPassword.mockResolvedValue({
+      error: { code: 'email_not_confirmed', message: 'Email not confirmed' },
+    });
+    const view = render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+    await waitFor(() => expect(view.getByText('user-1')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Sign in'));
+    });
+    await waitFor(() => expect(view.getByText(EmailNotConfirmedError.name)).toBeTruthy());
   });
 });

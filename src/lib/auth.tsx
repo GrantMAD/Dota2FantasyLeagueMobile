@@ -13,6 +13,13 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
 }
 
+export class EmailNotConfirmedError extends Error {
+  constructor() {
+    super('Please confirm your email before signing in.');
+    this.name = 'EmailNotConfirmedError';
+  }
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -104,6 +111,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
           email: email.trim().toLowerCase(),
           password,
         });
+        if (error?.code === 'email_not_confirmed' || error?.message.toLowerCase().includes('email not confirmed')) {
+          throw new EmailNotConfirmedError();
+        }
         if (error) throw new Error(error.message);
       },
       signOut: async () => {

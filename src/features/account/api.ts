@@ -313,6 +313,15 @@ export async function createManagerAccount(input: {
   };
 }
 
+export async function resendManagerConfirmation(email: string, redirectTo: string): Promise<void> {
+  const { error } = await getSupabaseClient().auth.resend({
+    type: 'signup',
+    email: email.trim().toLowerCase(),
+    options: { emailRedirectTo: redirectTo },
+  });
+  if (error) throw new ApiError(`Unable to resend the confirmation email: ${error.message}`, 400);
+}
+
 export async function requestManagerPasswordReset(email: string, redirectTo: string): Promise<void> {
   const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email.trim().toLowerCase(), {
     redirectTo,

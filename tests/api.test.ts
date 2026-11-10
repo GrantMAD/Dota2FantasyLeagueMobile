@@ -35,6 +35,7 @@ import {
   exchangeMobileAuthCode,
   getManagerProfile,
   getThemePreference,
+  resendManagerConfirmation,
   requestManagerPasswordReset,
   registerPushToken,
   removePushToken,
@@ -2060,6 +2061,25 @@ describe('mobile data access', () => {
         },
         emailRedirectTo: 'fantasydota2://callback',
       },
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('resends mobile account confirmation to the callback deep link', async () => {
+    const resend = jest.spyOn(supabase.auth, 'resend').mockResolvedValue({
+      data: { user: null, session: null },
+      error: null,
+    });
+
+    await expect(resendManagerConfirmation(
+      ' MANAGER@EXAMPLE.TEST ',
+      'fantasydota2://callback',
+    )).resolves.toBeUndefined();
+
+    expect(resend).toHaveBeenCalledWith({
+      type: 'signup',
+      email: 'manager@example.test',
+      options: { emailRedirectTo: 'fantasydota2://callback' },
     });
     expect(fetch).not.toHaveBeenCalled();
   });

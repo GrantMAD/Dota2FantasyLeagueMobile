@@ -1,9 +1,8 @@
 import { Link, useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -19,7 +18,7 @@ import { AuthCard } from '@/src/components/auth/AuthCard';
 import { AuthInput } from '@/src/components/auth/AuthInput';
 import { PasswordStrength } from '@/src/components/auth/PasswordStrength';
 import { NetworkStatusBanner } from '@/src/lib/connectivity';
-import { createManagerAccount } from '@/src/features/account/api';
+import { createManagerAccount, resendManagerConfirmation } from '@/src/features/account/api';
 import { getWebBaseUrl } from '@/src/lib/web';
 
 const SQUAD_PREVIEW = [
@@ -102,28 +101,25 @@ const preview = StyleSheet.create({
   },
 });
 
-/** Animated success overlay shown after account creation */
 function SuccessOverlay({
   title,
   message,
   actionLabel,
   onBack,
+  email,
+  onResend,
+  resending,
+  resendMessage,
 }: {
   title: string;
   message: string;
   actionLabel: string;
   onBack: () => void;
+  email?: string;
+  onResend?: () => void;
+  resending?: boolean;
+  resendMessage?: string | null;
 }) {
-  const [progress] = useState(() => new Animated.Value(0));
-
-  useEffect(() => {
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: 3500,
-      useNativeDriver: false,
-    }).start();
-  }, [progress]);
-
   return (
     <View style={success.overlay}>
       <Image
@@ -133,22 +129,25 @@ function SuccessOverlay({
         accessibilityLabel="Fantasy Dota 2 logo"
       />
       <Text style={success.title}>{title}</Text>
+      {email ? <Text style={success.email}>{email}</Text> : null}
       <Text style={success.subtitle}>{message}</Text>
-
-      {/* Progress bar */}
-      <View style={success.progressTrack}>
-        <Animated.View
-          style={[
-            success.progressFill,
-            {
-              width: progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['0%', '100%'],
-              }),
-            },
-          ]}
-        />
-      </View>
+      {onResend ? (
+        <>
+          <Text style={success.guidance}>
+            Check your inbox and spam folder. Confirmation links expire, but you can request a new email here.
+          </Text>
+          {resendMessage ? <Text accessibilityRole="alert" style={success.resendMessage}>{resendMessage}</Text> : null}
+          <Pressable
+            onPress={onResend}
+            disabled={resending}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: Boolean(resending), busy: Boolean(resending) }}
+            style={({ pressed }) => [success.resendButton, (pressed || resending) && { opacity: 0.75 }]}
+          >
+            <Text style={success.resendButtonText}>{resending ? 'Sending…' : 'Resend confirmation email'}</Text>
+          </Pressable>
+        </>
+      ) : null}
 
       <Pressable
         onPress={onBack}
@@ -187,18 +186,36 @@ const success = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  progressTrack: {
-    width: '80%',
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(51, 65, 85, 0.6)',
-    overflow: 'hidden',
-    marginVertical: 8,
+  email: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#f1f5f9',
   },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
-    backgroundColor: '#14b8a6',
+  guidance: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  resendMessage: {
+    fontSize: 13,
+    color: '#6ee7b7',
+    textAlign: 'center',
+  },
+  resendButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(20, 184, 166, 0.4)',
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resendButtonText: {
+    color: '#5eead4',
+    fontSize: 14,
+    fontWeight: '700',
   },
   button: {
     marginTop: 8,
@@ -230,6 +247,8 @@ export default function SignUpScreen() {
   const [confirmationMessage, setConfirmationMessage] = useState('');
   const [requiresEmailConfirmation, setRequiresEmailConfirmation] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   async function handleSignUp() {
     setErrorMessage(null);
@@ -267,6 +286,19 @@ export default function SignUpScreen() {
     }
   }
 
+  async function resendConfirmation() {
+    setResending(true);
+    setResendMessage(null);
+    try {
+      await resendManagerConfirmation(email, Linking.createURL('callback'));
+      setResendMessage('If this email needs confirmation, a new link will arrive shortly.');
+    } catch (error) {
+      setResendMessage(error instanceof Error ? error.message : 'Unable to resend the confirmation email.');
+    } finally {
+      setResending(false);
+    }
+  }
+
   return (
     <AuthBackground>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -274,10 +306,14 @@ export default function SignUpScreen() {
 
         {created ? (
           <SuccessOverlay
-            title={requiresEmailConfirmation ? 'Check your email' : 'Account ready!'}
+            title={requiresEmailConfirmation ? 'Confirm your email' : 'Account ready!'}
             message={confirmationMessage}
             actionLabel={requiresEmailConfirmation ? 'Back to sign in' : 'Continue to app'}
             onBack={() => router.replace(requiresEmailConfirmation ? '/(auth)/sign-in' : '/(tabs)')}
+            email={requiresEmailConfirmation ? email.trim().toLowerCase() : undefined}
+            onResend={requiresEmailConfirmation ? () => void resendConfirmation() : undefined}
+            resending={resending}
+            resendMessage={resendMessage}
           />
         ) : (
           <KeyboardAvoidingView
