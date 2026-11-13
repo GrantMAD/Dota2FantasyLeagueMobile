@@ -1,32 +1,26 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
+import type { SeriesLeader } from './match-series-stats';
 
-export interface LeaderStat {
-  playerId: number;
-  playerName: string;
-  heroName?: string | null;
-  role: string;
-  value: number;
-  formattedValue: string;
-}
+export type LeaderStat = SeriesLeader;
 
 interface MatchLeadersStripProps {
   fantasyMVP: LeaderStat | null;
   highestDamage: LeaderStat | null;
-  highestGPM: LeaderStat | null;
+  highestEconomy: LeaderStat | null;
   highestKills: LeaderStat | null;
 }
 
 export function MatchLeadersStrip({
   fantasyMVP,
   highestDamage,
-  highestGPM,
+  highestEconomy,
   highestKills,
 }: MatchLeadersStripProps) {
   const router = useRouter();
 
-  if (!fantasyMVP && !highestDamage && !highestGPM && !highestKills) {
+  if (!fantasyMVP && !highestDamage && !highestEconomy && !highestKills) {
     return null;
   }
 
@@ -56,11 +50,11 @@ export function MatchLeadersStrip({
     {
       title: 'Top Economy',
       emoji: '🪙',
-      data: highestGPM,
+      data: highestEconomy,
       textColor: 'text-emerald-400',
       bgColor: 'bg-emerald-500/10',
       borderColor: 'border-emerald-500/30',
-      badge: 'GPM',
+      badge: 'EST. GOLD',
       badgeBg: 'bg-emerald-500/20',
       badgeText: 'text-emerald-300',
     },
@@ -80,17 +74,18 @@ export function MatchLeadersStrip({
   return (
     <View className="gap-3">
       <Text className="text-sm font-bold uppercase tracking-wider text-slate-400">
-        Match Leaders
+        Series Leaders
       </Text>
       <View className="flex-row flex-wrap gap-2.5">
         {cards.map((c) => {
-          if (!c.data) return null;
+          const data = c.data;
+          if (!data) return null;
           return (
             <Pressable
               key={c.title}
               accessibilityRole="button"
               className={`flex-1 min-w-[45%] rounded-2xl border ${c.borderColor} ${c.bgColor} p-3.5 justify-between`}
-              onPress={() => router.push(`/player/${c.data!.playerId}`)}
+              onPress={() => router.push(`/player/${data.playerId}`)}
             >
               <View className="flex-row items-center justify-between gap-1 mb-2">
                 <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex-row items-center">
@@ -105,18 +100,35 @@ export function MatchLeadersStrip({
 
               <View className="mb-2">
                 <Text className="text-sm font-bold text-white" numberOfLines={1}>
-                  {c.data.playerName}
+                  {data.playerName}
                 </Text>
                 <Text className="text-xs text-slate-400" numberOfLines={1}>
-                  {c.data.heroName || c.data.role}
+                  {data.heroName || data.role}
                 </Text>
               </View>
 
               <View className="pt-2 border-t border-slate-800/80 flex-row items-baseline justify-between">
-                <Text className="text-[10px] text-slate-500 font-medium">Record</Text>
+                <Text className="text-[10px] text-slate-500 font-medium">Series total</Text>
                 <Text className={`font-mono text-sm font-extrabold ${c.textColor}`}>
-                  {c.data.formattedValue}
+                  {data.formattedValue}
                 </Text>
+              </View>
+              <View className="mt-2 gap-1 border-t border-slate-800/80 pt-2">
+                {data.gameValues.map((game) => (
+                  <View key={game.matchId} className="flex-row items-center justify-between gap-2">
+                    <Text className="flex-1 text-[10px] text-slate-500" numberOfLines={1}>
+                      Game {game.matchNumber} · {new Date(game.scheduledAt).toLocaleString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                    <Text className={`font-mono text-[10px] font-semibold ${c.textColor}`}>
+                      {game.formattedValue}
+                    </Text>
+                  </View>
+                ))}
               </View>
             </Pressable>
           );

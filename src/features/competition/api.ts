@@ -3,8 +3,10 @@ import { getSupabaseClient } from '@/src/lib/supabase';
 
 export interface MatchSummary {
   id: number;
+  series_id?: number | null;
   status: string;
   scheduled_at: string;
+  duration_seconds?: number | null;
   gameweek_id: number | null;
   match_number: number;
   best_of: number;
@@ -15,6 +17,7 @@ export interface MatchSummary {
   radiant_team: { name: string; tag: string; logo_url?: string | null } | null;
   dire_team: { name: string; tag: string; logo_url?: string | null } | null;
   tournament: { id: number; name: string; tier: string | null } | null;
+  series_matches?: MatchSummary[];
 }
 
 export interface MatchCounts {
@@ -80,10 +83,12 @@ export interface UserLineupDetail {
 export interface UserFantasyImpact {
   userOwnedPlayerIds: number[];
   lineupDetails: UserLineupDetail[];
+  tripleCaptainActive?: boolean;
 }
 
 export interface MatchDetails {
   match: MatchSummary;
+  seriesMatches: MatchSummary[];
   playerStats: MatchPlayerStat[];
   fantasyBreakdown: FantasyCategoryBreakdown[];
   userFantasyImpact?: UserFantasyImpact | null;
@@ -92,6 +97,7 @@ export interface MatchDetails {
 export interface MatchPlayerStat {
   id: number | string;
   player_id: number;
+  series_player_key?: string;
   team_id: number;
   hero_name: string | null;
   kills: number;
@@ -188,6 +194,13 @@ function parseMatch(value: unknown): MatchSummary {
   if (!positiveIntegerArray(playerIds)) {
     throw new ApiError('Match data was returned in an unexpected format.', 502);
   }
+  if (
+    (value.series_id !== undefined && !nullableNumber(value.series_id)) ||
+    (value.duration_seconds !== undefined && !nullableFiniteNumber(value.duration_seconds)) ||
+    (value.series_matches !== undefined && !Array.isArray(value.series_matches))
+  ) {
+    throw new ApiError('Match data was returned in an unexpected format.', 502);
+  }
   const rawTournament = value.tournaments;
   if (
     rawTournament !== null &&
@@ -199,10 +212,12 @@ function parseMatch(value: unknown): MatchSummary {
   ) {
     throw new ApiError('Match data was returned in an unexpected format.', 502);
   }
-  return {
+  const parsedMatch: MatchSummary = {
     id: Number(value.id),
+    series_id: nullableNumber(value.series_id) ? value.series_id : null,
     status: value.status === 'in_progress' ? 'live' : value.status,
     scheduled_at: value.scheduled_at,
+    duration_seconds: nullableFiniteNumber(value.duration_seconds) ? value.duration_seconds : null,
     gameweek_id: value.gameweek_id,
     match_number: value.match_number,
     best_of: value.best_of,
@@ -226,6 +241,10 @@ function parseMatch(value: unknown): MatchSummary {
         }
       : null,
   };
+  if (Array.isArray(value.series_matches)) {
+    parsedMatch.series_matches = value.series_matches.map(parseMatch);
+  }
+  return parsedMatch;
 }
 
 export async function getMatches(status: string): Promise<MatchSummary[]> {
@@ -307,7 +326,8 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
       !Number.isFinite(row.assists) ||
       !nullableFiniteNumber(row.gold_per_minute) ||
       !nullableFiniteNumber(row.experience_per_minute) ||
-      !nullableFiniteNumber(row.hero_damage)
+      !nullableFiniteNumber(row.hero_damage) ||
+      (row.series_player_key !== undefined && typeof row.series_player_key !== 'string')
     ) {
       throw new ApiError('Match player statistics were returned in an unexpected format.', 502);
     }
@@ -321,6 +341,7 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
     return {
       id: typeof row.id === 'string' ? row.id : Number(row.id),
       player_id: Number(row.player_id),
+      ...(typeof row.series_player_key === 'string' ? { series_player_key: row.series_player_key } : {}),
       team_id: Number(row.team_id),
       hero_name: row.hero_name,
       kills: row.kills,
@@ -358,6 +379,12 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
   });
 
   const parsedMatch = parseMatch(result.match);
+  if (result.seriesMatches !== undefined && !Array.isArray(result.seriesMatches)) {
+    throw new ApiError('Match data was returned in an unexpected format.', 502);
+  }
+  const seriesMatches = Array.isArray(result.seriesMatches) && result.seriesMatches.length > 0
+    ? result.seriesMatches.map(parseMatch)
+    : [parsedMatch];
 
   // User fantasy impact resolution
   let userFantasyImpact: UserFantasyImpact | null = null;
@@ -369,7 +396,7 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
   if (userId) {
     const { data: fantasySeasonData, error: fantasySeasonError } = await supabase
       .from('fantasy_seasons')
-      .select('id')
+      .select('id, triple_captain_gameweek_id')
       .eq('user_id', userId)
       .limit(1);
     if (fantasySeasonError) {
@@ -456,12 +483,14 @@ export async function getMatchDetails(id: number): Promise<MatchDetails> {
       userFantasyImpact = {
         userOwnedPlayerIds: ownedIds,
         lineupDetails,
+        tripleCaptainActive: fantasySeasonData?.[0]?.triple_captain_gameweek_id === parsedMatch.gameweek_id,
       };
     }
   }
 
   return {
     match: parsedMatch,
+    seriesMatches,
     playerStats,
     fantasyBreakdown,
     userFantasyImpact,

@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, Pressable, RefreshControl, Text, View } from 'react-native';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView as HorizontalScrollView, Text, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { Screen } from '@/src/components/Screen';
 import { getMatchDetails, type MatchPlayerStat } from '@/src/features/competition/api';
 import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
-import { MatchLeadersStrip, type LeaderStat } from '@/src/features/competition/MatchLeadersStrip';
+import { MatchLeadersStrip } from '@/src/features/competition/MatchLeadersStrip';
 import { MatchFantasyImpactBanner } from '@/src/features/competition/MatchFantasyImpactBanner';
+import { getDefaultSeriesGame } from '@/src/features/competition/match-series';
+import { calculateSeriesLeaders } from '@/src/features/competition/match-series-stats';
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -34,12 +36,20 @@ function cleanPlayerName(stat: MatchPlayerStat): string {
   return raw;
 }
 
+function formatDuration(seconds: number | null | undefined): string | null {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
 export default function MatchDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const matchId = Number(id);
   const validId = Number.isSafeInteger(matchId) && matchId > 0;
   const [viewMode, setViewMode] = useState<'fantasy' | 'traditional'>('fantasy');
+  const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
 
   const query = useQuery({
     queryKey: ['match-detail', matchId],
@@ -48,48 +58,40 @@ export default function MatchDetailScreen() {
     staleTime: 30_000,
   });
 
+  const seriesGames = query.data?.seriesMatches.length
+    ? query.data.seriesMatches
+    : query.data ? [query.data.match] : [];
+  const seriesQueries = useQueries({
+    queries: seriesGames.map((game) => ({
+      queryKey: ['match-detail', game.id],
+      queryFn: () => getMatchDetails(game.id),
+      enabled: validId && Boolean(query.data),
+      staleTime: 30_000,
+      initialData: query.data?.match.id === game.id ? query.data : undefined,
+    })),
+  });
+  const seriesDetails = seriesQueries.flatMap((gameQuery) => gameQuery.data ? [gameQuery.data] : []);
+  const defaultGame = getDefaultSeriesGame(seriesGames);
+  const activeGameId = seriesGames.some((game) => game.id === selectedGameId)
+    ? selectedGameId
+    : defaultGame?.id;
+  const activeDetails = seriesDetails.find((game) => game.match.id === activeGameId);
+  const seriesDetailsReady = seriesGames.length > 0 && seriesDetails.length === seriesGames.length;
+  const seriesDetailsError = seriesQueries.find((gameQuery) => gameQuery.isError);
+  const seriesLeaders = seriesDetailsReady ? calculateSeriesLeaders(seriesDetails) : null;
+
   const fantasyPointsByPlayer = new Map<number, number>();
-  if (query.data?.fantasyBreakdown) {
-    for (const item of query.data.fantasyBreakdown) {
+  if (activeDetails?.fantasyBreakdown) {
+    for (const item of activeDetails.fantasyBreakdown) {
       fantasyPointsByPlayer.set(item.player_id, Number(item.total_points ?? 0));
     }
   }
 
   const lineupDetailMap = new Map<number, { slot: string; isCaptain: boolean; isViceCaptain: boolean; isStarter: boolean }>();
-  const ownedSet = new Set<number>(query.data?.userFantasyImpact?.userOwnedPlayerIds ?? []);
-  if (query.data?.userFantasyImpact?.lineupDetails) {
-    for (const d of query.data.userFantasyImpact.lineupDetails) {
+  const ownedSet = new Set<number>(activeDetails?.userFantasyImpact?.userOwnedPlayerIds ?? []);
+  if (activeDetails?.userFantasyImpact?.lineupDetails) {
+    for (const d of activeDetails.userFantasyImpact.lineupDetails) {
       lineupDetailMap.set(d.playerId, d);
-    }
-  }
-
-  // Calculate Match Leaders
-  let fantasyMVP: LeaderStat | null = null;
-  let highestDamage: LeaderStat | null = null;
-  let highestGPM: LeaderStat | null = null;
-  let highestKills: LeaderStat | null = null;
-
-  if (query.data?.playerStats) {
-    for (const s of query.data.playerStats) {
-      const pName = cleanPlayerName(s);
-      const role = 'Core';
-      const pts = fantasyPointsByPlayer.get(s.player_id) ?? 0;
-      const dmg = Number(s.hero_damage || 0);
-      const gpm = Number(s.gold_per_minute || 0);
-      const kills = Number(s.kills || 0);
-
-      if (!fantasyMVP || pts > fantasyMVP.value) {
-        fantasyMVP = { playerId: s.player_id, playerName: pName, heroName: s.hero_name, role, value: pts, formattedValue: `${pts.toFixed(1)} pts` };
-      }
-      if (!highestDamage || dmg > highestDamage.value) {
-        highestDamage = { playerId: s.player_id, playerName: pName, heroName: s.hero_name, role, value: dmg, formattedValue: dmg.toLocaleString() };
-      }
-      if (!highestGPM || gpm > highestGPM.value) {
-        highestGPM = { playerId: s.player_id, playerName: pName, heroName: s.hero_name, role, value: gpm, formattedValue: `${gpm} GPM` };
-      }
-      if (!highestKills || kills > highestKills.value) {
-        highestKills = { playerId: s.player_id, playerName: pName, heroName: s.hero_name, role, value: kills, formattedValue: `${kills} kills` };
-      }
     }
   }
 
@@ -120,55 +122,112 @@ export default function MatchDetailScreen() {
               <Text className="font-semibold text-white">Try again</Text>
             </Pressable>
           </View>
-        ) : query.data ? (
+        ) : query.data && activeDetails ? (
           <>
             {/* Match Header Information */}
             <View className="gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5">
               <Text className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
-                {query.data.match.status} · Match {query.data.match.match_number}
+                {activeDetails.match.status} · {seriesGames.length > 1
+                  ? `Game ${activeDetails.match.match_number} of ${seriesGames.length}`
+                  : `Match ${activeDetails.match.match_number}`}
               </Text>
               <TeamMatchup
-                radiantTeam={query.data.match.radiant_team}
-                direTeam={query.data.match.dire_team}
+                radiantTeam={activeDetails.match.radiant_team}
+                direTeam={activeDetails.match.dire_team}
               />
-              <Text className="text-sm text-slate-300">{formatDate(query.data.match.scheduled_at)}</Text>
+              {activeDetails.match.winner_team_id != null ? (
+                <Text className="text-sm font-semibold text-emerald-300">
+                  Winner · {activeDetails.match.winner_team_id === activeDetails.match.radiant_team_id
+                    ? activeDetails.match.radiant_team?.name ?? 'Radiant'
+                    : activeDetails.match.dire_team?.name ?? 'Dire'}
+                </Text>
+              ) : null}
+              <Text className="text-sm text-slate-300">{formatDate(activeDetails.match.scheduled_at)}</Text>
               <Text className="text-sm text-slate-400">
-                Best of {query.data.match.best_of}
-                {query.data.match.tournament ? ` · ${query.data.match.tournament.name}` : ''}
+                Best of {activeDetails.match.best_of}
+                {formatDuration(activeDetails.match.duration_seconds)
+                  ? ` · ${formatDuration(activeDetails.match.duration_seconds)}`
+                  : ''}
+                {activeDetails.match.tournament ? ` · ${activeDetails.match.tournament.name}` : ''}
               </Text>
-              {query.data.match.gameweek_id ? (
+              {activeDetails.match.gameweek_id ? (
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push(`/gameweek/${query.data.match.gameweek_id}`)}
+                  onPress={() => router.push(`/gameweek/${activeDetails.match.gameweek_id}`)}
                 >
                   <Text className="font-semibold text-cyan-300">View gameweek details</Text>
                 </Pressable>
               ) : null}
-              {query.data.match.tournament ? (
+              {activeDetails.match.tournament ? (
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push(`/tournament/${query.data.match.tournament?.id}`)}
+                  onPress={() => router.push(`/tournament/${activeDetails.match.tournament?.id}`)}
                 >
                   <Text className="font-semibold text-cyan-300">View tournament</Text>
                 </Pressable>
               ) : null}
             </View>
 
-            {/* Personalized User Fantasy Impact Banner */}
-            <MatchFantasyImpactBanner
-              impact={query.data.userFantasyImpact}
-              playerStats={query.data.playerStats}
-              fantasyPointsByPlayer={fantasyPointsByPlayer}
-              gameweekId={query.data.match.gameweek_id}
-            />
+            {seriesDetailsReady ? (
+              <>
+                <MatchFantasyImpactBanner
+                  impact={activeDetails.userFantasyImpact}
+                  games={seriesDetails}
+                />
+                <MatchLeadersStrip
+                  fantasyMVP={seriesLeaders?.fantasyMVP ?? null}
+                  highestDamage={seriesLeaders?.highestDamage ?? null}
+                  highestEconomy={seriesLeaders?.highestEconomy ?? null}
+                  highestKills={seriesLeaders?.highestKills ?? null}
+                />
+              </>
+            ) : seriesDetailsError ? (
+              <View accessibilityRole="alert" className="flex-row items-center justify-between gap-3 rounded-xl border border-red-900 bg-red-950 p-4">
+                <Text className="flex-1 text-sm text-red-100">Series totals are unavailable because a game could not be loaded.</Text>
+                <Pressable accessibilityRole="button" onPress={() => void seriesDetailsError.refetch()}>
+                  <Text className="font-semibold text-white">Retry</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View className="flex-row items-center gap-2">
+                <ActivityIndicator accessibilityLabel="Loading series statistics" color="#14b8a6" />
+                <Text className="text-xs text-slate-400">Loading series statistics</Text>
+              </View>
+            )}
 
-            {/* Match Highlight Leaders Strip */}
-            <MatchLeadersStrip
-              fantasyMVP={fantasyMVP}
-              highestDamage={highestDamage}
-              highestGPM={highestGPM}
-              highestKills={highestKills}
-            />
+            {seriesGames.length > 1 ? (
+              <View className="gap-2">
+                <Text className="text-xs font-bold uppercase tracking-wider text-slate-400">Series games</Text>
+                <HorizontalScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View className="flex-row gap-2">
+                    {seriesGames.map((game, index) => {
+                      const isSelected = game.id === activeDetails.match.id;
+                      const gameNumber = game.match_number || index + 1;
+                      const gameTime = new Date(game.scheduled_at).toLocaleTimeString([], {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      });
+                      return (
+                        <Pressable
+                          key={game.id}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected }}
+                          className={`min-h-11 rounded-xl border px-3 py-2 ${
+                            isSelected ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-900'
+                          }`}
+                          onPress={() => setSelectedGameId(game.id)}
+                        >
+                          <Text className={`text-xs font-bold ${isSelected ? 'text-brand-300' : 'text-slate-300'}`}>
+                            Game {gameNumber}
+                          </Text>
+                          <Text className="text-[10px] text-slate-500">{gameTime}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </HorizontalScrollView>
+              </View>
+            ) : null}
 
             {/* Player Performance Header & View Mode Switcher */}
             <View className="gap-3 mt-1">
@@ -204,12 +263,12 @@ export default function MatchDetailScreen() {
               </View>
 
               {/* Player Listing Cards */}
-              {query.data.playerStats.length ? (
-                query.data.playerStats.map((player) => {
+              {activeDetails.playerStats.length ? (
+                activeDetails.playerStats.map((player) => {
                   const pName = cleanPlayerName(player);
                   const lineup = lineupDetailMap.get(player.player_id);
                   const isOwned = ownedSet.has(player.player_id);
-                  const fBreakdown = query.data?.fantasyBreakdown.find((b) => b.player_id === player.player_id);
+                  const fBreakdown = activeDetails.fantasyBreakdown.find((b) => b.player_id === player.player_id);
                   const totalPts = fBreakdown?.total_points ?? fantasyPointsByPlayer.get(player.player_id);
 
                   return (
@@ -288,11 +347,25 @@ export default function MatchDetailScreen() {
                 })
               ) : (
                 <View className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-                  <Text className="text-sm text-slate-400">Player statistics have not been published for this match.</Text>
+                  <Text className="text-sm text-slate-400">Player statistics have not been published for this game.</Text>
                 </View>
               )}
             </View>
           </>
+        ) : query.data && seriesDetailsError ? (
+          <View accessibilityRole="alert" className="gap-3 rounded-2xl border border-red-900 bg-red-950 p-5">
+            <Text className="font-semibold text-red-200">Series game unavailable</Text>
+            <Text className="text-sm leading-5 text-red-100">
+              {seriesDetailsError.error instanceof Error
+                ? seriesDetailsError.error.message
+                : 'Unable to load the default series game.'}
+            </Text>
+            <Pressable accessibilityRole="button" onPress={() => void seriesDetailsError.refetch()}>
+              <Text className="font-semibold text-white">Try again</Text>
+            </Pressable>
+          </View>
+        ) : query.data ? (
+          <ActivityIndicator accessibilityLabel="Loading selected series game" color="#14b8a6" />
         ) : null}
       </ScrollView>
     </Screen>

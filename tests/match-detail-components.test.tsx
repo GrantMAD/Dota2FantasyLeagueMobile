@@ -2,9 +2,40 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { MatchLeadersStrip } from '@/src/features/competition/MatchLeadersStrip';
 import { MatchFantasyImpactBanner } from '@/src/features/competition/MatchFantasyImpactBanner';
+import type { MatchDetails } from '@/src/features/competition/api';
+
+function makeGame(
+  id: number,
+  matchNumber: number,
+  stats: MatchDetails['playerStats'],
+  points: MatchDetails['fantasyBreakdown'],
+): MatchDetails {
+  return {
+    match: {
+      id,
+      series_id: 9,
+      status: 'completed',
+      scheduled_at: `2026-11-13T${matchNumber + 10}:00:00Z`,
+      duration_seconds: 1800,
+      gameweek_id: 5,
+      match_number: matchNumber,
+      best_of: 3,
+      radiant_team_id: 10,
+      dire_team_id: 20,
+      winner_team_id: 10,
+      player_ids: stats.map((stat) => stat.player_id),
+      radiant_team: { name: 'Team A', tag: 'TA' },
+      dire_team: { name: 'Team B', tag: 'TB' },
+      tournament: null,
+    },
+    seriesMatches: [],
+    playerStats: stats,
+    fantasyBreakdown: points,
+  };
+}
 
 describe('MatchLeadersStrip', () => {
-  it('renders all four leaders when available', () => {
+  it('renders series leaders with totals and per-game values', () => {
     const { getByText } = render(
       <MatchLeadersStrip
         fantasyMVP={{
@@ -14,39 +45,24 @@ describe('MatchLeadersStrip', () => {
           role: 'Carry',
           value: 48.5,
           formattedValue: '48.5 pts',
+          gameValues: [{
+            matchId: 1,
+            matchNumber: 1,
+            scheduledAt: '2026-11-13T10:00:00Z',
+            value: 28.5,
+            formattedValue: '28.5 pts',
+          }],
         }}
-        highestDamage={{
-          playerId: 102,
-          playerName: 'Somnus',
-          heroName: 'Storm Spirit',
-          role: 'Mid',
-          value: 52000,
-          formattedValue: '52,000',
-        }}
-        highestGPM={{
-          playerId: 101,
-          playerName: 'Ame',
-          heroName: 'Morphling',
-          role: 'Carry',
-          value: 840,
-          formattedValue: '840 GPM',
-        }}
-        highestKills={{
-          playerId: 103,
-          playerName: 'XinQ',
-          heroName: 'Rubick',
-          role: 'Support',
-          value: 14,
-          formattedValue: '14 kills',
-        }}
-      />
+        highestDamage={null}
+        highestEconomy={null}
+        highestKills={null}
+      />,
     );
 
-    expect(getByText('Match Leaders')).toBeTruthy();
+    expect(getByText('Series Leaders')).toBeTruthy();
     expect(getByText('48.5 pts')).toBeTruthy();
-    expect(getByText('52,000')).toBeTruthy();
-    expect(getByText('840 GPM')).toBeTruthy();
-    expect(getByText('14 kills')).toBeTruthy();
+    expect(getByText('28.5 pts')).toBeTruthy();
+    expect(getByText('Series total')).toBeTruthy();
   });
 
   it('renders nothing when all leaders are null', () => {
@@ -54,17 +70,17 @@ describe('MatchLeadersStrip', () => {
       <MatchLeadersStrip
         fantasyMVP={null}
         highestDamage={null}
-        highestGPM={null}
+        highestEconomy={null}
         highestKills={null}
-      />
+      />,
     );
 
-    expect(queryByText('Match Leaders')).toBeNull();
+    expect(queryByText('Series Leaders')).toBeNull();
   });
 });
 
 describe('MatchFantasyImpactBanner', () => {
-  it('renders banner when user has players in the match', () => {
+  it('shows per-game and series captain and bench impact', () => {
     const impact = {
       userOwnedPlayerIds: [101, 102],
       lineupDetails: [
@@ -84,12 +100,11 @@ describe('MatchFantasyImpactBanner', () => {
         },
       ],
     };
-
-    const playerStats = [
+    const gameOne = makeGame(1, 1, [
       {
         id: 1,
         player_id: 101,
-        team_id: 5,
+        team_id: 10,
         hero_name: 'Morphling',
         kills: 10,
         deaths: 2,
@@ -102,7 +117,7 @@ describe('MatchFantasyImpactBanner', () => {
       {
         id: 2,
         player_id: 102,
-        team_id: 5,
+        team_id: 10,
         hero_name: 'Storm Spirit',
         kills: 8,
         deaths: 4,
@@ -112,60 +127,59 @@ describe('MatchFantasyImpactBanner', () => {
         hero_damage: 35000,
         player: { id: 102, name: 'Lu Yao', in_game_name: 'Somnus' },
       },
-    ];
-
-    const fantasyPoints = new Map([
-      [101, 30.0],
-      [102, 25.0],
+    ], [
+      { player_id: 101, total_points: 30 },
+      { player_id: 102, total_points: 25 },
     ]);
+    const gameTwo = makeGame(2, 2, [{
+      id: 3,
+      player_id: 101,
+      team_id: 20,
+      hero_name: 'Morphling',
+      kills: 5,
+      deaths: 2,
+      assists: 10,
+      gold_per_minute: 700,
+      experience_per_minute: 800,
+      hero_damage: 30000,
+      player: { id: 101, name: 'Wang Chunyu', in_game_name: 'Ame' },
+    }], [{ player_id: 101, total_points: 10 }]);
 
-    const { getByText } = render(
-      <MatchFantasyImpactBanner
-        impact={impact}
-        playerStats={playerStats}
-        fantasyPointsByPlayer={fantasyPoints}
-        gameweekId={5}
-      />
+    const { getAllByText } = render(
+      <MatchFantasyImpactBanner impact={impact} games={[gameOne, gameTwo]} />,
     );
 
-    expect(getByText('Your Fantasy Impact')).toBeTruthy();
-    // Ame is captain (30 * 2 = 60), Somnus is bench (25 * 0 = 0) -> +60.0
-    expect(getByText('+60.0')).toBeTruthy();
-    expect(getByText('CAPTAIN 2x')).toBeTruthy();
-    expect(getByText('BENCH')).toBeTruthy();
+    expect(getAllByText('Your Fantasy Impact').length).toBeGreaterThan(0);
+    expect(getAllByText('+80.0').length).toBeGreaterThan(0);
+    expect(getAllByText('CAPTAIN 2x').length).toBeGreaterThan(0);
+    expect(getAllByText('BENCH').length).toBeGreaterThan(0);
+    expect(getAllByText(/Game 1 ·/).length).toBeGreaterThan(0);
+    expect(getAllByText(/Game 2 ·/).length).toBeGreaterThan(0);
   });
 
-  it('renders status fallback when user has squad but none in this match', () => {
-    const impact = {
-      userOwnedPlayerIds: [999],
-      lineupDetails: [],
-    };
-
-    const playerStats = [
-      {
-        id: 1,
-        player_id: 101,
-        team_id: 5,
-        hero_name: 'Morphling',
-        kills: 10,
-        deaths: 2,
-        assists: 8,
-        gold_per_minute: 750,
-        experience_per_minute: 800,
-        hero_damage: 40000,
-        player: { id: 101, name: 'Wang Chunyu', in_game_name: 'Ame' },
-      },
-    ];
+  it('renders the series squad status when owned players did not appear', () => {
+    const game = makeGame(1, 1, [{
+      id: 1,
+      player_id: 101,
+      team_id: 10,
+      hero_name: 'Morphling',
+      kills: 10,
+      deaths: 2,
+      assists: 8,
+      gold_per_minute: 750,
+      experience_per_minute: 800,
+      hero_damage: 40000,
+      player: { id: 101, name: 'Wang Chunyu', in_game_name: 'Ame' },
+    }], []);
 
     const { getByText } = render(
       <MatchFantasyImpactBanner
-        impact={impact}
-        playerStats={playerStats}
-        fantasyPointsByPlayer={new Map()}
-        gameweekId={5}
-      />
+        impact={{ userOwnedPlayerIds: [999], lineupDetails: [] }}
+        games={[game]}
+      />,
     );
 
     expect(getByText('Fantasy Squad Status')).toBeTruthy();
+    expect(getByText('None of your fantasy squad players featured in this series.')).toBeTruthy();
   });
 });

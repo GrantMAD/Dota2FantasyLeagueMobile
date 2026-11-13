@@ -33,3 +33,18 @@ export function getMatchSquadAppearance(
     ? { kind: 'unconfirmed', playerNames: [] }
     : { kind: 'none', playerNames: [] };
 }
+
+export function getMatchSeriesSquadAppearance(
+  matches: MatchSummary[],
+  ownedPlayers: FantasyPlayer[],
+): MatchSquadAppearance {
+  const appearances = matches.map((match) => getMatchSquadAppearance(match, ownedPlayers));
+  const playerNames = [...new Set(appearances.flatMap((appearance) => (
+    appearance.kind === 'confirmed' ? appearance.playerNames : []
+  )))];
+  if (playerNames.length > 0) return { kind: 'confirmed', playerNames };
+  if (appearances.some((appearance) => appearance.kind === 'unconfirmed')) {
+    return { kind: 'unconfirmed', playerNames: [] };
+  }
+  return { kind: 'none', playerNames: [] };
+}

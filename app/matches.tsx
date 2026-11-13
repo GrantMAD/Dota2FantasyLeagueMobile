@@ -6,25 +6,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { getMatchesPage, getTournaments } from '@/src/features/competition/api';
-import { getMatchSquadAppearance } from '@/src/features/competition/match-squad-appearance';
-import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
+import { getMatchSeriesSquadAppearance } from '@/src/features/competition/match-squad-appearance';
+import { getDefaultSeriesGame, groupMatchesBySeries, shouldShowMatchSeries } from '@/src/features/competition/match-series';
+import { MatchSeriesCard } from '@/src/features/competition/MatchSeriesCard';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 
 const filters = ['all', 'live', 'upcoming', 'completed'] as const;
 type MatchFilter = (typeof filters)[number];
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? 'Time to be confirmed'
-    : date.toLocaleString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-}
 
 export default function MatchesScreen() {
   const router = useRouter();
@@ -69,6 +57,11 @@ export default function MatchesScreen() {
   const fantasyQuery = useFantasyContext();
   const ownedPlayers = fantasyQuery.data?.ownedPlayers ?? [];
   const totalPages = query.data ? Math.max(1, Math.ceil(query.data.total / query.data.limit)) : 1;
+  const allSeriesGroups = groupMatchesBySeries(query.data?.matches ?? []);
+  const seriesGroups = allSeriesGroups.filter((group) => shouldShowMatchSeries(group.games));
+  const hiddenCompletedMatchCount = allSeriesGroups
+    .filter((group) => !shouldShowMatchSeries(group.games))
+    .reduce((count, group) => count + group.games.length, 0);
   const matchingTournaments = (tournamentsQuery.data ?? []).filter((tournament) =>
     tournament.name.toLowerCase().includes(tournamentSearch.toLowerCase()),
   );
@@ -220,67 +213,35 @@ export default function MatchesScreen() {
               <Text className="font-semibold text-white">Try again</Text>
             </Pressable>
           </View>
-        ) : query.data.matches.length ? (
+        ) : seriesGroups.length ? (
           <View className="gap-3">
-            {query.data.matches.map((match) => {
-              const appearance = getMatchSquadAppearance(match, ownedPlayers);
-              const hasSquadConnection = appearance.kind !== 'none';
-              const matchLabel = `View ${match.radiant_team?.name ?? 'team'} versus ${match.dire_team?.name ?? 'team'} match details`;
+            {seriesGroups.map((group) => {
+              const appearance = getMatchSeriesSquadAppearance(group.games, ownedPlayers);
+              const defaultGame = getDefaultSeriesGame(group.games);
               return (
-                <Pressable
-                  key={match.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={matchLabel}
-                  accessibilityHint={
-                    appearance.kind === 'confirmed'
-                      ? `Your players in this match: ${appearance.playerNames.join(', ')}`
-                      : appearance.kind === 'unconfirmed'
-                        ? 'A team in your squad is playing, but player appearances are not confirmed'
-                        : undefined
-                  }
-                  className={`gap-3 rounded-2xl border p-4 ${
-                    hasSquadConnection
-                      ? 'border-emerald-500/60 bg-emerald-950/20'
-                      : 'border-slate-800 bg-slate-900'
-                  }`}
-                  onPress={() => router.push(`/match/${match.id}`)}
-                >
-                  <View className="flex-row items-center justify-between gap-2">
-                    <Text className={`text-xs font-semibold uppercase tracking-wider ${
-                      match.status === 'live' ? 'text-red-300' : 'text-slate-400'
-                    }`}>
-                      {match.status === 'live' ? '● Live' : match.status}
-                    </Text>
-                    <Text className="text-xs text-slate-500">
-                      {match.gameweek_id ? `GW ${match.gameweek_id}` : `Match ${match.match_number}`}
-                    </Text>
-                  </View>
-                  <TeamMatchup radiantTeam={match.radiant_team} direTeam={match.dire_team} />
-                  {appearance.kind === 'confirmed' ? (
-                    <Text className="text-xs font-semibold text-emerald-300">
-                      Your players in match · {appearance.playerNames.join(', ')}
-                    </Text>
-                  ) : appearance.kind === 'unconfirmed' ? (
-                    <Text className="text-xs font-semibold text-amber-300">
-                      Squad team fixture · player appearance unconfirmed
-                    </Text>
-                  ) : null}
-                  <Text className="text-sm text-cyan-200">{formatDate(match.scheduled_at)}</Text>
-                  <View className="flex-row items-center justify-between gap-3 border-t border-slate-800 pt-3">
-                    <Text numberOfLines={1} className="flex-1 text-xs text-slate-400">
-                      {match.tournament?.name ?? 'Tournament not announced'}
-                    </Text>
-                    <Text className="text-xs text-slate-500">Best of {match.best_of}</Text>
-                  </View>
-                </Pressable>
+                <MatchSeriesCard
+                  key={group.key}
+                  group={group}
+                  appearance={appearance}
+                  onPress={() => router.push(`/match/${defaultGame?.id ?? group.match.id}`)}
+                />
               );
             })}
           </View>
         ) : (
           <View className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-6">
-            <Text className="text-center text-sm text-slate-300">No {filter === 'all' ? '' : `${filter} `}matches found.</Text>
+            <Text className="text-center text-sm text-slate-300">
+              {hiddenCompletedMatchCount > 0
+                ? `${hiddenCompletedMatchCount} completed match${hiddenCompletedMatchCount === 1 ? '' : 'es'} hidden until player stats are available.`
+                : `No ${filter === 'all' ? '' : `${filter} `}matches found.`}
+            </Text>
           </View>
         )}
+        {hiddenCompletedMatchCount > 0 && seriesGroups.length > 0 ? (
+          <Text className="text-center text-xs text-slate-500">
+            {hiddenCompletedMatchCount} completed match{hiddenCompletedMatchCount === 1 ? '' : 'es'} hidden until player stats are available.
+          </Text>
+        ) : null}
         {query.data && query.data.total > query.data.limit ? (
           <View className="flex-row items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3">
             <Pressable

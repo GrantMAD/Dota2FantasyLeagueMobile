@@ -1,4 +1,7 @@
-import { getMatchSquadAppearance } from '@/src/features/competition/match-squad-appearance';
+import {
+  getMatchSeriesSquadAppearance,
+  getMatchSquadAppearance,
+} from '@/src/features/competition/match-squad-appearance';
 import type { MatchSummary } from '@/src/features/competition/api';
 import type { FantasyPlayer } from '@/src/features/fantasy/api';
 
@@ -51,5 +54,22 @@ describe('getMatchSquadAppearance', () => {
       kind: 'unconfirmed',
       playerNames: [],
     });
+  });
+});
+
+describe('getMatchSeriesSquadAppearance', () => {
+  it('combines confirmed participants and keeps unconfirmed games visible', () => {
+    expect(getMatchSeriesSquadAppearance([
+      { ...match, player_ids: [] },
+      { ...match, id: 2, player_ids: [101] },
+    ], [ownedPlayer])).toEqual({
+      kind: 'confirmed',
+      playerNames: ['One'],
+    });
+
+    expect(getMatchSeriesSquadAppearance([
+      { ...match, player_ids: [] },
+      { ...match, id: 2, player_ids: [202] },
+    ], [ownedPlayer])).toEqual({ kind: 'unconfirmed', playerNames: [] });
   });
 });
