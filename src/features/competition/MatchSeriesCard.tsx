@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import type { MatchSeriesGroup } from './match-series';
 import type { MatchSquadAppearance } from './match-squad-appearance';
-import { summarizeMatchSeries } from './match-series';
+import { getCompletedGamesAwaitingPlayerStats, summarizeMatchSeries } from './match-series';
 import { TeamMatchup } from './TeamMatchup';
 
 interface MatchSeriesCardProps {
@@ -26,6 +26,7 @@ function formatDate(value: string): string {
 export function MatchSeriesCard({ group, appearance, onPress }: MatchSeriesCardProps) {
   const { match, games } = group;
   const score = summarizeMatchSeries(games);
+  const gamesAwaitingPlayerStats = getCompletedGamesAwaitingPlayerStats(games);
   const completedGame = [...games].reverse().find((game) => game.status === 'completed');
   const displayGame = (
     score.isComplete
@@ -83,6 +84,12 @@ export function MatchSeriesCard({ group, appearance, onPress }: MatchSeriesCardP
           </Text>
           <Text className="text-lg font-black text-rose-300">{score.direWins}</Text>
         </View>
+      ) : null}
+
+      {gamesAwaitingPlayerStats.length > 0 ? (
+        <Text accessibilityLiveRegion="polite" className="rounded-lg border border-amber-700/60 bg-amber-950/50 px-3 py-2 text-xs leading-5 text-amber-200">
+          Player stats for {gamesAwaitingPlayerStats.length} completed {gamesAwaitingPlayerStats.length === 1 ? 'game are' : 'games are'} still being processed.
+        </Text>
       ) : null}
 
       {appearance.kind === 'confirmed' ? (

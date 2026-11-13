@@ -72,6 +72,9 @@ export default function MatchDetailScreen() {
     })),
   });
   const seriesDetails = seriesQueries.flatMap((gameQuery) => gameQuery.data ? [gameQuery.data] : []);
+  const gamesAwaitingPlayerStats = seriesDetails.filter((game) => (
+    game.match.status === 'completed' && game.playerStats.length === 0
+  ));
   const defaultGame = getDefaultSeriesGame(seriesGames);
   const activeGameId = seriesGames.some((game) => game.id === selectedGameId)
     ? selectedGameId
@@ -227,6 +230,14 @@ export default function MatchDetailScreen() {
                     })}
                   </View>
                 </HorizontalScrollView>
+              </View>
+            ) : null}
+
+            {seriesDetailsReady && gamesAwaitingPlayerStats.length > 0 ? (
+              <View accessibilityLiveRegion="polite" className="rounded-xl border border-amber-700/60 bg-amber-950/50 px-4 py-3">
+                <Text className="text-sm leading-5 text-amber-200">
+                  Player stats for {gamesAwaitingPlayerStats.map((game) => `Game ${game.match.match_number}`).join(', ')} are still being processed and will appear here once available.
+                </Text>
               </View>
             ) : null}
 

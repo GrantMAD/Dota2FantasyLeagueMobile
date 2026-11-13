@@ -1,5 +1,6 @@
 import type { MatchSummary } from '@/src/features/competition/api';
 import {
+  getCompletedGamesAwaitingPlayerStats,
   getDefaultSeriesGame,
   groupMatchesBySeries,
   shouldShowMatchSeries,
@@ -87,6 +88,15 @@ describe('match series helpers', () => {
     ])).toBe(true);
     expect(shouldShowMatchSeries([makeMatch({ id: 3, status: 'scheduled' })])).toBe(true);
     expect(shouldShowMatchSeries([makeMatch({ id: 4, status: 'live' })])).toBe(true);
+  });
+
+  it('flags only completed games that have no player stats', () => {
+    expect(getCompletedGamesAwaitingPlayerStats([
+      makeMatch({ id: 1, player_ids: [101] }),
+      makeMatch({ id: 2, match_number: 2, player_ids: [] }),
+      makeMatch({ id: 3, status: 'scheduled', player_ids: [] }),
+      makeMatch({ id: 4, status: 'live', player_ids: [] }),
+    ])).toMatchObject([{ id: 2, match_number: 2 }]);
   });
 
   it('summarizes wins across games and chooses Game 1 by default', () => {

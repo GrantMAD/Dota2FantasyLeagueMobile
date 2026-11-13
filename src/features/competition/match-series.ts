@@ -15,6 +15,10 @@ export interface MatchSeriesScore {
   isLive: boolean;
 }
 
+export function getCompletedGamesAwaitingPlayerStats(games: MatchSummary[]): MatchSummary[] {
+  return games.filter((game) => game.status === 'completed' && game.player_ids.length === 0);
+}
+
 export function getMatchSeriesKey(match: MatchSummary): string {
   if (
     match.series_id == null ||
