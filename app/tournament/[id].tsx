@@ -6,22 +6,12 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { Screen } from '@/src/components/Screen';
 import { TeamLogo } from '@/src/components/TeamLogo';
 import { getTournamentDetails } from '@/src/features/competition/api';
-import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
+import { getDefaultSeriesGame, groupMatchesBySeries } from '@/src/features/competition/match-series';
+import { getMatchSeriesSquadAppearance } from '@/src/features/competition/match-squad-appearance';
+import { MatchSeriesCard } from '@/src/features/competition/MatchSeriesCard';
 import { TournamentSeriesTimeline } from '@/src/features/competition/TournamentSeriesTimeline';
 import { TournamentGroupStandings } from '@/src/features/competition/TournamentGroupStandings';
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? 'Time to be confirmed'
-    : date.toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        timeZoneName: 'short',
-      });
-}
+import { useFantasyContext } from '@/src/features/fantasy/hooks';
 
 type TabMode = 'matches' | 'series' | 'standings' | 'teams';
 type MatchStatusFilter = 'all' | 'live' | 'upcoming' | 'completed';
@@ -41,8 +31,11 @@ export default function TournamentDetailScreen() {
     enabled: validId,
     staleTime: 60_000,
   });
+  const fantasyQuery = useFantasyContext();
+  const ownedPlayers = fantasyQuery.data?.ownedPlayers ?? [];
 
   const matches = useMemo(() => query.data?.matches ?? [], [query.data?.matches]);
+  const seriesGroups = useMemo(() => groupMatchesBySeries(matches), [matches]);
 
   // Competing teams derived from matches
   const competingTeams = useMemo(() => {
@@ -96,21 +89,49 @@ export default function TournamentDetailScreen() {
   const selectedFilterOption =
     filterOptions.find((opt) => opt.key === statusFilter) ?? filterOptions[0];
 
-  const filteredMatches = useMemo(() => {
-    return matches.filter((m) => {
-      if (statusFilter === 'live') return m.status === 'live' || m.status === 'in_progress';
-      if (statusFilter === 'upcoming') return m.status === 'scheduled' || m.status === 'upcoming';
-      if (statusFilter === 'completed') return m.status === 'completed';
+  const filteredSeriesGroups = useMemo(() => {
+    const matchesStatusFilter = (match: (typeof matches)[number]) => {
+      if (statusFilter === 'live') return match.status === 'live' || match.status === 'in_progress';
+      if (statusFilter === 'upcoming') return match.status === 'scheduled' || match.status === 'upcoming';
+      if (statusFilter === 'completed') return match.status === 'completed';
       return true;
-    }).sort((a, b) => {
-      const statusOrder = (status: string) => (status === 'live' || status === 'in_progress') ? 0 : status === 'scheduled' ? 1 : 2;
-      const statusDiff = statusOrder(a.status) - statusOrder(b.status);
-      if (statusDiff !== 0) return statusDiff;
-      const timeA = new Date(a.scheduled_at).getTime();
-      const timeB = new Date(b.scheduled_at).getTime();
-      return a.status === 'completed' ? timeB - timeA : timeA - timeB;
-    });
-  }, [matches, statusFilter]);
+    };
+    const getSeriesStatus = (games: typeof matches) => (
+      games.some((game) => game.status === 'live' || game.status === 'in_progress')
+        ? 'live'
+        : games.some((game) => game.status === 'scheduled' || game.status === 'upcoming')
+          ? 'upcoming'
+          : 'completed'
+    );
+    const getSeriesSortTime = (games: typeof matches, status: 'live' | 'upcoming' | 'completed') => {
+      const statusGames = games.filter((game) => (
+        status === 'live'
+          ? game.status === 'live' || game.status === 'in_progress'
+          : status === 'upcoming'
+            ? game.status === 'scheduled' || game.status === 'upcoming'
+            : game.status === 'completed'
+      ));
+      const sortMatch = status === 'completed'
+        ? statusGames[statusGames.length - 1] ?? games[games.length - 1]
+        : statusGames[0] ?? games[0];
+      if (!sortMatch) return 0;
+      const time = new Date(sortMatch.scheduled_at).getTime();
+      return Number.isFinite(time) ? time : 0;
+    };
+
+    return seriesGroups
+      .filter((group) => group.games.some(matchesStatusFilter))
+      .sort((a, b) => {
+        const statusA = getSeriesStatus(a.games);
+        const statusB = getSeriesStatus(b.games);
+        const statusOrder = (status: string) => status === 'live' ? 0 : status === 'upcoming' ? 1 : 2;
+        const statusDiff = statusOrder(statusA) - statusOrder(statusB);
+        if (statusDiff !== 0) return statusDiff;
+        const timeA = getSeriesSortTime(a.games, statusA);
+        const timeB = getSeriesSortTime(b.games, statusB);
+        return statusA === 'completed' ? timeB - timeA : timeA - timeB;
+      });
+  }, [seriesGroups, statusFilter]);
 
   return (
     <Screen>
@@ -270,39 +291,22 @@ export default function TournamentDetailScreen() {
                 </Pressable>
 
                 {/* Match Cards */}
-                {filteredMatches.length ? filteredMatches.map((match) => (
-                  <Pressable
-                    key={match.id}
-                    accessibilityRole="button"
-                    className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4"
-                    onPress={() => router.push(`/match/${match.id}`)}
-                  >
-                    <TeamMatchup radiantTeam={match.radiant_team} direTeam={match.dire_team} />
-                    <View className="flex-row items-center justify-between border-t border-slate-800/80 pt-2.5">
-                      <Text className="text-xs text-cyan-200">{formatDate(match.scheduled_at)}</Text>
-                      <View className="flex-row items-center gap-1.5">
-                        <View className={`rounded-full px-2 py-0.5 ${
-                          match.status === 'live' || match.status === 'in_progress'
-                            ? 'bg-red-500/20 border border-red-500/30'
-                            : match.status === 'completed'
-                              ? 'bg-emerald-500/20 border border-emerald-500/30'
-                              : 'bg-slate-800'
-                        }`}>
-                          <Text className={`text-[10px] font-bold uppercase ${
-                            match.status === 'live' || match.status === 'in_progress'
-                              ? 'text-red-400'
-                              : match.status === 'completed'
-                                ? 'text-emerald-300'
-                                : 'text-slate-400'
-                          }`}>
-                            {match.status}
-                          </Text>
-                        </View>
-                        <Text className="text-[10px] uppercase text-slate-500">Bo{match.best_of}</Text>
-                      </View>
-                    </View>
-                  </Pressable>
-                )) : (
+                {filteredSeriesGroups.length ? (
+                  <View className="gap-3">
+                    {filteredSeriesGroups.map((group) => {
+                      const appearance = getMatchSeriesSquadAppearance(group.games, ownedPlayers);
+                      const defaultGame = getDefaultSeriesGame(group.games);
+                      return (
+                        <MatchSeriesCard
+                          key={group.key}
+                          group={group}
+                          appearance={appearance}
+                          onPress={() => router.push(`/match/${defaultGame?.id ?? group.match.id}`)}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : (
                   <View className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                     <Text className="text-sm text-slate-400">No matches found for this filter.</Text>
                   </View>

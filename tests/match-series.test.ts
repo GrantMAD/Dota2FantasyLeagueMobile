@@ -56,6 +56,20 @@ describe('match series helpers', () => {
     expect(groups[1].games.map((game) => game.id)).toEqual([3]);
   });
 
+  it('groups flat tournament match rows from the same series without nested sibling data', () => {
+    const first = makeMatch({ id: 1, match_number: 1 });
+    const second = makeMatch({
+      id: 2,
+      match_number: 2,
+      radiant_team_id: 20,
+      dire_team_id: 10,
+    });
+
+    expect(groupMatchesBySeries([first, second])).toMatchObject([
+      { games: [{ id: 1 }, { id: 2 }] },
+    ]);
+  });
+
   it('keeps unscopable or unrelated series IDs separate', () => {
     const first = makeMatch({ id: 1, gameweek_id: null });
     const second = makeMatch({ id: 2, gameweek_id: null });

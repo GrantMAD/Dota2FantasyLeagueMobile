@@ -1309,6 +1309,7 @@ describe('mobile data access', () => {
       tournament: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
       matches: [{
         id: 81,
+        series_id: 12,
         status: 'scheduled',
         scheduled_at: '2026-10-07T10:00:00.000Z',
         gameweek_id: 7,
@@ -1324,7 +1325,7 @@ describe('mobile data access', () => {
 
     await expect(getTournamentDetails(9)).resolves.toMatchObject({
       tournament: { id: 9, name: 'Autumn Cup', tier: 'Tier 1' },
-      matches: [{ id: 81, radiant_team: { name: 'Radiant' }, gameweek_id: 7 }],
+      matches: [{ id: 81, series_id: 12, radiant_team: { name: 'Radiant' }, gameweek_id: 7 }],
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_tournament_details', {
       p_tournament_id: 9,
