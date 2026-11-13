@@ -8,6 +8,7 @@ import { getMatchDetails, type MatchPlayerStat } from '@/src/features/competitio
 import { TeamMatchup } from '@/src/features/competition/TeamMatchup';
 import { MatchLeadersStrip } from '@/src/features/competition/MatchLeadersStrip';
 import { MatchFantasyImpactBanner } from '@/src/features/competition/MatchFantasyImpactBanner';
+import { PendingFantasyScoreNotice } from '@/src/features/competition/PendingFantasyScoreNotice';
 import { getDefaultSeriesGame } from '@/src/features/competition/match-series';
 import { calculateSeriesLeaders } from '@/src/features/competition/match-series-stats';
 
@@ -261,6 +262,11 @@ export default function MatchDetailScreen() {
                   </Pressable>
                 </View>
               </View>
+
+              <PendingFantasyScoreNotice
+                hasPlayerStats={activeDetails.playerStats.length > 0}
+                hasFantasyBreakdown={activeDetails.fantasyBreakdown.length > 0}
+              />
 
               {/* Player Listing Cards */}
               {activeDetails.playerStats.length ? (

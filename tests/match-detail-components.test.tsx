@@ -2,6 +2,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { MatchLeadersStrip } from '@/src/features/competition/MatchLeadersStrip';
 import { MatchFantasyImpactBanner } from '@/src/features/competition/MatchFantasyImpactBanner';
+import { PendingFantasyScoreNotice } from '@/src/features/competition/PendingFantasyScoreNotice';
 import type { MatchDetails } from '@/src/features/competition/api';
 
 function makeGame(
@@ -33,6 +34,29 @@ function makeGame(
     fantasyBreakdown: points,
   };
 }
+
+describe('PendingFantasyScoreNotice', () => {
+  it('shows when player stats exist but fantasy points are not calculated', () => {
+    const { getByText } = render(
+      <PendingFantasyScoreNotice hasPlayerStats hasFantasyBreakdown={false} />,
+    );
+
+    expect(getByText('Fantasy points for this match have not been calculated yet. Please check back soon.')).toBeTruthy();
+  });
+
+  it('stays hidden when stats are missing or fantasy points are available', () => {
+    const { queryByText, rerender } = render(
+      <PendingFantasyScoreNotice hasPlayerStats={false} hasFantasyBreakdown={false} />,
+    );
+    const message = 'Fantasy points for this match have not been calculated yet. Please check back soon.';
+
+    expect(queryByText(message)).toBeNull();
+
+    rerender(<PendingFantasyScoreNotice hasPlayerStats hasFantasyBreakdown />);
+
+    expect(queryByText(message)).toBeNull();
+  });
+});
 
 describe('MatchLeadersStrip', () => {
   it('renders series leaders with totals and per-game values', () => {
