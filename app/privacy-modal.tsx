@@ -48,8 +48,8 @@ export default function PrivacyPolicyModal() {
         {/* Section 1 */}
         <Section title="1. Introduction">
           <P>
-            Fantasy Dota 2 ("we", "us", or "our") operates the Fantasy Dota 2 mobile application
-            and web platform (the "Service"). This Privacy Policy explains what information we
+            Fantasy Dota 2 (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates the Fantasy Dota 2 mobile application
+            and web platform (the &quot;Service&quot;). This Privacy Policy explains what information we
             collect, how we use it, and your rights regarding that information.
           </P>
           <P>

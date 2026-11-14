@@ -49,8 +49,8 @@ export default function TermsOfServiceModal() {
         {/* Section 1 */}
         <Section title="1. Agreement and Eligibility">
           <P>
-            By accessing or using Fantasy Dota 2 (the "Service") you confirm that you are at least
-            13 years of age and agree to be bound by these Terms of Service ("Terms"). If you do not
+            By accessing or using Fantasy Dota 2 (the &quot;Service&quot;) you confirm that you are at least
+            13 years of age and agree to be bound by these Terms of Service (&quot;Terms&quot;). If you do not
             agree, do not use the Service.
           </P>
           <P>
@@ -126,7 +126,7 @@ export default function TermsOfServiceModal() {
         {/* Section 7 */}
         <Section title="7. Limitation of Liability">
           <P>
-            Fantasy Dota 2 is provided on an "as is" and "as available" basis without warranties of
+            Fantasy Dota 2 is provided on an &quot;as is&quot; and &quot;as available&quot; basis without warranties of
             any kind, either express or implied. To the fullest extent permitted by law, we exclude
             all warranties and shall not be liable for any indirect, incidental, special, or
             consequential damages arising from your use of the Service.
@@ -145,8 +145,8 @@ export default function TermsOfServiceModal() {
         {/* Section 9 */}
         <Section title="9. Changes to Terms">
           <P>
-            We may update these Terms from time to time. When we do, we will update the "Last
-            updated" date at the top of this document. Your continued use of the Service after any
+            We may update these Terms from time to time. When we do, we will update the &quot;Last
+            updated&quot; date at the top of this document. Your continued use of the Service after any
             change constitutes your acceptance of the new Terms.
           </P>
         </Section>
