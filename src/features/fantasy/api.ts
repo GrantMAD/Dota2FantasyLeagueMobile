@@ -47,6 +47,7 @@ export interface FantasyLineupEntry {
 export interface FantasyContext {
   fantasySeasonId: number | null;
   seasonId: number | null;
+  hasSquad: boolean;
   budget: number;
   freeTransfers: number;
   totalPoints: number;
@@ -368,6 +369,7 @@ export async function getFantasyContext(gameweekId?: number): Promise<FantasyCon
     !isRecord(value) ||
     !isNullableNumber(value.fantasySeasonId) ||
     !isNullableNumber(value.seasonId) ||
+    typeof value.hasSquad !== 'boolean' ||
     typeof value.budget !== 'number' ||
     typeof value.freeTransfers !== 'number' ||
     typeof value.totalPoints !== 'number' ||
@@ -455,6 +457,7 @@ export async function getFantasyContext(gameweekId?: number): Promise<FantasyCon
   return {
     fantasySeasonId: value.fantasySeasonId,
     seasonId: value.seasonId,
+    hasSquad: value.hasSquad,
     budget: value.budget,
     freeTransfers: value.freeTransfers,
     totalPoints: value.totalPoints,

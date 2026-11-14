@@ -249,7 +249,7 @@ function ProfileOverview({
   const label = profile.displayName?.trim() || profile.username;
   const initials = label.trim().slice(0, 1).toUpperCase() || 'U';
   const avatarUrl = profile.avatarUrl && /^https?:\/\//i.test(profile.avatarUrl) ? profile.avatarUrl : null;
-  const hasSquad = Boolean(fantasyQuery.data?.ownedPlayers.length);
+  const hasSquad = fantasyQuery.data?.hasSquad ?? false;
   const hasBio = Boolean(profile.bio?.trim());
 
   const [selectedBannerThemeId, setSelectedBannerThemeId] = useState(
@@ -530,7 +530,7 @@ function ProfileOverview({
 function ProfileAchievementsSection({ profile }: { profile: ManagerProfile }) {
   const fantasyQuery = useFantasyContext();
   const achievements = computeAchievements({
-    hasSquad: Boolean(fantasyQuery.data?.ownedPlayers.length),
+    hasSquad: fantasyQuery.data?.hasSquad ?? false,
     totalPoints: Number(fantasyQuery.data?.totalPoints ?? 0),
     globalRank: fantasyQuery.data?.globalRank ?? null,
     hasBio: Boolean(profile.bio?.trim()),

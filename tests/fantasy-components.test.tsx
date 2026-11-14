@@ -125,6 +125,7 @@ function createContext(overrides: Partial<FantasyContext> = {}): FantasyContext 
   return {
     fantasySeasonId: 12,
     seasonId: 3,
+    hasSquad: true,
     budget: 100,
     freeTransfers: 1,
     totalPoints: 0,

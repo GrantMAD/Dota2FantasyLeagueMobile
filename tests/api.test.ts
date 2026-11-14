@@ -102,6 +102,7 @@ describe('mobile data access', () => {
     mockFantasyContextRpc({
         fantasySeasonId: null,
         seasonId: null,
+        hasSquad: false,
         budget: 100,
         freeTransfers: 2,
         totalPoints: 0,
@@ -124,6 +125,7 @@ describe('mobile data access', () => {
     await expect(getFantasyContext()).resolves.toMatchObject({
       budget: 100,
       freeTransfers: 2,
+      hasSquad: false,
       ownedPlayers: [],
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_fantasy_lineup_context', {
@@ -139,6 +141,7 @@ describe('mobile data access', () => {
           data: {
             fantasySeasonId: 12,
             seasonId: 3,
+            hasSquad: false,
             budget: 100,
             freeTransfers: 1,
             totalPoints: 0,
@@ -186,6 +189,7 @@ describe('mobile data access', () => {
           data: {
             fantasySeasonId: 12,
             seasonId: 3,
+            hasSquad: false,
             budget: 100,
             freeTransfers: 1,
             totalPoints: 0,
@@ -219,6 +223,7 @@ describe('mobile data access', () => {
     mockFantasyContextRpc({
       fantasySeasonId: 12,
       seasonId: 3,
+      hasSquad: false,
       budget: 100,
       freeTransfers: 1,
       totalPoints: 0,
@@ -314,6 +319,7 @@ describe('mobile data access', () => {
           data: {
             fantasySeasonId: 10,
             seasonId: 1,
+            hasSquad: true,
             budget: 95.5,
             freeTransfers: 1,
             totalPoints: 120,
@@ -360,6 +366,7 @@ describe('mobile data access', () => {
 
     const result = await getFantasyContext();
     expect(result.budget).toBe(95.5);
+    expect(result.hasSquad).toBe(true);
     expect(result.defaultGameweekId).toBe(2);
     expect(result.availableGameweeks).toHaveLength(1);
     expect(result.availableGameweeks[0].id).toBe(3);
@@ -493,6 +500,7 @@ describe('mobile data access', () => {
     mockFantasyContextRpc({
       fantasySeasonId: 9,
       seasonId: 2,
+      hasSquad: true,
       budget: 10,
       freeTransfers: 2,
       totalPoints: 0,
@@ -524,6 +532,7 @@ describe('mobile data access', () => {
     });
 
     await expect(getFantasyContext()).resolves.toMatchObject({
+      hasSquad: true,
       ownedPlayers: [{
         id: 19,
         professional_teams: { id: 4, name: 'Radiant', slug: 'radiant' },
