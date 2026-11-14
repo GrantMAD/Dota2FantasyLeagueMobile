@@ -19,7 +19,6 @@ import { AuthInput } from '@/src/components/auth/AuthInput';
 import { PasswordStrength } from '@/src/components/auth/PasswordStrength';
 import { NetworkStatusBanner } from '@/src/lib/connectivity';
 import { createManagerAccount, resendManagerConfirmation } from '@/src/features/account/api';
-import { getWebBaseUrl } from '@/src/lib/web';
 
 const SQUAD_PREVIEW = [
   { role: 'Carry',    initials: 'CS', color: '#f59e0b' },
@@ -278,13 +277,6 @@ export default function SignUpScreen() {
     }
   }
 
-  async function openLegalDocument(path: 'terms' | 'privacy') {
-    try {
-      await Linking.openURL(new URL(`/${path}`, getWebBaseUrl()).toString());
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : `Unable to open the ${path} page.`);
-    }
-  }
 
   async function resendConfirmation() {
     setResending(true);
@@ -452,11 +444,11 @@ export default function SignUpScreen() {
               </Link>
               <Text style={styles.legalText}>
                 By creating an account you agree to our{' '}
-                <Text accessibilityRole="link" onPress={() => void openLegalDocument('terms')} style={styles.legalLink}>
+                <Text accessibilityRole="link" onPress={() => router.push('/terms-modal')} style={styles.legalLink}>
                   Terms
                 </Text>
                 {' '}and{' '}
-                <Text accessibilityRole="link" onPress={() => void openLegalDocument('privacy')} style={styles.legalLink}>
+                <Text accessibilityRole="link" onPress={() => router.push('/privacy-modal')} style={styles.legalLink}>
                   Privacy Policy
                 </Text>
                 .
