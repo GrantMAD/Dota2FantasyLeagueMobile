@@ -42,6 +42,7 @@ export interface ProfessionalTeam {
 export interface PlayerPerformance {
   id: number;
   gameweek_id: number;
+  gameweek_number: number;
   kills: number | null;
   deaths: number | null;
   assists: number | null;
@@ -350,7 +351,8 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
     if (
       !isRecord(performance) ||
       !Number.isInteger(performance.id) ||
-      !Number.isInteger(performance.gameweek_id)
+      !Number.isInteger(performance.gameweek_id) ||
+      !Number.isInteger(performance.gameweek_number)
     ) {
       throw new ApiError('Player performance data was returned in an unexpected format.', 502);
     }
@@ -400,6 +402,7 @@ export async function getPlayerDetail(playerId: number): Promise<PlayerDetail> {
     return {
       id: Number(performance.id),
       gameweek_id: Number(performance.gameweek_id),
+      gameweek_number: Number(performance.gameweek_number),
       kills: optionalStat(performance.kills),
       deaths: optionalStat(performance.deaths),
       assists: optionalStat(performance.assists),

@@ -772,6 +772,9 @@ export default function FriendsScreen() {
                           {progressQuery.data.season.gameweeks.length} weeks
                         </Text>
                       </View>
+                      <Text className="text-xs leading-5" style={{ color: modalColors.muted }}>
+                        Only closed gameweeks are shown. The active gameweek will appear once it closes.
+                      </Text>
                       {progressQuery.data.season.gameweeks.length ? (
                         <View className="gap-2">
                           {progressQuery.data.season.gameweeks.map((gameweek) => (

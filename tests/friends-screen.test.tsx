@@ -93,6 +93,7 @@ describe('Friends screen', () => {
     await waitFor(() => expect(view.getByText('Season 7')).toBeTruthy());
     expect(view.getByText('82 points')).toBeTruthy();
     expect(view.getByText('Gameweek 2')).toBeTruthy();
+    expect(view.getByText('Only closed gameweeks are shown. The active gameweek will appear once it closes.')).toBeTruthy();
     expect(mockedGetProgress).toHaveBeenCalledWith(manager.id);
   });
 

@@ -478,13 +478,13 @@ export default function PlayerDetailScreen() {
                 <Pressable
                   key={performance.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`View Gameweek ${performance.gameweek_id} match details`}
+                  accessibilityLabel={`View Gameweek ${performance.gameweek_number} match details`}
                   className="flex-row items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 active:bg-slate-800/80"
                   onPress={() => setSelectedPerformance(performance)}
                 >
                   <View className="flex-1">
                     <View className="flex-row items-center gap-2">
-                      <Text className="font-semibold text-white">Gameweek {performance.gameweek_id}</Text>
+                      <Text className="font-semibold text-white">Gameweek {performance.gameweek_number}</Text>
                       {performance.opponent_name ? (
                         <Text className="text-xs text-cyan-400 font-medium">vs {performance.opponent_name}</Text>
                       ) : null}
@@ -536,7 +536,7 @@ export default function PlayerDetailScreen() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <View style={{ backgroundColor: 'rgba(245,158,11,0.15)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.3)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 2 }}>
                       <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: '#f59e0b', textTransform: 'uppercase' }}>
-                        GW {selectedPerformance.gameweek_id}
+                        GW {selectedPerformance.gameweek_number}
                       </Text>
                     </View>
                     {selectedPerformance.is_win !== null && selectedPerformance.is_win !== undefined ? (

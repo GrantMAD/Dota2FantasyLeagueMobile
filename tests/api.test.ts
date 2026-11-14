@@ -829,6 +829,7 @@ describe('mobile data access', () => {
         performances: [{
           id: 501,
           gameweek_id: 7,
+          gameweek_number: 5,
           kills: 8,
           deaths: 2,
           assists: 11,
@@ -860,6 +861,7 @@ describe('mobile data access', () => {
         }, {
           id: 500,
           gameweek_id: 6,
+          gameweek_number: 4,
           kills: 5,
           deaths: 3,
           assists: 8,
@@ -876,6 +878,7 @@ describe('mobile data access', () => {
       performances: [
         {
           gameweek_id: 7,
+          gameweek_number: 5,
           kills: 8,
           deaths: 2,
           assists: 11,
@@ -905,7 +908,7 @@ describe('mobile data access', () => {
             total: 12,
           },
         },
-        { gameweek_id: 6, kills: 5, deaths: 3, assists: 8, total_points: 7, price: 8.5 },
+        { gameweek_id: 6, gameweek_number: 4, kills: 5, deaths: 3, assists: 8, total_points: 7, price: 8.5 },
       ],
       analytics: {
         matches: 2,
@@ -940,6 +943,7 @@ describe('mobile data access', () => {
         performances: [{
           id: 502,
           gameweek_id: 8,
+          gameweek_number: 6,
           kills: 3,
           deaths: 4,
           assists: 10,
@@ -948,6 +952,7 @@ describe('mobile data access', () => {
         }, {
           id: 501,
           gameweek_id: 7,
+          gameweek_number: 5,
           kills: 2,
           deaths: 1,
           assists: 5,
@@ -994,15 +999,15 @@ describe('mobile data access', () => {
 
     expect(aggregateLatestGameweekScoreBreakdown([
       {
-        id: 1, gameweek_id: 8, kills: 1, deaths: 2, assists: 3, total_points: 3.5, price: null,
+        id: 1, gameweek_id: 8, gameweek_number: 6, kills: 1, deaths: 2, assists: 3, total_points: 3.5, price: null,
         score_breakdown: categoryBreakdown,
       },
       {
-        id: 2, gameweek_id: 8, kills: 2, deaths: 1, assists: 4, total_points: 4, price: null,
+        id: 2, gameweek_id: 8, gameweek_number: 6, kills: 2, deaths: 1, assists: 4, total_points: 4, price: null,
         score_breakdown: secondBreakdown,
       },
       {
-        id: 3, gameweek_id: 7, kills: 2, deaths: 1, assists: 4, total_points: 4, price: null,
+        id: 3, gameweek_id: 7, gameweek_number: 5, kills: 2, deaths: 1, assists: 4, total_points: 4, price: null,
         score_breakdown: secondBreakdown,
       },
     ])).toEqual({
