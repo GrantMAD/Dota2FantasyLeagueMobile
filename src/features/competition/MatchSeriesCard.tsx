@@ -37,10 +37,11 @@ export function MatchSeriesCard({ group, appearance, onPress }: MatchSeriesCardP
   ) ?? match;
   const hasSquadConnection = appearance.kind !== 'none';
   const isLive = score.isLive && !score.isComplete;
+  const isSeries = match.best_of > 1 || games.length > 1;
   const statusText = isLive
     ? '● Live'
     : score.isComplete
-      ? 'Series Final'
+      ? (isSeries ? 'Series Final' : 'Final')
       : displayGame.status;
 
   return (
@@ -70,7 +71,13 @@ export function MatchSeriesCard({ group, appearance, onPress }: MatchSeriesCardP
           {statusText}
         </Text>
         <Text className="text-xs text-slate-500">
-          {match.best_of > 1 ? `Best of ${match.best_of}` : `Game ${displayGame.match_number}`}
+          {match.best_of > 1
+            ? `Best of ${match.best_of}`
+            : match.best_of === 1
+              ? 'Best of 1'
+              : games.length > 1
+                ? `Game ${displayGame.match_number}`
+                : ''}
         </Text>
       </View>
 
@@ -80,7 +87,9 @@ export function MatchSeriesCard({ group, appearance, onPress }: MatchSeriesCardP
         <View className="flex-row items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-2">
           <Text className="text-lg font-black text-emerald-300">{score.radiantWins}</Text>
           <Text className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Series score · {score.completedGames} {score.completedGames === 1 ? 'game' : 'games'}
+            {isSeries
+              ? `Series score · ${score.completedGames} ${score.completedGames === 1 ? 'game' : 'games'}`
+              : 'Match score'}
           </Text>
           <Text className="text-lg font-black text-rose-300">{score.direWins}</Text>
         </View>

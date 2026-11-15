@@ -115,7 +115,9 @@ export function TournamentSeriesTimeline({ matches, onMatchPress }: TournamentSe
       let scoreB = 0;
       let hasLive = false;
       let allCompleted = true;
-      const bestOf = cluster.matches[0]?.best_of || (cluster.matches.length >= 3 ? 3 : 2);
+      const bestOf = cluster.matches[0]?.best_of && cluster.matches[0].best_of > 0
+        ? cluster.matches[0].best_of
+        : (cluster.matches.length >= 3 ? 3 : cluster.matches.length === 2 ? 2 : 1);
 
       for (const m of cluster.matches) {
         if (m.status === 'live' || m.status === 'in_progress') hasLive = true;
@@ -245,7 +247,7 @@ export function TournamentSeriesTimeline({ matches, onMatchPress }: TournamentSe
                 {/* Series Card Top Header */}
                 <View className="flex-row items-center justify-between border-b border-slate-800/80 bg-slate-950/60 px-3.5 py-1.5">
                   <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
-                    Bo{node.bestOf} Series
+                    {node.bestOf > 1 ? `Bo${node.bestOf} Series` : 'Bo1 Match'}
                   </Text>
                   {isLive ? (
                     <View className="flex-row items-center gap-1">

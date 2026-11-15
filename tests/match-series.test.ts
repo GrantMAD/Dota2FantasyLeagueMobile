@@ -119,4 +119,15 @@ describe('match series helpers', () => {
     });
     expect(getDefaultSeriesGame([gameTwo, gameOne])).toBe(gameOne);
   });
+
+  it('correctly clinches a Best of 1 match after a single win', () => {
+    const singleGame = makeMatch({ id: 1, match_number: 1, best_of: 1, winner_team_id: 10 });
+    expect(summarizeMatchSeries([singleGame])).toMatchObject({
+      radiantWins: 1,
+      direWins: 0,
+      completedGames: 1,
+      clinchedTeamId: 10,
+      isComplete: true,
+    });
+  });
 });

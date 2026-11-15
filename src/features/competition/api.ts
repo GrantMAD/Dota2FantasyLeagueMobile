@@ -184,7 +184,7 @@ function parseMatch(value: unknown): MatchSummary {
     typeof value.scheduled_at !== 'string' ||
     !nullableNumber(value.gameweek_id) ||
     typeof value.match_number !== 'number' ||
-    typeof value.best_of !== 'number' ||
+    !nullableFiniteNumber(value.best_of) ||
     !nullableNumber(value.radiant_team_id) ||
     !nullableNumber(value.dire_team_id)
   ) {
@@ -220,7 +220,10 @@ function parseMatch(value: unknown): MatchSummary {
     duration_seconds: nullableFiniteNumber(value.duration_seconds) ? value.duration_seconds : null,
     gameweek_id: value.gameweek_id,
     match_number: value.match_number,
-    best_of: value.best_of,
+    best_of:
+      typeof value.best_of === 'number' && Number.isFinite(value.best_of) && value.best_of > 0
+        ? value.best_of
+        : 1,
     radiant_team_id: value.radiant_team_id,
     dire_team_id: value.dire_team_id,
     winner_team_id:

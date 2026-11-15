@@ -79,7 +79,8 @@ export function summarizeMatchSeries(games: MatchSummary[]): MatchSeriesScore {
   const direWins = firstGame?.dire_team_id == null
     ? 0
     : completedGames.filter((game) => game.winner_team_id === firstGame.dire_team_id).length;
-  const clinchThreshold = Math.floor((firstGame?.best_of ?? 3) / 2) + 1;
+  const bestOf = typeof firstGame?.best_of === 'number' && firstGame.best_of > 0 ? firstGame.best_of : 1;
+  const clinchThreshold = bestOf <= 1 ? 1 : Math.floor(bestOf / 2) + 1;
   const clinchedTeamId = radiantWins >= clinchThreshold
     ? firstGame?.radiant_team_id ?? null
     : direWins >= clinchThreshold

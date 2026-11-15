@@ -81,9 +81,11 @@ export function DashboardLiveMatches({
                     {match.tournament?.name ?? 'Tournament'}
                   </Text>
                   <View className="flex-row items-center gap-1.5">
-                    <Text className="text-[10px] font-mono text-slate-400">
-                      Bo{match.best_of}
-                    </Text>
+                    {match.best_of && match.best_of > 0 ? (
+                      <Text className="text-[10px] font-mono text-slate-400">
+                        Bo{match.best_of}
+                      </Text>
+                    ) : null}
                     <View className="flex-row items-center gap-1 rounded bg-red-950/80 border border-red-800/60 px-1.5 py-0.5">
                       <View className="h-1.5 w-1.5 rounded-full bg-red-500" />
                       <Text className="text-[10px] font-bold font-mono text-red-400">

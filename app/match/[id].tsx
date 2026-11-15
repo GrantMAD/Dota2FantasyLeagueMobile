@@ -148,7 +148,9 @@ export default function MatchDetailScreen() {
               ) : null}
               <Text className="text-sm text-slate-300">{formatDate(activeDetails.match.scheduled_at)}</Text>
               <Text className="text-sm text-slate-400">
-                Best of {activeDetails.match.best_of}
+                {activeDetails.match.best_of && activeDetails.match.best_of > 1
+                  ? `Best of ${activeDetails.match.best_of}`
+                  : 'Best of 1'}
                 {formatDuration(activeDetails.match.duration_seconds)
                   ? ` · ${formatDuration(activeDetails.match.duration_seconds)}`
                   : ''}

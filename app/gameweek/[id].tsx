@@ -211,7 +211,14 @@ export default function GameweekDetailScreen() {
                 >
                   <TeamMatchup radiantTeam={match.radiant_team} direTeam={match.dire_team} />
                   <Text className="text-sm text-cyan-200">{formatDate(match.scheduled_at)}</Text>
-                  <Text className="text-xs uppercase text-slate-500">{match.status} · Best of {match.best_of}</Text>
+                  <Text className="text-xs uppercase text-slate-500">
+                    {match.status}
+                    {match.best_of && match.best_of > 1
+                      ? ` · Best of ${match.best_of}`
+                      : match.best_of === 1
+                        ? ' · Best of 1'
+                        : ''}
+                  </Text>
                   {match.tournament ? <Text className="text-xs text-slate-400">{match.tournament.name}</Text> : null}
                 </Pressable>
               )) : (
