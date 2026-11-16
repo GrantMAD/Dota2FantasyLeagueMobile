@@ -42,7 +42,7 @@ describe('MatchSeriesCard', () => {
     expect(getByText('Player stats for 1 completed game are still being processed.')).toBeTruthy();
   });
 
-  it('renders Best of 1 and Final for single-game Bo1 matches without series mislabeling', () => {
+  it('renders Best of 1 and Completed for single-game Bo1 matches without series mislabeling', () => {
     const singleBo1 = makeMatch({ id: 1, match_number: 1, best_of: 1, player_ids: [101] });
     const group = groupMatchesBySeries([singleBo1])[0];
     const { getByText, queryByText } = render(
@@ -54,13 +54,13 @@ describe('MatchSeriesCard', () => {
     );
 
     expect(getByText('Best of 1')).toBeTruthy();
-    expect(getByText('Final')).toBeTruthy();
-    expect(queryByText('Series Final')).toBeNull();
+    expect(getByText('Completed')).toBeTruthy();
+    expect(queryByText('Series complete')).toBeNull();
     expect(queryByText(/Series score/)).toBeNull();
     expect(getByText('Match score')).toBeTruthy();
   });
 
-  it('renders Series Final and Series score for multi-game Bo3 series', () => {
+  it('renders Series complete and Series score for multi-game Bo3 series', () => {
     const games = [
       makeMatch({ id: 1, match_number: 1, best_of: 3, player_ids: [101] }),
       makeMatch({ id: 2, match_number: 2, best_of: 3, player_ids: [101] }),
@@ -75,8 +75,8 @@ describe('MatchSeriesCard', () => {
     );
 
     expect(getByText('Best of 3')).toBeTruthy();
-    expect(getByText('Series Final')).toBeTruthy();
-    expect(queryByText('Final')).toBeNull();
+    expect(getByText('Series complete')).toBeTruthy();
+    expect(queryByText('Completed')).toBeNull();
     expect(getByText(/Series score/)).toBeTruthy();
   });
 });

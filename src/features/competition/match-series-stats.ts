@@ -1,5 +1,15 @@
 import type { MatchDetails, UserFantasyImpact } from './api';
 
+const HERO_NAMES_BY_ID: Record<number, string> = {
+  155: 'Largo',
+};
+
+function resolveHeroName(heroName: string | null | undefined): string | null {
+  const name = heroName?.trim();
+  const placeholderId = name?.match(/^(?:hero\s*)?(\d+)$/i)?.[1];
+  return placeholderId ? HERO_NAMES_BY_ID[Number(placeholderId)] ?? name ?? null : name ?? null;
+}
+
 export interface SeriesGameValue {
   matchId: number;
   matchNumber: number;
@@ -122,7 +132,7 @@ export function calculateSeriesLeaders(games: MatchDetails[]): {
       const current = totalsByPlayer.get(key) ?? {
         playerId: stat.player_id,
         playerName: playerName(stat),
-        heroName: stat.hero_name,
+        heroName: resolveHeroName(stat.hero_name),
         role: 'Core',
         fantasy: 0,
         damage: 0,
@@ -241,7 +251,7 @@ export function calculateSeriesFantasyImpact(
       playersByKey.set(key, {
         playerId: stat.player_id,
         playerName: playerName(stat),
-        heroName: stat.hero_name,
+        heroName: resolveHeroName(stat.hero_name),
         slot: lineup?.slot ?? 'Squad Roster',
         isCaptain: Boolean(lineup?.isCaptain),
         isViceCaptain: Boolean(lineup?.isViceCaptain),

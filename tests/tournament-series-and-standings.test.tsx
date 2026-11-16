@@ -82,11 +82,12 @@ describe('TournamentSeriesTimeline', () => {
 
   it('renders series grouped by day with correct scores and winner', () => {
     const onMatchPress = jest.fn();
-    const { getByText } = render(
+    const { getByText, getAllByText } = render(
       <TournamentSeriesTimeline matches={mockMatches} onMatchPress={onMatchPress} />
     );
 
     expect(getByText('Series Results Timeline')).toBeTruthy();
+    expect(getAllByText('Series complete')).toHaveLength(2);
     expect(getByText('Team Alpha')).toBeTruthy();
     expect(getByText('Team Beta')).toBeTruthy();
     expect(getByText('Team Gamma')).toBeTruthy();
@@ -95,6 +96,16 @@ describe('TournamentSeriesTimeline', () => {
     // Trigger match details navigation
     fireEvent.press(getByText('Team Alpha'));
     expect(onMatchPress).toHaveBeenCalledWith(1);
+  });
+
+  it('labels a completed Best of 1 match Completed', () => {
+    const singleMatch = { ...mockMatches[0], id: 5, best_of: 1 };
+    const { getByText, queryByText } = render(
+      <TournamentSeriesTimeline matches={[singleMatch]} />
+    );
+
+    expect(getByText('Completed')).toBeTruthy();
+    expect(queryByText('Final')).toBeNull();
   });
 });
 

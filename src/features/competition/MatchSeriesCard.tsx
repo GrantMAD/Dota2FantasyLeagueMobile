@@ -41,7 +41,7 @@ export function MatchSeriesCard({ group, appearance, onPress }: MatchSeriesCardP
   const statusText = isLive
     ? '● Live'
     : score.isComplete
-      ? (isSeries ? 'Series Final' : 'Final')
+      ? (isSeries ? 'Series complete' : 'Completed')
       : displayGame.status;
 
   return (

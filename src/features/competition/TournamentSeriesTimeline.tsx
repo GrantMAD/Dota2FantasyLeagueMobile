@@ -255,7 +255,9 @@ export function TournamentSeriesTimeline({ matches, onMatchPress }: TournamentSe
                       <Text className="text-[10px] font-bold text-rose-400 uppercase tracking-wide">Live</Text>
                     </View>
                   ) : isCompleted ? (
-                    <Text className="text-[10px] font-bold text-emerald-400">Final</Text>
+                    <Text className="text-[10px] font-bold text-emerald-400">
+                      {node.bestOf > 1 ? 'Series complete' : 'Completed'}
+                    </Text>
                   ) : (
                     <Text className="text-[10px] text-slate-500">Scheduled</Text>
                   )}

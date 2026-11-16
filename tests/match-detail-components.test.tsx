@@ -2,6 +2,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { MatchLeadersStrip } from '@/src/features/competition/MatchLeadersStrip';
 import { MatchFantasyImpactBanner } from '@/src/features/competition/MatchFantasyImpactBanner';
+import { calculateSeriesLeaders } from '@/src/features/competition/match-series-stats';
 import { PendingFantasyScoreNotice } from '@/src/features/competition/PendingFantasyScoreNotice';
 import type { MatchDetails } from '@/src/features/competition/api';
 
@@ -59,6 +60,26 @@ describe('PendingFantasyScoreNotice', () => {
 });
 
 describe('MatchLeadersStrip', () => {
+  it('resolves a known hero ID placeholder to its display name', () => {
+    const leaders = calculateSeriesLeaders([
+      makeGame(1, 1, [{
+        id: 1,
+        player_id: 101,
+        team_id: 10,
+        hero_name: 'Hero 155',
+        kills: 5,
+        deaths: 1,
+        assists: 8,
+        gold_per_minute: 600,
+        experience_per_minute: 700,
+        hero_damage: 20000,
+        player: { id: 101, name: 'Player A', in_game_name: 'Player A' },
+      }], [{ player_id: 101, total_points: 12 }]),
+    ]);
+
+    expect(leaders.fantasyMVP?.heroName).toBe('Largo');
+  });
+
   it('renders series leaders with totals and per-game values', () => {
     const { getByText } = render(
       <MatchLeadersStrip

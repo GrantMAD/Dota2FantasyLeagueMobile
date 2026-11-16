@@ -132,14 +132,20 @@ export function TopNavigationBar() {
   });
   const markRead = useMutation({
     mutationFn: markNotificationRead,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+      queryClient.invalidateQueries({ queryKey: ['dashboard-whats-new'] }),
+    ]),
     onError: (error) => setNotificationActionError(
       error instanceof Error ? error.message : 'Unable to open this notification.'
     ),
   });
   const markAllRead = useMutation({
     mutationFn: markAllNotificationsRead,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+      queryClient.invalidateQueries({ queryKey: ['dashboard-whats-new'] }),
+    ]),
     onError: (error) => setNotificationActionError(
       error instanceof Error ? error.message : 'Unable to mark all notifications as read.'
     ),
