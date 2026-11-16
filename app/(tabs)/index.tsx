@@ -777,6 +777,13 @@ export default function HomeScreen() {
           ) : null}
         </View>
 
+        {liveMatchesQuery.data && liveMatchesQuery.data.length > 0 ? (
+          <DashboardLiveMatches
+            matches={liveMatchesQuery.data}
+            ownedPlayers={query.data?.ownedPlayers ?? []}
+          />
+        ) : null}
+
         {/* Keep deadline urgency after the activity feed, matching the web dashboard hierarchy. */}
         {transferRushQuery.isPending ? (
           <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
@@ -839,14 +846,6 @@ export default function HomeScreen() {
               targetPoints={query.data.targetPoints}
               targetRank={query.data.targetRank}
             />
-
-            {/* Live Matches In Progress */}
-            {liveMatchesQuery.data && liveMatchesQuery.data.length > 0 ? (
-              <DashboardLiveMatches
-                matches={liveMatchesQuery.data}
-                ownedPlayers={query.data?.ownedPlayers ?? []}
-              />
-            ) : null}
 
             {hasSquad ? (
               <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">

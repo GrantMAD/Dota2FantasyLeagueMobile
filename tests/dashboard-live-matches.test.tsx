@@ -2,6 +2,32 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { DashboardLiveMatches } from '@/src/features/dashboard/DashboardLiveMatches';
 import type { MatchSummary } from '@/src/features/competition/api';
+import type { ThemePreference } from '@/src/features/account/api';
+import { useMobileTheme } from '@/src/lib/theme';
+
+jest.mock('@/src/lib/theme', () => ({
+  useMobileTheme: jest.fn(() => ({ theme: 'dark' })),
+}));
+
+const mockedUseMobileTheme = jest.mocked(useMobileTheme);
+
+function themeContext(theme: ThemePreference): ReturnType<typeof useMobileTheme> {
+  return {
+    theme,
+    colors: {
+      placeholder: '#94a3b8',
+      onAccent: '#ffffff',
+      tabBarBackground: '#020617',
+      tabBarBorder: '#1e293b',
+      tabBarActive: '#14b8a6',
+      tabBarInactive: '#94a3b8',
+    },
+    isLoading: false,
+    isSaving: false,
+    error: null,
+    setTheme: async (nextTheme) => nextTheme,
+  };
+}
 
 describe('DashboardLiveMatches', () => {
   const mockMatches: MatchSummary[] = [
@@ -41,6 +67,7 @@ describe('DashboardLiveMatches', () => {
   });
 
   it('renders live matches with team names, tags, and BoX format', () => {
+    mockedUseMobileTheme.mockReturnValue(themeContext('dark'));
     const { getByText } = render(<DashboardLiveMatches matches={mockMatches} />);
 
     expect(getByText('Live Matches')).toBeTruthy();
@@ -58,6 +85,28 @@ describe('DashboardLiveMatches', () => {
     expect(getByText('DreamLeague Season 25')).toBeTruthy();
     expect(getByText('Bo2')).toBeTruthy();
   });
+
+  it.each(['dark', 'light'] as const)(
+    'shows long names on full-width cards in %s mode',
+    (theme) => {
+      mockedUseMobileTheme.mockReturnValue(themeContext(theme));
+      const tournamentName = 'The International Championship Qualifier';
+      const radiantName = 'Very Long Radiant Esports Team Name';
+      const direName = 'Another Extremely Long Dire Team Name';
+      const longMatch = {
+        ...mockMatches[0],
+        radiant_team: { name: radiantName, tag: 'RAD' },
+        dire_team: { name: direName, tag: 'DIR' },
+        tournament: { id: 9, name: tournamentName, tier: 'Tier 1' },
+      };
+      const { getByText, getByLabelText } = render(<DashboardLiveMatches matches={[longMatch]} />);
+
+      expect(getByText(tournamentName)).toBeTruthy();
+      expect(getByText(radiantName).props.numberOfLines).toBeUndefined();
+      expect(getByText(direName).props.numberOfLines).toBeUndefined();
+      expect(getByLabelText(`View live match ${radiantName} vs ${direName}`)).toBeTruthy();
+    },
+  );
 
   it('highlights a confirmed player from the full squad', () => {
     const { getByText } = render(
