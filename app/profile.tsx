@@ -18,9 +18,11 @@ import { Button } from '@/src/components/Button';
 import { Screen } from '@/src/components/Screen';
 import { TextField } from '@/src/components/TextField';
 import {
+  getLiveSquadMatchAlertsEnabled,
   getManagerProfile,
   type ManagerProfile,
   updateBannerTheme,
+  updateLiveSquadMatchAlertsEnabled,
   updateManagerProfile,
   updatePushNotificationPreference,
   uploadManagerAvatar,
@@ -741,6 +743,11 @@ function ProfileEditor({
   const { session } = useAuth();
   const pushStatus = usePushNotificationStatus();
   const { theme, setTheme, isSaving: savingTheme } = useMobileTheme();
+  const liveSquadAlertsQuery = useQuery({
+    queryKey: ['live-squad-match-alerts'],
+    queryFn: getLiveSquadMatchAlertsEnabled,
+    staleTime: 60_000,
+  });
   const [username, setUsername] = useState(profile.username);
   const [displayName, setDisplayName] = useState(profile.displayName ?? '');
   const [bio, setBio] = useState(profile.bio ?? '');
@@ -750,6 +757,7 @@ function ProfileEditor({
   const [notice, setNotice] = useState<string | null>(null);
   const [enablingPush, setEnablingPush] = useState(false);
   const [savingPushPreference, setSavingPushPreference] = useState(false);
+  const [savingLiveSquadAlerts, setSavingLiveSquadAlerts] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const save = useMutation({
@@ -794,6 +802,24 @@ function ProfileEditor({
       setNotice(error instanceof Error ? error.message : 'Unable to save the push notification preference.');
     } finally {
       setSavingPushPreference(false);
+    }
+  }
+
+  async function handleLiveSquadAlertsChange(enabled: boolean) {
+    if (save.isPending || savingLiveSquadAlerts || liveSquadAlertsQuery.isPending) return;
+
+    setSavingLiveSquadAlerts(true);
+    setNotice(null);
+    try {
+      const savedValue = await updateLiveSquadMatchAlertsEnabled(enabled);
+      queryClient.setQueryData(['live-squad-match-alerts'], savedValue);
+      setNotice(savedValue
+        ? 'Live squad match alerts are enabled for your account.'
+        : 'Live squad match alerts are off for your account.');
+    } catch (error: unknown) {
+      setNotice(error instanceof Error ? error.message : 'Unable to save the live squad match alert preference.');
+    } finally {
+      setSavingLiveSquadAlerts(false);
     }
   }
 
@@ -1045,6 +1071,28 @@ function ProfileEditor({
           disabled={savingPushPreference || save.isPending}
           onChange={(enabled) => void handlePushPreferenceChange(enabled)}
         />
+        <PreferenceToggle
+          label="Live squad match alerts"
+          description="Enabled by default. Show alerts in Notifications and What’s New when a player in your squad appears in a live match. Push delivery also requires push notifications and a registered device."
+          value={liveSquadAlertsQuery.data ?? true}
+          disabled={
+            liveSquadAlertsQuery.isPending
+            || liveSquadAlertsQuery.isError
+            || savingLiveSquadAlerts
+            || save.isPending
+          }
+          onChange={(enabled) => void handleLiveSquadAlertsChange(enabled)}
+        />
+        {liveSquadAlertsQuery.isError ? (
+          <Text accessibilityRole="alert" className="text-xs leading-5 text-amber-300">
+            {liveSquadAlertsQuery.error instanceof Error
+              ? liveSquadAlertsQuery.error.message
+              : 'Unable to load the live squad match alert preference.'}
+          </Text>
+        ) : null}
+        {savingLiveSquadAlerts ? (
+          <Text className="text-xs text-slate-400">Saving live squad alert preference...</Text>
+        ) : null}
         {savingPushPreference ? (
           <Text className="text-xs text-slate-400">Saving push preference...</Text>
         ) : null}

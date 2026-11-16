@@ -34,12 +34,14 @@ import {
   createManagerAccount,
   exchangeMobileAuthCode,
   getManagerProfile,
+  getLiveSquadMatchAlertsEnabled,
   getThemePreference,
   resendManagerConfirmation,
   requestManagerPasswordReset,
   registerPushToken,
   removePushToken,
   updateManagerProfile,
+  updateLiveSquadMatchAlertsEnabled,
   updateBannerTheme,
   updateManagerPassword,
   updatePushNotificationPreference,
@@ -373,7 +375,8 @@ describe('mobile data access', () => {
   });
 
   it('loads dashboard announcements through the authenticated Supabase RPC', async () => {
-    mobileFantasyContextRpc.mockResolvedValue({ data: {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({ data: {
         events: [{
           kind: 'tournament',
           id: 10,
@@ -404,14 +407,26 @@ describe('mobile data access', () => {
           createdAt: '2026-10-08T12:00:00.000Z',
           href: '/players/41',
         }],
-      }, error: null });
+      }, error: null })
+      .mockResolvedValueOnce({ data: [{
+        id: 23,
+        kind: 'live_match',
+        matchId: 55,
+        title: 'Your squad is in a live match',
+        message: 'Carry is playing in a live match.',
+        createdAt: '2026-10-08T12:30:00.000Z',
+      }], error: null });
 
     await expect(getDashboardWhatsNew()).resolves.toMatchObject({
       events: [{ id: 10, title: 'Autumn Cup', matchCount: 6 }],
       gameweek: { id: 7, number: 3, matchStatuses: { scheduled: 6 } },
-      updates: [{ id: 22, playerId: 41, kind: 'price_change' }],
+      updates: [
+        { id: 23, matchId: 55, kind: 'live_match' },
+        { id: 22, playerId: 41, kind: 'price_change' },
+      ],
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_dashboard_whats_new');
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_live_squad_match_updates');
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -1675,6 +1690,36 @@ describe('mobile data access', () => {
     });
   });
 
+  it('loads live squad alerts from the Live notification category', async () => {
+    mobileFantasyContextRpc.mockResolvedValueOnce({
+      data: {
+        notifications: [{
+          id: 93,
+          type: 'live_squad_match',
+          title: 'Your squad is in a live match',
+          message: 'Carry is playing in a live match.',
+          is_read: false,
+          created_at: '2026-10-07T10:00:00.000Z',
+          metadata: { match_id: 177 },
+        }],
+        unreadCount: 1,
+        nextCursor: null,
+      },
+      error: null,
+    });
+
+    await expect(getNotifications('live')).resolves.toMatchObject({
+      notifications: [{ id: 93, type: 'live_squad_match', metadata: { match_id: 177 } }],
+      unreadCount: 1,
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_notifications', {
+      p_category: 'live',
+      p_limit: 30,
+      p_cursor_created_at: null,
+      p_cursor_id: null,
+    });
+  });
+
   it('filters league invitations into the League category on mobile', () => {
     const invitation = {
       id: 92,
@@ -1690,6 +1735,26 @@ describe('mobile data access', () => {
     expect(matchesNotificationCategory(invitation, 'league')).toBe(true);
     expect(matchesNotificationCategory(invitation, 'unread')).toBe(true);
     expect(matchesNotificationCategory(invitation, 'scoring')).toBe(false);
+  });
+
+  it('filters live squad match alerts and routes them to the matching mobile match', () => {
+    const liveAlert = {
+      id: 93,
+      type: 'live_squad_match',
+      title: 'Your squad is in a live match',
+      message: 'Carry is playing in a live match.',
+      is_read: false,
+      created_at: '2026-10-07T10:00:00.000Z',
+      metadata: { match_id: 55, player_ids: [501], player_names: ['Carry'] },
+    };
+
+    expect(notificationCategoryForType(liveAlert.type)).toBe('live');
+    expect(matchesNotificationCategory(liveAlert, 'live')).toBe(true);
+    expect(matchesNotificationCategory(liveAlert, 'league')).toBe(false);
+    expect(notificationActionFor(liveAlert)).toEqual({
+      label: 'View match',
+      href: { pathname: '/match/[id]', params: { id: '55' } },
+    });
   });
 
   it('fetches notification pages with a stable server-side cursor', async () => {
@@ -1963,6 +2028,21 @@ describe('mobile data access', () => {
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_update_banner_theme', {
       p_theme_id: 'dire-crimson',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('loads and saves the live squad match alert preference through authenticated RPCs', async () => {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({ data: true, error: null })
+      .mockResolvedValueOnce({ data: false, error: null });
+
+    await expect(getLiveSquadMatchAlertsEnabled()).resolves.toBe(true);
+    await expect(updateLiveSquadMatchAlertsEnabled(false)).resolves.toBe(false);
+
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(1, 'mobile_get_live_squad_match_alerts_enabled');
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(2, 'mobile_update_live_squad_match_alerts_enabled', {
+      p_enabled: false,
     });
     expect(fetch).not.toHaveBeenCalled();
   });

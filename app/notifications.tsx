@@ -26,6 +26,7 @@ const categories: { key: NotificationCategory; label: string }[] = [
   { key: 'market', label: 'Market' },
   { key: 'scoring', label: 'Scoring' },
   { key: 'league', label: 'Leagues' },
+  { key: 'live', label: 'Live' },
 ];
 
 const emptyState: Record<NotificationCategory, { title: string; description: string; href: Href | null; action: string | null }> = {
@@ -35,6 +36,7 @@ const emptyState: Record<NotificationCategory, { title: string; description: str
   market: { title: 'No market updates', description: 'No player price changes, transfer market trends, or chip alerts to report right now.', href: { pathname: '/team', params: { tab: 'transfers' } }, action: 'Browse market' },
   scoring: { title: 'No scoring updates', description: 'Scores, match completions, and fantasy point adjustments will appear here when games conclude.', href: '/gameweeks', action: 'View gameweeks' },
   league: { title: 'No league activity', description: 'No head-to-head match results, rank movements, or commissioner messages yet.', href: '/leagues', action: 'Go to leagues' },
+  live: { title: 'No live squad match alerts', description: 'Live alerts appear when a player in your squad is detected in an active match.', href: '/profile', action: 'Manage preferences' },
 };
 
 type NotificationPresentation = {
@@ -55,6 +57,15 @@ function notificationPresentation(notification: ManagerNotification): Notificati
       color: '#a78bfa',
       surface: 'border-violet-500/30 bg-violet-500/10',
       row: 'border-l-violet-500',
+    };
+  }
+  if (type === 'live_squad_match') {
+    return {
+      label: 'Live match',
+      icon: { ios: 'dot.radiowaves.left.and.right', android: 'radio', web: 'radio' },
+      color: '#22d3ee',
+      surface: 'border-cyan-500/30 bg-cyan-500/10',
+      row: 'border-l-cyan-500',
     };
   }
   if (['player_removed', 'player_unavailable'].includes(type) || (type === 'system' && metadata?.player_id)) {
@@ -211,7 +222,7 @@ export default function NotificationsScreen() {
         <View>
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Updates</Text>
           <Text className="mt-2 text-3xl font-bold text-white">Notifications</Text>
-          <Text className="mt-1 text-sm leading-5 text-slate-400">Deadlines, scoring, market changes, and league activity.</Text>
+          <Text className="mt-1 text-sm leading-5 text-slate-400">Live match, deadline, scoring, market, and league alerts.</Text>
           <Link href="/profile" asChild>
             <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start">
               <Text className="font-semibold text-brand-300">Notification preferences →</Text>
@@ -388,9 +399,9 @@ export default function NotificationsScreen() {
             <View className="h-16 w-16 items-center justify-center rounded-2xl border border-slate-700 bg-slate-800">
               <SymbolView
                 name={{
-                  ios: category === 'deadline' ? 'clock' : category === 'league' ? 'trophy' : category === 'scoring' ? 'sparkles' : 'bell',
-                  android: category === 'deadline' ? 'schedule' : category === 'league' ? 'emoji_events' : category === 'scoring' ? 'auto_awesome' : 'notifications',
-                  web: category === 'deadline' ? 'schedule' : category === 'league' ? 'emoji_events' : category === 'scoring' ? 'auto_awesome' : 'notifications',
+                  ios: category === 'live' ? 'dot.radiowaves.left.and.right' : category === 'deadline' ? 'clock' : category === 'league' ? 'trophy' : category === 'scoring' ? 'sparkles' : 'bell',
+                  android: category === 'live' ? 'radio' : category === 'deadline' ? 'schedule' : category === 'league' ? 'emoji_events' : category === 'scoring' ? 'auto_awesome' : 'notifications',
+                  web: category === 'live' ? 'radio' : category === 'deadline' ? 'schedule' : category === 'league' ? 'emoji_events' : category === 'scoring' ? 'auto_awesome' : 'notifications',
                 }}
                 size={28}
                 tintColor="#94a3b8"

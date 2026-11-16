@@ -1,7 +1,7 @@
 import { ApiError } from '@/src/lib/errors';
 import { getSupabaseClient } from '@/src/lib/supabase';
 
-export type NotificationCategory = 'all' | 'unread' | 'deadline' | 'market' | 'scoring' | 'league';
+export type NotificationCategory = 'all' | 'unread' | 'deadline' | 'market' | 'scoring' | 'league' | 'live';
 
 export interface ManagerNotification {
   id: number;
@@ -151,6 +151,8 @@ export function notificationCategoryForType(type: string): Exclude<NotificationC
     case 'h2h_result':
     case 'league_invite':
       return 'league';
+    case 'live_squad_match':
+      return 'live';
     default:
       return null;
   }

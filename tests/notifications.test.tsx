@@ -32,8 +32,14 @@ jest.mock('../src/features/notifications/api', () => ({
     if (category === 'unread') return !notification.is_read;
     return category === 'scoring' && notification.type === 'gameweek_result';
   },
-  notificationActionFor: () => ({ label: 'View gameweek', href: '/gameweeks' }),
-  notificationCategoryForType: (type: string) => type === 'gameweek_result' ? 'scoring' : null,
+  notificationActionFor: (notification: { type: string }) => notification.type === 'live_squad_match'
+    ? { label: 'View match', href: { pathname: '/match/[id]', params: { id: '55' } } }
+    : ({ label: 'View gameweek', href: '/gameweeks' }),
+  notificationCategoryForType: (type: string) => type === 'gameweek_result'
+    ? 'scoring'
+    : type === 'live_squad_match'
+      ? 'live'
+      : null,
 }));
 
 const mockedGetNotifications = jest.mocked(getNotifications);
@@ -158,5 +164,43 @@ describe('Notifications screen', () => {
       createdAt: first.created_at,
       id: first.id,
     });
+
+  });
+
+  it('shows live squad match alerts in the Live category', async () => {
+    mockedGetNotifications.mockImplementation(async (category) => ({
+      notifications: category === 'live' ? [{
+        id: 8,
+        type: 'live_squad_match',
+        title: 'Your squad is in a live match',
+        message: 'Carry is playing in a live match.',
+        is_read: false,
+        created_at: new Date().toISOString(),
+        metadata: { match_id: 55 },
+      }] : [],
+      unreadCount: 1,
+      nextCursor: null,
+    }));
+
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+        mutations: { retry: false, gcTime: 0 },
+      },
+    });
+    queryClient = client;
+    const view = render(
+      <QueryClientProvider client={client}>
+        <NotificationsScreen />
+      </QueryClientProvider>
+    );
+
+    await fireEvent.press(view.getByRole('button', { name: 'Live' }));
+    await waitFor(() => {
+      expect(view.getByText('Your squad is in a live match')).toBeTruthy();
+      expect(view.getByText('Live match')).toBeTruthy();
+      expect(view.getByText('View match →')).toBeTruthy();
+    });
+    expect(mockedGetNotifications).toHaveBeenLastCalledWith('live');
   });
 });

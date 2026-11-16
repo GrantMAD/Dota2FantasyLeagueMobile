@@ -426,6 +426,7 @@ export default function HomeScreen() {
                   const tournamentsList = whatsNewQuery.data.events ?? [];
                   const priceChanges = dashboardUpdates.filter((u) => u.kind === 'price_change');
                   const availabilityUpdates = dashboardUpdates.filter((u) => u.kind === 'availability');
+                  const liveMatchUpdates = dashboardUpdates.filter((u) => u.kind === 'live_match');
 
                   const shouldCollapseFriends = whatsNewTab === 'all' && friendsList.length >= 5;
                   const shouldCollapsePrice = whatsNewTab === 'all' && priceChanges.length >= 5;
@@ -583,6 +584,38 @@ export default function HomeScreen() {
                           <Text className="text-xs font-bold text-rose-300">Squad ›</Text>
                         </Pressable>
                       )}
+
+                      {/* Live squad match alerts */}
+                      {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
+                        liveMatchUpdates.map((update) => (
+                          <Link key={`live-match-${update.id}`} href={`/match/${update.matchId}`} asChild>
+                            <Pressable
+                              onPress={() => {
+                                void markNotificationRead(update.id).catch(() => {});
+                              }}
+                              className="flex-row items-start gap-3 rounded-xl p-3"
+                              style={{
+                                borderLeftWidth: 3,
+                                borderLeftColor: '#06b6d4',
+                                backgroundColor: isDark ? 'rgba(6, 182, 212, 0.08)' : 'rgba(8, 145, 178, 0.06)',
+                              }}
+                            >
+                              <SymbolView
+                                name={{ ios: 'dot.radiowaves.left.and.right', android: 'radio', web: 'radio' }}
+                                size={17}
+                                tintColor="#22d3ee"
+                              />
+                              <View className="flex-1 gap-1">
+                                <Text className="text-[10px] font-bold uppercase tracking-wider text-cyan-300">
+                                  Live match
+                                </Text>
+                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{update.title}</Text>
+                                <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
+                              </View>
+                              <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                            </Pressable>
+                          </Link>
+                        ))}
 
                       {/* Player price changes */}
                       {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&

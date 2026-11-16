@@ -259,6 +259,26 @@ export async function updatePushNotificationPreference(enabled: boolean): Promis
   return updateProfile({ push_notifications: enabled });
 }
 
+export async function getLiveSquadMatchAlertsEnabled(): Promise<boolean> {
+  const { data, error } = await getSupabaseClient().rpc('mobile_get_live_squad_match_alerts_enabled');
+  if (error) throw new ApiError(`Unable to load live squad match alert preference: ${error.message}`, 500);
+  if (typeof data !== 'boolean') {
+    throw new ApiError('Live squad match alert preference was returned in an unexpected format.', 502);
+  }
+  return data;
+}
+
+export async function updateLiveSquadMatchAlertsEnabled(enabled: boolean): Promise<boolean> {
+  const { data, error } = await getSupabaseClient().rpc('mobile_update_live_squad_match_alerts_enabled', {
+    p_enabled: enabled,
+  });
+  if (error) throw new ApiError(`Unable to save live squad match alert preference: ${error.message}`, 400);
+  if (data !== enabled) {
+    throw new ApiError('Live squad match alert preference was not saved.', 502);
+  }
+  return data;
+}
+
 export async function registerPushToken(token: string, platform: 'ios' | 'android'): Promise<void> {
   const { data, error } = await getSupabaseClient().rpc('mobile_register_push_token', {
     p_token: token,

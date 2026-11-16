@@ -23,14 +23,31 @@ export interface DashboardGameweek {
   matchStatuses: Record<string, number>;
 }
 
-export interface DashboardUpdate {
-  id: number;
-  playerId: number;
-  kind: 'price_change' | 'availability';
-  title: string;
-  message: string;
-  createdAt: string;
-}
+export type DashboardUpdate =
+  | {
+      id: number;
+      kind: 'price_change';
+      playerId: number;
+      title: string;
+      message: string;
+      createdAt: string;
+    }
+  | {
+      id: number;
+      kind: 'availability';
+      playerId: number;
+      title: string;
+      message: string;
+      createdAt: string;
+    }
+  | {
+      id: number;
+      kind: 'live_match';
+      matchId: number;
+      title: string;
+      message: string;
+      createdAt: string;
+    };
 
 export interface DashboardWhatsNew {
   events: DashboardTournamentEvent[];
@@ -125,17 +142,59 @@ function parseUpdate(value: unknown): DashboardUpdate {
   };
 }
 
+function parseLiveMatchUpdate(value: unknown): DashboardUpdate {
+  if (
+    !isRecord(value) ||
+    !Number.isSafeInteger(value.id) ||
+    Number(value.id) < 1 ||
+    value.kind !== 'live_match' ||
+    !Number.isSafeInteger(value.matchId) ||
+    Number(value.matchId) < 1 ||
+    typeof value.title !== 'string' ||
+    typeof value.message !== 'string' ||
+    typeof value.createdAt !== 'string'
+  ) {
+    throw new ApiError('Live match update data was returned in an unexpected format.', 502);
+  }
+  return {
+    id: Number(value.id),
+    kind: 'live_match',
+    matchId: Number(value.matchId),
+    title: value.title,
+    message: value.message,
+    createdAt: value.createdAt,
+  };
+}
+
 export async function getDashboardWhatsNew(): Promise<DashboardWhatsNew> {
-  const { data: body, error } = await getSupabaseClient().rpc('mobile_get_dashboard_whats_new');
+  const supabase = getSupabaseClient();
+  const [
+    { data: body, error },
+    { data: liveUpdatesBody, error: liveUpdatesError },
+  ] = await Promise.all([
+    supabase.rpc('mobile_get_dashboard_whats_new'),
+    supabase.rpc('mobile_get_live_squad_match_updates'),
+  ]);
   if (error) throw new ApiError(`Unable to load dashboard updates: ${error.message}`, 500);
+  if (liveUpdatesError) {
+    throw new ApiError(`Unable to load live squad match updates: ${liveUpdatesError.message}`, 500);
+  }
   if (!isRecord(body) || !Array.isArray(body.events) || !Array.isArray(body.updates)) {
     throw new ApiError('Dashboard updates were returned in an unexpected format.', 502);
   }
+  if (!Array.isArray(liveUpdatesBody)) {
+    throw new ApiError('Live squad match updates were returned in an unexpected format.', 502);
+  }
+
+  const updates = [
+    ...body.updates.map(parseUpdate),
+    ...liveUpdatesBody.map(parseLiveMatchUpdate),
+  ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
   return {
     events: body.events.map(parseEvent),
     gameweek: body.gameweek === null ? null : parseGameweek(body.gameweek),
-    updates: body.updates.map(parseUpdate),
+    updates,
   };
 }
 
