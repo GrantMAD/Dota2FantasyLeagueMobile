@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView as HorizontalScrollView, Text, TextInput, View } from 'react-native';
+import { summarizeMatchSeries } from '@/src/features/competition/match-series';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -62,6 +63,10 @@ export default function MatchesScreen() {
   const hiddenCompletedMatchCount = allSeriesGroups
     .filter((group) => !shouldShowMatchSeries(group.games))
     .reduce((count, group) => count + group.games.length, 0);
+  const liveSeriesCount = seriesGroups.filter((group) => {
+    const s = summarizeMatchSeries(group.games);
+    return s.isLive && !s.isComplete;
+  }).length;
   const matchingTournaments = (tournamentsQuery.data ?? []).filter((tournament) =>
     tournament.name.toLowerCase().includes(tournamentSearch.toLowerCase()),
   );
@@ -215,6 +220,18 @@ export default function MatchesScreen() {
           </View>
         ) : seriesGroups.length ? (
           <View className="gap-3">
+            {/* Live now section header */}
+            {liveSeriesCount > 0 && filter !== 'completed' && (
+              <View className="flex-row items-center gap-2 px-1">
+                <View className="w-2 h-2 rounded-full bg-rose-500" />
+                <Text className="text-sm font-black uppercase tracking-wider text-rose-400">
+                  Live Now
+                </Text>
+                <View className="px-1.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30">
+                  <Text className="text-[11px] font-bold text-rose-400">{liveSeriesCount}</Text>
+                </View>
+              </View>
+            )}
             {seriesGroups.map((group) => {
               const appearance = getMatchSeriesSquadAppearance(group.games, ownedPlayers);
               const defaultGame = getDefaultSeriesGame(group.games);
