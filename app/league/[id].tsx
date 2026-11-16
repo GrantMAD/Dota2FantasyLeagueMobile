@@ -14,7 +14,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { Screen } from '@/src/components/Screen';
-import { getLeague, getLeagueActivity, type LeagueFixture, type LeagueStanding } from '@/src/features/leagues/api';
+import {
+  getLeague,
+  getLeagueActivity,
+  sortLeagueStandings,
+  type LeagueFixture,
+  type LeagueStanding,
+} from '@/src/features/leagues/api';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
 
@@ -51,12 +57,7 @@ export default function LeagueDetailScreen() {
     staleTime: 30_000,
   });
   const league = query.data;
-  const standings = [...(league?.standings ?? [])].sort((a, b) => {
-    if (a.rank !== null && b.rank !== null) return a.rank - b.rank;
-    if (a.rank !== null) return -1;
-    if (b.rank !== null) return 1;
-    return b.points - a.points;
-  });
+  const standings = sortLeagueStandings(league?.standings ?? [], league?.type ?? 'classic');
 
   async function copyInviteCode() {
     if (!league?.inviteCode) return;
@@ -147,7 +148,9 @@ export default function LeagueDetailScreen() {
             <View className="gap-3">
               <View className="flex-row items-end justify-between">
                 <Text className="text-xl font-bold text-slate-50">Standings</Text>
-                <Text className="text-xs text-slate-500">Points · GW points</Text>
+                <Text className="text-xs text-slate-500">
+                  {league.type === 'h2h' ? 'LP · Fantasy · GW' : 'Fantasy · GW'}
+                </Text>
               </View>
               {standings.length ? standings.map((standing, index) => {
                 const isCurrentUser = standing.userId === session?.user.id;
@@ -173,8 +176,18 @@ export default function LeagueDetailScreen() {
                       ) : null}
                     </View>
                     <View className="items-end">
-                      <Text className="font-bold text-slate-50">{standing.points}</Text>
-                      <Text className="text-xs text-slate-500">{standing.gameweekPoints} GW</Text>
+                      {league.type === 'h2h' ? (
+                        <>
+                          <Text className="font-bold text-brand-300">{standing.leaguePoints ?? 0} LP</Text>
+                          <Text className="text-xs text-slate-400">{standing.points} fantasy</Text>
+                          <Text className="text-xs text-slate-500">{standing.gameweekPoints} GW</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text className="font-bold text-slate-50">{standing.points}</Text>
+                          <Text className="text-xs text-slate-500">{standing.gameweekPoints} GW</Text>
+                        </>
+                      )}
                     </View>
                   </Pressable>
                 );
@@ -363,7 +376,10 @@ export default function LeagueDetailScreen() {
 
                     <View className="flex-row gap-3">
                       {[
-                        { label: 'SEASON POINTS', value: selectedManager.points },
+                        ...(league?.type === 'h2h'
+                          ? [{ label: 'LEAGUE POINTS', value: selectedManager.leaguePoints ?? 0 }]
+                          : []),
+                        { label: 'FANTASY TOTAL', value: selectedManager.points },
                         { label: 'GAMEWEEK', value: selectedManager.gameweekPoints },
                       ].map((stat) => (
                         <View

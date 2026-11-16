@@ -16,7 +16,13 @@ import {
   getTournamentDetails,
   getTournaments,
 } from '../src/features/competition/api';
-import { createLeague, getLeagueActivity, getLeagues, joinLeague } from '../src/features/leagues/api';
+import {
+  createLeague,
+  getLeagueActivity,
+  getLeagues,
+  joinLeague,
+  sortLeagueStandings,
+} from '../src/features/leagues/api';
 import { getLeaderboard, getLeaderboardCountries } from '../src/features/leaderboard/api';
 import { getAnalytics } from '../src/features/analytics/api';
 import { getDashboardWhatsNew, getTransferRush } from '../src/features/dashboard/api';
@@ -1400,10 +1406,66 @@ describe('mobile data access', () => {
     await expect(getLeagues()).resolves.toMatchObject([{
       id: 21,
       type: 'h2h',
-      standings: [{ userId: 'manager-1', gameweekPoints: 12, wins: 3 }],
+      standings: [{ userId: 'manager-1', gameweekPoints: 12, wins: 3, leaguePoints: 9 }],
       fixtures: [{ gameweekId: 5, homePoints: 12, awayPoints: 8 }],
     }]);
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_leagues');
+  });
+
+  it('orders standings by stored rank and keeps equal H2H ranks independent of fantasy totals', () => {
+    const standings = [
+      {
+        userId: 'manager-z',
+        manager: 'Zeta',
+        username: null,
+        displayName: null,
+        avatarUrl: null,
+        bio: null,
+        points: 240,
+        gameweekPoints: 10,
+        rank: 1,
+        wins: 2,
+        losses: 0,
+        draws: 0,
+        leaguePoints: 6,
+      },
+      {
+        userId: 'manager-a',
+        manager: 'Alpha',
+        username: null,
+        displayName: null,
+        avatarUrl: null,
+        bio: null,
+        points: 120,
+        gameweekPoints: 8,
+        rank: 1,
+        wins: 2,
+        losses: 0,
+        draws: 0,
+        leaguePoints: 6,
+      },
+      {
+        userId: 'manager-b',
+        manager: 'Beta',
+        username: null,
+        displayName: null,
+        avatarUrl: null,
+        bio: null,
+        points: 300,
+        gameweekPoints: 12,
+        rank: 2,
+        wins: 1,
+        losses: 1,
+        draws: 0,
+        leaguePoints: 3,
+      },
+    ];
+
+    expect(sortLeagueStandings(standings, 'h2h').map(({ manager }) => manager)).toEqual([
+      'Alpha',
+      'Zeta',
+      'Beta',
+    ]);
   });
 
   it('loads and validates the authenticated league activity feed', async () => {

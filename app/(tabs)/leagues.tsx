@@ -14,6 +14,7 @@ import {
   type CreateLeagueInput,
   type LeagueFixture,
   type LeagueStanding,
+  sortLeagueStandings,
 } from '@/src/features/leagues/api';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
@@ -58,6 +59,7 @@ export default function LeaguesScreen() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [selectedManager, setSelectedManager] = useState<{
     leagueName: string;
+    leagueType: CreateLeagueInput['type'];
     manager: LeagueStanding;
   } | null>(null);
   const [selectedFixture, setSelectedFixture] = useState<{
@@ -110,7 +112,7 @@ export default function LeaguesScreen() {
   const visibleLeagues = leagueFilter === 'all'
     ? myLeagues
     : myLeagues.filter((league) => league.type === leagueFilter);
-  const heroLeague = [...myLeagues].sort((a, b) => b.currentParticipants - a.currentParticipants)[0] ?? null;
+  const heroLeague = [...visibleLeagues].sort((a, b) => b.currentParticipants - a.currentParticipants)[0] ?? null;
   const submitting = createMutation.isPending || joinMutation.isPending;
 
   async function copyInviteCode(code: string) {
@@ -374,7 +376,7 @@ export default function LeaguesScreen() {
           <View className="gap-3">
             {visibleLeagues.map((league) => {
               const ownStanding = league.standings.find((standing) => standing.userId === session?.user.id);
-              const leaders = league.standings.slice(0, 3);
+              const leaders = sortLeagueStandings(league.standings, league.type).slice(0, 3);
               return (
                 <Link key={league.id} href={`/league/${league.id}`} asChild>
                   <Pressable
@@ -393,10 +395,10 @@ export default function LeaguesScreen() {
                       </Text>
                     </View>
                     <Text className="text-sm text-slate-300">
-                      {ownStanding?.rank ? `Rank ${ownStanding.rank} · ` : ''}{ownStanding?.points ?? 0} points
+                      {ownStanding?.rank ? `Rank ${ownStanding.rank} · ` : ''}
                       {league.type === 'h2h' && ownStanding
-                        ? ` · ${ownStanding.wins}W ${ownStanding.draws}D ${ownStanding.losses}L`
-                        : ''}
+                        ? `${ownStanding.leaguePoints ?? 0} league pts · ${ownStanding.points} fantasy pts · ${ownStanding.wins}W ${ownStanding.draws}D ${ownStanding.losses}L`
+                        : `${ownStanding?.points ?? 0} fantasy points`}
                     </Text>
                     {league.description ? (
                       <Text numberOfLines={2} className="text-xs leading-5 text-slate-400">{league.description}</Text>
@@ -415,13 +417,17 @@ export default function LeaguesScreen() {
                             key={standing.userId}
                             onPress={(event) => {
                               event.stopPropagation();
-                              setSelectedManager({ leagueName: league.name, manager: standing });
+                              setSelectedManager({ leagueName: league.name, leagueType: league.type, manager: standing });
                             }}
                           >
                             <Text numberOfLines={1} className="flex-1 text-sm text-slate-300">
                               {standing.rank ?? index + 1}. {standing.manager}
                             </Text>
-                            <Text className="text-xs font-semibold text-slate-400">{standing.points} pts</Text>
+                            <Text className="text-xs font-semibold text-slate-400">
+                              {league.type === 'h2h'
+                                ? `${standing.leaguePoints ?? 0} LP · ${standing.points} FP`
+                                : `${standing.points} pts`}
+                            </Text>
                           </Pressable>
                         ))}
                       </View>
@@ -526,7 +532,9 @@ export default function LeaguesScreen() {
                   <Text className="text-sm leading-5 text-slate-300">{selectedManager.manager.bio}</Text>
                 ) : null}
                 <Text className="text-sm text-slate-300">
-                  {selectedManager.leagueName} · {selectedManager.manager.points} points · {selectedManager.manager.gameweekPoints} GW
+                  {selectedManager.leagueName} · {selectedManager.leagueType === 'h2h'
+                    ? `${selectedManager.manager.leaguePoints ?? 0} league pts · ${selectedManager.manager.points} fantasy pts · ${selectedManager.manager.gameweekPoints} GW`
+                    : `${selectedManager.manager.points} fantasy pts · ${selectedManager.manager.gameweekPoints} GW`}
                 </Text>
                 {selectedManager.manager.wins + selectedManager.manager.draws + selectedManager.manager.losses > 0 ? (
                   <Text className="text-sm text-slate-400">

@@ -14,6 +14,7 @@ export interface LeagueStanding {
   wins: number;
   losses: number;
   draws: number;
+  leaguePoints: number | null;
 }
 
 export interface LeagueFixture {
@@ -40,6 +41,24 @@ export interface LeagueSummary {
   createdAt: string;
   standings: LeagueStanding[];
   fixtures: LeagueFixture[];
+}
+
+export function sortLeagueStandings(
+  standings: LeagueStanding[],
+  leagueType: LeagueSummary['type'],
+): LeagueStanding[] {
+  return [...standings].sort((a, b) => {
+    if (a.rank !== null && b.rank !== null && a.rank !== b.rank) return a.rank - b.rank;
+    if (a.rank !== null && b.rank === null) return -1;
+    if (b.rank !== null && a.rank === null) return 1;
+    if (a.rank === null && b.rank === null) {
+      const points = leagueType === 'h2h'
+        ? (b.leaguePoints ?? 0) - (a.leaguePoints ?? 0)
+        : b.points - a.points;
+      if (points !== 0) return points;
+    }
+    return a.manager.localeCompare(b.manager);
+  });
 }
 
 export interface LeagueActivity {
@@ -122,6 +141,7 @@ function parseLeague(value: unknown): LeagueSummary {
       wins: standing.wins,
       losses: standing.losses,
       draws: standing.draws,
+      leaguePoints: value.type === 'h2h' ? standing.wins * 3 + standing.draws : null,
     };
   });
 

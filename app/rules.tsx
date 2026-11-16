@@ -10,7 +10,7 @@ const ruleSections = [
   { id: 'chips', label: 'Chips', icon: '✨', searchText: 'wildcard triple captain bench boost transfers' },
   { id: 'transfers', label: 'Transfers', icon: '🔁', searchText: 'free transfer hit penalty budget price ownership' },
   { id: 'deadlines', label: 'Deadlines', icon: '⏱️', searchText: 'lock timestamp gameweek lineup deadline' },
-  { id: 'leagues', label: 'Leagues', icon: '🏆', searchText: 'classic head to head h2h draw bye wins losses standings invite participants' },
+  { id: 'leagues', label: 'Leagues', icon: '🏆', searchText: 'classic head to head h2h draw bye wins losses standings invite participants league points tie break score difference fantasy points' },
   { id: 'faq', label: 'FAQ', icon: '❔', searchText: 'frequently asked questions common help answers' },
   { id: 'hood', label: 'Under the Hood', icon: '⚙️', searchText: 'jobs schedule notifications global rankings data pipeline availability conflict resolution' },
 ] as const;
@@ -528,7 +528,7 @@ export default function RulesScreen() {
           </View>
           <View className="gap-2 rounded-xl bg-slate-950 p-3">
             <Text className="font-semibold text-amber-300">Head-to-head leagues</Text>
-            <RuleText>Each gameweek, your lineup total is compared with your scheduled opponent’s. A higher score wins; equal scores are a draw. H2H standings track wins, losses, draws, and points.</RuleText>
+            <RuleText>Each gameweek, your lineup total is compared with your scheduled opponent’s. A higher score wins; equal scores are a draw. Standings award 3 league points per win, 1 per draw, and 0 per loss. Ties are broken by cumulative H2H score difference, then total H2H points scored; managers still tied share a rank. Fantasy totals are shown separately and do not determine H2H rank.</RuleText>
           </View>
           <Bullet>Create a league for 4–32 managers (10 by default).</Bullet>
           <Bullet>In an H2H league with an odd number of participants, one manager receives a bye and an automatic win for that round.</Bullet>
