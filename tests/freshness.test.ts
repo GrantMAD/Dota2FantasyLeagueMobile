@@ -1,4 +1,18 @@
-import { formatCountdown, formatRelativeTime } from '@/src/lib/freshness';
+import {
+  formatCountdown,
+  formatRelativeTime,
+  getNextCronDate,
+  JOB_METADATA,
+} from '@/src/lib/freshness';
+
+describe('job schedules', () => {
+  it('uses the 15-minute fetch-matches cadence in the direct Supabase fallback', () => {
+    const from = new Date('2026-10-19T12:07:00.000Z');
+
+    expect(getNextCronDate(JOB_METADATA['fetch-matches'].schedule, from).toISOString())
+      .toBe('2026-10-19T12:15:00.000Z');
+  });
+});
 
 describe('freshness formatters', () => {
   const baseTime = new Date('2026-10-19T12:00:00Z');

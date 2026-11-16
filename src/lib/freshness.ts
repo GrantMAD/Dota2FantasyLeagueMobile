@@ -42,7 +42,7 @@ export const JOB_METADATA: Record<string, { title: string; desc: string; schedul
   'fetch-matches': {
     title: 'Match Schedule & Series',
     desc: 'Discovers new matches, series status & winner updates',
-    schedule: '0 * * * *',
+    schedule: '*/15 * * * *',
   },
   'process-completed-matches': {
     title: 'Match Settlement',

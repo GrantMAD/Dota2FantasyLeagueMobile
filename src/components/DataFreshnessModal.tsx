@@ -23,7 +23,12 @@ function formatExactTime(dateString: string | null | undefined): string {
   if (!dateString) return 'Not available';
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return 'Not available';
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  }).format(date);
 }
 
 function getStatusBadgeStyle(status: string) {
@@ -93,7 +98,7 @@ function JobCard({ job, isDark }: { job: JobDetailItem; isDark: boolean }) {
               style={{ color: isDark ? '#94a3b8' : '#64748b' }}
               className="mt-0.5 font-mono text-xs"
             >
-              Cron: {job.schedule}
+              Cron: {job.schedule} UTC
             </Text>
           ) : null}
         </View>
@@ -175,6 +180,9 @@ export function DataFreshnessModal({
   const exactUpdated = formatExactTime(freshness?.lastUpdated);
   const countdownNext = formatCountdown(freshness?.nextUpdate);
   const exactNext = formatExactTime(freshness?.nextUpdate);
+  const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local time';
+  const nextJobTitle = freshness?.jobs.find((job) => job.jobName === freshness.jobName)?.title
+    ?? freshness?.jobName;
 
   return (
     <Modal
@@ -232,6 +240,12 @@ export function DataFreshnessModal({
                 className="mt-1 text-xs"
               >
                 Background pipelines powering data on this screen
+              </Text>
+              <Text
+                style={{ color: isDark ? '#94a3b8' : '#64748b' }}
+                className="mt-1 text-xs"
+              >
+                Schedules use UTC; clock times use {userTimeZone}
               </Text>
             </View>
 
@@ -309,6 +323,14 @@ export function DataFreshnessModal({
                 >
                   {exactNext}
                 </Text>
+                {freshness?.nextUpdate && nextJobTitle ? (
+                  <Text
+                    style={{ color: isDark ? '#94a3b8' : '#64748b' }}
+                    className="mt-0.5 text-[11px]"
+                  >
+                    Next job: {nextJobTitle}
+                  </Text>
+                ) : null}
               </View>
             </View>
 
