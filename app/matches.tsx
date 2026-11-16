@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView as HorizontalScrollView, Text, TextInput, View } from 'react-native';
-import { summarizeMatchSeries } from '@/src/features/competition/match-series';
+import { getDefaultSeriesGame, groupMatchesBySeries, shouldShowMatchSeries, summarizeMatchSeries } from '@/src/features/competition/match-series';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -8,7 +8,6 @@ import { Screen } from '@/src/components/Screen';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { getMatchesPage, getTournaments } from '@/src/features/competition/api';
 import { getMatchSeriesSquadAppearance } from '@/src/features/competition/match-squad-appearance';
-import { getDefaultSeriesGame, groupMatchesBySeries, shouldShowMatchSeries } from '@/src/features/competition/match-series';
 import { MatchSeriesCard } from '@/src/features/competition/MatchSeriesCard';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 

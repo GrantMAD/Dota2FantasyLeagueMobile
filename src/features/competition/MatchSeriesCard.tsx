@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import type { MatchSummary } from './api';
 import type { MatchSeriesGroup } from './match-series';
@@ -43,7 +43,7 @@ function formatDateShort(value: string): string {
  * A single pulsing dot used for the live game indicator inside SeriesDots.
  */
 function PulsingDot() {
-  const anim = useRef(new Animated.Value(1)).current;
+  const [anim] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -115,7 +115,7 @@ function SeriesDots({
  * A pulsing accent line used for the top of live match cards.
  */
 function PulsingAccentLine() {
-  const anim = useRef(new Animated.Value(1)).current;
+  const [anim] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
     const loop = Animated.loop(
