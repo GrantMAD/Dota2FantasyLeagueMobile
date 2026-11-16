@@ -2,8 +2,10 @@ import {
   getFriendActivity,
   getFriendProgress,
   getFollowing,
+  keepLatestGameweekScoreActivities,
   searchFriends,
   setFriendFollow,
+  type FriendActivity,
 } from '../src/features/friends/api';
 
 const mockRpc = jest.fn();
@@ -22,6 +24,44 @@ jest.mock('../src/lib/supabase', () => ({
 describe('mobile Friends API', () => {
   beforeEach(() => {
     mockRpc.mockReset();
+  });
+
+  it('keeps only the latest gameweek scores while preserving other friend activities', () => {
+    const activity = (
+      id: string,
+      activityType: FriendActivity['activity_type'],
+      gameweekNumber: number,
+    ): FriendActivity => ({
+      activity_id: id,
+      activity_type: activityType,
+      user_id: friendId,
+      username: profile.username,
+      display_name: profile.display_name,
+      avatar_url: null,
+      season_id: 7,
+      season_name: 'Season 7',
+      gameweek_id: gameweekNumber,
+      gameweek_number: gameweekNumber,
+      title: activityType === 'gameweek_score'
+        ? `Gameweek ${gameweekNumber} scores are in`
+        : 'Made fantasy transfers',
+      players_in: null,
+      players_out: null,
+      chip: null,
+      gameweek_points: activityType === 'gameweek_score' ? 35 : null,
+      total_points: 82,
+      gameweek_rank: null,
+      previous_gameweek_rank: null,
+      global_rank: null,
+      updated_at: '2026-10-27T10:00:00.000',
+      lineup_changes: [],
+    });
+    const latestScore = activity('score-5', 'gameweek_score', 5);
+    const olderScore = activity('score-3', 'gameweek_score', 3);
+    const friendMove = activity('transfer-4', 'transfer', 4);
+
+    expect(keepLatestGameweekScoreActivities([latestScore, olderScore, friendMove]))
+      .toEqual([latestScore, friendMove]);
   });
 
   it('loads following and manager search through authenticated Supabase RPCs', async () => {

@@ -11,7 +11,10 @@ import { Screen } from '@/src/components/Screen';
 import { getManagerProfile } from '@/src/features/account/api';
 import { getDashboardWhatsNew, getTransferRush } from '@/src/features/dashboard/api';
 import { DashboardPointsModal } from '@/src/features/dashboard/DashboardPointsModal';
-import { getFriendActivity } from '@/src/features/friends/api';
+import {
+  getFriendActivity,
+  keepLatestGameweekScoreActivities,
+} from '@/src/features/friends/api';
 import { DashboardLiveMatches } from '@/src/features/dashboard/DashboardLiveMatches';
 import { GettingStartedChecklist } from '@/src/features/dashboard/GettingStartedChecklist';
 import { TransferDeadlineRush } from '@/src/features/dashboard/TransferDeadlineRush';
@@ -76,6 +79,9 @@ export default function HomeScreen() {
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
   });
+  const friendActivities = keepLatestGameweekScoreActivities(
+    friendActivityQuery.data?.activities ?? [],
+  );
   const transferRushQuery = useQuery({
     queryKey: ['transfer-rush'],
     queryFn: () => getTransferRush(60),
@@ -354,7 +360,7 @@ export default function HomeScreen() {
                   </Text>
                   <View className={`rounded-full px-1.5 py-0.2 ${whatsNewTab === 'all' ? 'bg-slate-950/20' : 'bg-slate-700'}`}>
                     <Text className={`text-[10px] font-bold ${whatsNewTab === 'all' ? 'text-slate-950' : 'text-slate-300'}`}>
-                      {(friendActivityQuery.data?.activities?.length ?? 0) +
+                      {friendActivities.length +
                         dashboardUpdates.length +
                         whatsNewQuery.data.events.length}
                     </Text>
@@ -375,7 +381,7 @@ export default function HomeScreen() {
                   </Text>
                   <View className={`rounded-full px-1.5 py-0.2 ${whatsNewTab === 'friends' ? 'bg-slate-950/20' : 'bg-slate-700'}`}>
                     <Text className={`text-[10px] font-bold ${whatsNewTab === 'friends' ? 'text-slate-950' : 'text-slate-300'}`}>
-                      {friendActivityQuery.data?.activities?.length ?? 0}
+                      {friendActivities.length}
                     </Text>
                   </View>
                 </Pressable>
@@ -422,7 +428,7 @@ export default function HomeScreen() {
               {/* Feed items */}
               <View className="gap-2">
                 {(() => {
-                  const friendsList = friendActivityQuery.data?.activities ?? [];
+                  const friendsList = friendActivities;
                   const tournamentsList = whatsNewQuery.data.events ?? [];
                   const priceChanges = dashboardUpdates.filter((u) => u.kind === 'price_change');
                   const availabilityUpdates = dashboardUpdates.filter((u) => u.kind === 'availability');
@@ -725,7 +731,7 @@ export default function HomeScreen() {
                 })()}
 
                 {/* Empty states for selected tab */}
-                {whatsNewTab === 'friends' && (friendActivityQuery.data?.activities?.length ?? 0) === 0 ? (
+                {whatsNewTab === 'friends' && friendActivities.length === 0 ? (
                   <View className="rounded-xl border border-dashed border-slate-700 bg-slate-950/30 p-4 items-center">
                     <Text className="text-sm font-semibold text-slate-300">No friend activity yet</Text>
                     <Text className="mt-1 text-xs text-center text-slate-400">
@@ -755,7 +761,7 @@ export default function HomeScreen() {
                 !whatsNewQuery.data.gameweek &&
                 whatsNewQuery.data.events.length === 0 &&
                 dashboardUpdates.length === 0 &&
-                (friendActivityQuery.data?.activities?.length ?? 0) === 0 ? (
+                friendActivities.length === 0 ? (
                   <Text className="rounded-xl border border-slate-700/70 bg-slate-950/40 p-3 text-sm leading-5 text-slate-300">
                     No new events or updates right now.
                   </Text>
