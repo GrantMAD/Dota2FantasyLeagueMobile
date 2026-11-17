@@ -1,6 +1,4 @@
-import { ApiError } from '@/src/lib/errors';
 import { getSupabaseClient } from '@/src/lib/supabase';
-import { getWebBaseUrl } from '@/src/lib/web';
 
 export interface JobDetailItem {
   jobName: string;
@@ -183,25 +181,6 @@ export function getPreviousCronDate(cronExpression: string, fromDate: Date = new
   return new Date(fromDate.getTime() - 60 * 60 * 1000);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function parseJobDetail(value: unknown): JobDetailItem {
-  if (!isRecord(value) || typeof value.jobName !== 'string') {
-    throw new ApiError('Invalid job detail payload', 502);
-  }
-  return {
-    jobName: value.jobName,
-    title: typeof value.title === 'string' ? value.title : value.jobName,
-    description: typeof value.description === 'string' ? value.description : '',
-    schedule: typeof value.schedule === 'string' ? value.schedule : '',
-    status: typeof value.status === 'string' ? value.status : 'idle',
-    lastRun: typeof value.lastRun === 'string' ? value.lastRun : null,
-    nextRun: typeof value.nextRun === 'string' ? value.nextRun : null,
-  };
-}
-
 export function formatRelativeTime(dateString: string | null | undefined, now: Date = new Date()): string {
   if (!dateString) return 'Pending sync';
   const date = new Date(dateString);
@@ -241,7 +220,7 @@ export function formatCountdown(targetString: string | null | undefined, now: Da
   return `in ~${diffDays}d`;
 }
 
-/** Direct database fallback query when web API server is offline or unreachable */
+/** Queries Supabase directly for job execution data */
 async function fetchFreshnessDirectFromSupabase(page: string): Promise<FreshnessData> {
   const targetJobNames = PAGE_JOB_MAPPING[page] || PAGE_JOB_MAPPING.matches;
   const supabase = getSupabaseClient();
@@ -267,28 +246,29 @@ async function fetchFreshnessDirectFromSupabase(page: string): Promise<Freshness
       schedule: '0 * * * *',
     };
 
-    const recentRun = (dbLogs ?? []).find((log: { job_name: string }) => log.job_name === jobName);
+    const logs = dbLogs ?? [];
 
-    let jobLastRun: string | null = null;
-    const completedAtStr = recentRun?.completed_at || recentRun?.started_at;
-    if (completedAtStr) {
-      const completedDate = new Date(completedAtStr);
-      jobLastRun = completedDate.toISOString();
-    } else {
-      try {
-        const prevDate = getPreviousCronDate(meta.schedule, now);
-        jobLastRun = prevDate.toISOString();
-      } catch {
-        // ignore
+    // Only use completed rows to determine lastRun — this ensures that while a job
+    // is mid-run, we still surface the previous successful completion time.
+    const completedDates = logs
+      .filter((log) => log.job_name === jobName && log.status === 'completed' && log.completed_at)
+      .map((log) => new Date(log.completed_at!))
+      .filter((date) => Number.isFinite(date.getTime()));
+
+    const completedDate = completedDates.reduce<Date | null>(
+      (latest, date) => !latest || date.getTime() > latest.getTime() ? date : latest,
+      null,
+    );
+    const jobLastRun = completedDate?.toISOString() ?? null;
+
+    if (completedDate) {
+      if (!latestUpdatedDate || completedDate.getTime() > latestUpdatedDate.getTime()) {
+        latestUpdatedDate = completedDate;
       }
     }
 
-    if (jobLastRun) {
-      const runDate = new Date(jobLastRun);
-      if (!latestUpdatedDate || runDate.getTime() > latestUpdatedDate.getTime()) {
-        latestUpdatedDate = runDate;
-      }
-    }
+    // Current status comes from the most recent row for this job (may be 'running')
+    const currentStatus = logs.find((log) => log.job_name === jobName)?.status ?? 'idle';
 
     let jobNextRun: string | null = null;
     try {
@@ -307,7 +287,7 @@ async function fetchFreshnessDirectFromSupabase(page: string): Promise<Freshness
       title: meta.title,
       description: meta.desc,
       schedule: meta.schedule,
-      status: recentRun?.status || 'idle',
+      status: currentStatus,
       lastRun: jobLastRun,
       nextRun: jobNextRun,
     });
@@ -325,57 +305,5 @@ async function fetchFreshnessDirectFromSupabase(page: string): Promise<Freshness
 }
 
 export async function fetchDataFreshness(page: string): Promise<FreshnessData> {
-  // First attempt web API route if endpoint is available
-  try {
-    let baseUrl: string;
-    try {
-      baseUrl = getWebBaseUrl();
-    } catch {
-      baseUrl = 'http://localhost:3000';
-    }
-
-    const endpoint = `${baseUrl}/api/data/freshness?page=${encodeURIComponent(page)}`;
-    const headers: Record<string, string> = { Accept: 'application/json' };
-
-    try {
-      const supabase = getSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        headers.Authorization = `Bearer ${session.access_token}`;
-      }
-    } catch {
-      // ignore
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-    const response = await fetch(endpoint, {
-      method: 'GET',
-      headers,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data: unknown = await response.json();
-      if (isRecord(data) && data.success) {
-        const jobsRaw = Array.isArray(data.jobs) ? data.jobs : [];
-        return {
-          success: true,
-          page: typeof data.page === 'string' ? data.page : page,
-          lastUpdated: typeof data.lastUpdated === 'string' ? data.lastUpdated : null,
-          nextUpdate: typeof data.nextUpdate === 'string' ? data.nextUpdate : null,
-          jobName: typeof data.jobName === 'string' ? data.jobName : undefined,
-          serverTime: typeof data.serverTime === 'string' ? data.serverTime : new Date().toISOString(),
-          jobs: jobsRaw.map(parseJobDetail),
-        };
-      }
-    }
-  } catch {
-    // Web endpoint offline or unreachable; fall through to direct Supabase query
-  }
-
-  // Direct Supabase query fallback (independent of web server running)
   return fetchFreshnessDirectFromSupabase(page);
 }
