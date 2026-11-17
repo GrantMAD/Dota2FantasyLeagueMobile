@@ -40,8 +40,11 @@ describe('mobile Rules screen', () => {
     expect(screen.getByRole('button', { name: 'Jump to Leagues rules' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'League formats rules' }).props.accessibilityState.expanded).toBe(true);
     expect(screen.getByText(/higher score wins; equal scores are a draw/i)).toBeTruthy();
-    expect(screen.getByText(/3 league points per win, 1 per draw, and 0 per loss/i)).toBeTruthy();
-    expect(screen.getByText(/cumulative H2H score difference, then total H2H points scored/i)).toBeTruthy();
+    expect(screen.getByText('3 pts')).toBeTruthy();
+    expect(screen.getByText('1 pt')).toBeTruthy();
+    expect(screen.getByText('0 pts')).toBeTruthy();
+    expect(screen.getByText('1 · H2H score difference')).toBeTruthy();
+    expect(screen.getByText('2 · H2H points scored')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Jump to Squad rules' })).toBeNull();
   });
 
