@@ -41,6 +41,7 @@ import {
   exchangeMobileAuthCode,
   getManagerProfile,
   getLiveSquadMatchAlertsEnabled,
+  getMatchLifecycleNotificationPreferences,
   getThemePreference,
   resendManagerConfirmation,
   requestManagerPasswordReset,
@@ -48,6 +49,7 @@ import {
   removePushToken,
   updateManagerProfile,
   updateLiveSquadMatchAlertsEnabled,
+  updateMatchLifecycleNotificationPreference,
   updateBannerTheme,
   updateManagerPassword,
   updatePushNotificationPreference,
@@ -421,12 +423,36 @@ describe('mobile data access', () => {
         title: 'Your squad is in a live match',
         message: 'Carry is playing in a live match.',
         createdAt: '2026-10-08T12:30:00.000Z',
+      }, {
+        id: 24,
+        kind: 'match_finished',
+        matchId: 56,
+        title: 'Squad match finished',
+        message: 'The match has finished.',
+        createdAt: '2026-10-08T12:40:00.000Z',
+      }, {
+        id: 25,
+        kind: 'match_data_processed',
+        matchId: 57,
+        title: 'Match data processed',
+        message: 'Player data is ready.',
+        createdAt: '2026-10-08T12:50:00.000Z',
+      }, {
+        id: 26,
+        kind: 'fantasy_points_calculated',
+        matchId: 58,
+        title: 'Fantasy points calculated',
+        message: 'Match points are ready.',
+        createdAt: '2026-10-08T13:00:00.000Z',
       }], error: null });
 
     await expect(getDashboardWhatsNew()).resolves.toMatchObject({
       events: [{ id: 10, title: 'Autumn Cup', matchCount: 6 }],
       gameweek: { id: 7, number: 3, matchStatuses: { scheduled: 6 } },
       updates: [
+        { id: 26, matchId: 58, kind: 'fantasy_points_calculated' },
+        { id: 25, matchId: 57, kind: 'match_data_processed' },
+        { id: 24, matchId: 56, kind: 'match_finished' },
         { id: 23, matchId: 55, kind: 'live_match' },
         { id: 22, playerId: 41, kind: 'price_change' },
       ],
@@ -2106,6 +2132,38 @@ describe('mobile data access', () => {
     expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(2, 'mobile_update_live_squad_match_alerts_enabled', {
       p_enabled: false,
     });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('loads and saves the match lifecycle preferences through dedicated authenticated RPCs', async () => {
+    mobileFantasyContextRpc
+      .mockResolvedValueOnce({
+        data: {
+          match_data_processed_notifications: true,
+          fantasy_points_calculated_notifications: false,
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: false, error: null });
+
+    await expect(getMatchLifecycleNotificationPreferences()).resolves.toEqual({
+      matchDataProcessedNotifications: true,
+      fantasyPointsCalculatedNotifications: false,
+    });
+    await expect(updateMatchLifecycleNotificationPreference(
+      'match_data_processed_notifications',
+      false,
+    )).resolves.toBe(false);
+
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(
+      1,
+      'mobile_get_match_lifecycle_notification_preferences',
+    );
+    expect(mobileFantasyContextRpc).toHaveBeenNthCalledWith(
+      2,
+      'mobile_update_match_lifecycle_notification_preference',
+      { p_preference: 'match_data_processed_notifications', p_enabled: false },
+    );
     expect(fetch).not.toHaveBeenCalled();
   });
 

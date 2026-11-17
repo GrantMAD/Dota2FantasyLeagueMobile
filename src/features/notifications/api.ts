@@ -152,6 +152,9 @@ export function notificationCategoryForType(type: string): Exclude<NotificationC
     case 'league_invite':
       return 'league';
     case 'live_squad_match':
+    case 'match_finished':
+    case 'match_data_processed':
+    case 'fantasy_points_calculated':
       return 'live';
     default:
       return null;

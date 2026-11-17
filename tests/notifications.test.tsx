@@ -30,14 +30,30 @@ jest.mock('../src/features/notifications/api', () => ({
   matchesNotificationCategory: (notification: { is_read: boolean; type: string }, category: string) => {
     if (category === 'all') return true;
     if (category === 'unread') return !notification.is_read;
-    return category === 'scoring' && notification.type === 'gameweek_result';
+    if (category === 'scoring') return notification.type === 'gameweek_result';
+    return category === 'live' && [
+      'live_squad_match',
+      'match_finished',
+      'match_data_processed',
+      'fantasy_points_calculated',
+    ].includes(notification.type);
   },
-  notificationActionFor: (notification: { type: string }) => notification.type === 'live_squad_match'
+  notificationActionFor: (notification: { type: string }) => [
+    'live_squad_match',
+    'match_finished',
+    'match_data_processed',
+    'fantasy_points_calculated',
+  ].includes(notification.type)
     ? { label: 'View match', href: { pathname: '/match/[id]', params: { id: '55' } } }
     : ({ label: 'View gameweek', href: '/gameweeks' }),
   notificationCategoryForType: (type: string) => type === 'gameweek_result'
     ? 'scoring'
-    : type === 'live_squad_match'
+    : [
+      'live_squad_match',
+      'match_finished',
+      'match_data_processed',
+      'fantasy_points_calculated',
+    ].includes(type)
       ? 'live'
       : null,
 }));
@@ -167,18 +183,23 @@ describe('Notifications screen', () => {
 
   });
 
-  it('shows live squad match alerts in the Live category', async () => {
+  it('shows each match lifecycle alert in the Live category', async () => {
     mockedGetNotifications.mockImplementation(async (category) => ({
-      notifications: category === 'live' ? [{
-        id: 8,
-        type: 'live_squad_match',
-        title: 'Your squad is in a live match',
-        message: 'Carry is playing in a live match.',
+      notifications: category === 'live' ? [
+        ['live_squad_match', 'Your squad is in a live match', 'Match starting'],
+        ['match_finished', 'Squad match finished', 'Match finished'],
+        ['match_data_processed', 'Match data processed', 'Data processed'],
+        ['fantasy_points_calculated', 'Match point totals ready', 'Fantasy points calculated'],
+      ].map(([type, title]) => ({
+        id: type.length,
+        type,
+        title,
+        message: 'Match alert message.',
         is_read: false,
         created_at: new Date().toISOString(),
         metadata: { match_id: 55 },
-      }] : [],
-      unreadCount: 1,
+      })) : [],
+      unreadCount: 4,
       nextCursor: null,
     }));
 
@@ -198,8 +219,14 @@ describe('Notifications screen', () => {
     await fireEvent.press(view.getByRole('button', { name: 'Live' }));
     await waitFor(() => {
       expect(view.getByText('Your squad is in a live match')).toBeTruthy();
-      expect(view.getByText('Live match')).toBeTruthy();
-      expect(view.getByText('View match →')).toBeTruthy();
+      expect(view.getByText('Match starting')).toBeTruthy();
+      expect(view.getByText('Squad match finished')).toBeTruthy();
+      expect(view.getByText('Match finished')).toBeTruthy();
+      expect(view.getByText('Match data processed')).toBeTruthy();
+      expect(view.getByText('Data processed')).toBeTruthy();
+      expect(view.getByText('Match point totals ready')).toBeTruthy();
+      expect(view.getByText('Fantasy points calculated')).toBeTruthy();
+      expect(view.getAllByText('View match →')).toHaveLength(4);
     });
     expect(mockedGetNotifications).toHaveBeenLastCalledWith('live');
   });

@@ -259,6 +259,53 @@ export async function updatePushNotificationPreference(enabled: boolean): Promis
   return updateProfile({ push_notifications: enabled });
 }
 
+export type MatchLifecycleNotificationPreference =
+  | 'match_data_processed_notifications'
+  | 'fantasy_points_calculated_notifications';
+
+export interface MatchLifecycleNotificationPreferences {
+  matchDataProcessedNotifications: boolean;
+  fantasyPointsCalculatedNotifications: boolean;
+}
+
+function parseMatchLifecyclePreferences(value: unknown): MatchLifecycleNotificationPreferences {
+  if (
+    !isRecord(value) ||
+    typeof value.match_data_processed_notifications !== 'boolean' ||
+    typeof value.fantasy_points_calculated_notifications !== 'boolean'
+  ) {
+    throw new ApiError('Match notification preferences were returned in an unexpected format.', 502);
+  }
+  return {
+    matchDataProcessedNotifications: value.match_data_processed_notifications,
+    fantasyPointsCalculatedNotifications: value.fantasy_points_calculated_notifications,
+  };
+}
+
+export async function getMatchLifecycleNotificationPreferences(): Promise<MatchLifecycleNotificationPreferences> {
+  const { data, error } = await getSupabaseClient()
+    .rpc('mobile_get_match_lifecycle_notification_preferences');
+  if (error) throw new ApiError(`Unable to load match notification preferences: ${error.message}`, 500);
+  return parseMatchLifecyclePreferences(data);
+}
+
+export async function updateMatchLifecycleNotificationPreference(
+  preference: MatchLifecycleNotificationPreference,
+  enabled: boolean,
+): Promise<boolean> {
+  const { data, error } = await getSupabaseClient().rpc(
+    'mobile_update_match_lifecycle_notification_preference',
+    { p_preference: preference, p_enabled: enabled },
+  );
+  if (error) {
+    throw new ApiError(`Unable to save match notification preference: ${error.message}`, 400);
+  }
+  if (data !== enabled) {
+    throw new ApiError('Match notification preference was not saved.', 502);
+  }
+  return data;
+}
+
 export async function getLiveSquadMatchAlertsEnabled(): Promise<boolean> {
   const { data, error } = await getSupabaseClient().rpc('mobile_get_live_squad_match_alerts_enabled');
   if (error) throw new ApiError(`Unable to load live squad match alert preference: ${error.message}`, 500);

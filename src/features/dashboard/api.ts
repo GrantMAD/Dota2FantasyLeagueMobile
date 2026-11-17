@@ -23,6 +23,12 @@ export interface DashboardGameweek {
   matchStatuses: Record<string, number>;
 }
 
+export type DashboardMatchLifecycleKind =
+  | 'live_match'
+  | 'match_finished'
+  | 'match_data_processed'
+  | 'fantasy_points_calculated';
+
 export type DashboardUpdate =
   | {
       id: number;
@@ -42,7 +48,7 @@ export type DashboardUpdate =
     }
   | {
       id: number;
-      kind: 'live_match';
+      kind: DashboardMatchLifecycleKind;
       matchId: number;
       title: string;
       message: string;
@@ -142,23 +148,29 @@ function parseUpdate(value: unknown): DashboardUpdate {
   };
 }
 
-function parseLiveMatchUpdate(value: unknown): DashboardUpdate {
+function parseMatchLifecycleUpdate(value: unknown): DashboardUpdate {
+  const lifecycleKinds: DashboardMatchLifecycleKind[] = [
+    'live_match',
+    'match_finished',
+    'match_data_processed',
+    'fantasy_points_calculated',
+  ];
   if (
     !isRecord(value) ||
     !Number.isSafeInteger(value.id) ||
     Number(value.id) < 1 ||
-    value.kind !== 'live_match' ||
+    !lifecycleKinds.includes(value.kind as DashboardMatchLifecycleKind) ||
     !Number.isSafeInteger(value.matchId) ||
     Number(value.matchId) < 1 ||
     typeof value.title !== 'string' ||
     typeof value.message !== 'string' ||
     typeof value.createdAt !== 'string'
   ) {
-    throw new ApiError('Live match update data was returned in an unexpected format.', 502);
+    throw new ApiError('Match lifecycle update data was returned in an unexpected format.', 502);
   }
   return {
     id: Number(value.id),
-    kind: 'live_match',
+    kind: value.kind as DashboardMatchLifecycleKind,
     matchId: Number(value.matchId),
     title: value.title,
     message: value.message,
@@ -177,7 +189,7 @@ export async function getDashboardWhatsNew(): Promise<DashboardWhatsNew> {
   ]);
   if (error) throw new ApiError(`Unable to load dashboard updates: ${error.message}`, 500);
   if (liveUpdatesError) {
-    throw new ApiError(`Unable to load live squad match updates: ${liveUpdatesError.message}`, 500);
+    throw new ApiError(`Unable to load match lifecycle updates: ${liveUpdatesError.message}`, 500);
   }
   if (!isRecord(body) || !Array.isArray(body.events) || !Array.isArray(body.updates)) {
     throw new ApiError('Dashboard updates were returned in an unexpected format.', 502);
@@ -188,7 +200,7 @@ export async function getDashboardWhatsNew(): Promise<DashboardWhatsNew> {
 
   const updates = [
     ...body.updates.map(parseUpdate),
-    ...liveUpdatesBody.map(parseLiveMatchUpdate),
+    ...liveUpdatesBody.map(parseMatchLifecycleUpdate),
   ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
   return {

@@ -19,10 +19,12 @@ import { Screen } from '@/src/components/Screen';
 import { TextField } from '@/src/components/TextField';
 import {
   getLiveSquadMatchAlertsEnabled,
+  getMatchLifecycleNotificationPreferences,
   getManagerProfile,
   type ManagerProfile,
   updateBannerTheme,
   updateLiveSquadMatchAlertsEnabled,
+  updateMatchLifecycleNotificationPreference,
   updateManagerProfile,
   updatePushNotificationPreference,
   uploadManagerAvatar,
@@ -748,6 +750,11 @@ function ProfileEditor({
     queryFn: getLiveSquadMatchAlertsEnabled,
     staleTime: 60_000,
   });
+  const matchLifecyclePreferencesQuery = useQuery({
+    queryKey: ['match-lifecycle-notification-preferences'],
+    queryFn: getMatchLifecycleNotificationPreferences,
+    staleTime: 60_000,
+  });
   const [username, setUsername] = useState(profile.username);
   const [displayName, setDisplayName] = useState(profile.displayName ?? '');
   const [bio, setBio] = useState(profile.bio ?? '');
@@ -758,6 +765,7 @@ function ProfileEditor({
   const [enablingPush, setEnablingPush] = useState(false);
   const [savingPushPreference, setSavingPushPreference] = useState(false);
   const [savingLiveSquadAlerts, setSavingLiveSquadAlerts] = useState(false);
+  const [savingMatchLifecyclePreference, setSavingMatchLifecyclePreference] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const save = useMutation({
@@ -820,6 +828,37 @@ function ProfileEditor({
       setNotice(error instanceof Error ? error.message : 'Unable to save the live squad match alert preference.');
     } finally {
       setSavingLiveSquadAlerts(false);
+    }
+  }
+
+  async function handleMatchLifecyclePreferenceChange(
+    preference: 'match_data_processed_notifications' | 'fantasy_points_calculated_notifications',
+    enabled: boolean,
+  ) {
+    if (save.isPending || savingMatchLifecyclePreference) return;
+
+    setSavingMatchLifecyclePreference(preference);
+    setNotice(null);
+    try {
+      const savedValue = await updateMatchLifecycleNotificationPreference(preference, enabled);
+      queryClient.setQueryData(
+        ['match-lifecycle-notification-preferences'],
+        (current: Awaited<ReturnType<typeof getMatchLifecycleNotificationPreferences>> | undefined) => ({
+          matchDataProcessedNotifications: preference === 'match_data_processed_notifications'
+            ? savedValue
+            : current?.matchDataProcessedNotifications ?? true,
+          fantasyPointsCalculatedNotifications: preference === 'fantasy_points_calculated_notifications'
+            ? savedValue
+            : current?.fantasyPointsCalculatedNotifications ?? true,
+        }),
+      );
+      setNotice(enabled
+        ? 'Match notification preference enabled.'
+        : 'Match notification preference turned off.');
+    } catch (error: unknown) {
+      setNotice(error instanceof Error ? error.message : 'Unable to save the match notification preference.');
+    } finally {
+      setSavingMatchLifecyclePreference(null);
     }
   }
 
@@ -1072,8 +1111,8 @@ function ProfileEditor({
           onChange={(enabled) => void handlePushPreferenceChange(enabled)}
         />
         <PreferenceToggle
-          label="Live squad match alerts"
-          description="Enabled by default. Show alerts in Notifications and What’s New when a player in your squad appears in a live match. Push delivery also requires push notifications and a registered device."
+          label="Match starting and finished alerts"
+          description="Use one preference for both alerts when a player in your squad starts a match and when that match finishes. Push delivery also requires push notifications and a registered device."
           value={liveSquadAlertsQuery.data ?? true}
           disabled={
             liveSquadAlertsQuery.isPending
@@ -1083,6 +1122,46 @@ function ProfileEditor({
           }
           onChange={(enabled) => void handleLiveSquadAlertsChange(enabled)}
         />
+        <PreferenceToggle
+          label="Match data processed alerts"
+          description="Show an alert when player statistics for a match featuring a player in your squad have been processed."
+          value={matchLifecyclePreferencesQuery.data?.matchDataProcessedNotifications ?? true}
+          disabled={
+            matchLifecyclePreferencesQuery.isPending
+            || matchLifecyclePreferencesQuery.isError
+            || savingMatchLifecyclePreference !== null
+            || save.isPending
+          }
+          onChange={(enabled) => void handleMatchLifecyclePreferenceChange(
+            'match_data_processed_notifications',
+            enabled,
+          )}
+        />
+        <PreferenceToggle
+          label="Fantasy points calculated alerts"
+          description="Show an alert when fantasy points for all eligible players in a match featuring a player in your squad have been calculated."
+          value={matchLifecyclePreferencesQuery.data?.fantasyPointsCalculatedNotifications ?? true}
+          disabled={
+            matchLifecyclePreferencesQuery.isPending
+            || matchLifecyclePreferencesQuery.isError
+            || savingMatchLifecyclePreference !== null
+            || save.isPending
+          }
+          onChange={(enabled) => void handleMatchLifecyclePreferenceChange(
+            'fantasy_points_calculated_notifications',
+            enabled,
+          )}
+        />
+        {matchLifecyclePreferencesQuery.isError ? (
+          <Text accessibilityRole="alert" className="text-xs leading-5 text-amber-300">
+            {matchLifecyclePreferencesQuery.error instanceof Error
+              ? matchLifecyclePreferencesQuery.error.message
+              : 'Unable to load match notification preferences.'}
+          </Text>
+        ) : null}
+        {matchLifecyclePreferencesQuery.isPending ? (
+          <Text className="text-xs text-slate-400">Loading match notification preferences...</Text>
+        ) : null}
         {liveSquadAlertsQuery.isError ? (
           <Text accessibilityRole="alert" className="text-xs leading-5 text-amber-300">
             {liveSquadAlertsQuery.error instanceof Error
@@ -1092,6 +1171,9 @@ function ProfileEditor({
         ) : null}
         {savingLiveSquadAlerts ? (
           <Text className="text-xs text-slate-400">Saving live squad alert preference...</Text>
+        ) : null}
+        {savingMatchLifecyclePreference ? (
+          <Text className="text-xs text-slate-400">Saving match notification preference...</Text>
         ) : null}
         {savingPushPreference ? (
           <Text className="text-xs text-slate-400">Saving push preference...</Text>

@@ -59,13 +59,48 @@ function notificationPresentation(notification: ManagerNotification): Notificati
       row: 'border-l-violet-500',
     };
   }
-  if (type === 'live_squad_match') {
+  if ([
+    'live_squad_match',
+    'match_finished',
+    'match_data_processed',
+    'fantasy_points_calculated',
+  ].includes(type)) {
+    const lifecycleLabels: Record<string, string> = {
+      live_squad_match: 'Match starting',
+      match_finished: 'Match finished',
+      match_data_processed: 'Data processed',
+      fantasy_points_calculated: 'Fantasy points calculated',
+    };
     return {
-      label: 'Live match',
-      icon: { ios: 'dot.radiowaves.left.and.right', android: 'radio', web: 'radio' },
-      color: '#22d3ee',
-      surface: 'border-cyan-500/30 bg-cyan-500/10',
-      row: 'border-l-cyan-500',
+      label: lifecycleLabels[type],
+      icon: type === 'match_finished'
+        ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }
+        : type === 'match_data_processed'
+          ? { ios: 'chart.bar.doc.horizontal.fill', android: 'analytics', web: 'analytics' }
+          : type === 'fantasy_points_calculated'
+            ? { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }
+            : { ios: 'dot.radiowaves.left.and.right', android: 'radio', web: 'radio' },
+      color: type === 'match_finished'
+        ? '#34d399'
+        : type === 'match_data_processed'
+          ? '#fbbf24'
+          : type === 'fantasy_points_calculated'
+            ? '#a78bfa'
+            : '#22d3ee',
+      surface: type === 'match_finished'
+        ? 'border-emerald-500/30 bg-emerald-500/10'
+        : type === 'match_data_processed'
+          ? 'border-amber-500/30 bg-amber-500/10'
+          : type === 'fantasy_points_calculated'
+            ? 'border-violet-500/30 bg-violet-500/10'
+            : 'border-cyan-500/30 bg-cyan-500/10',
+      row: type === 'match_finished'
+        ? 'border-l-emerald-500'
+        : type === 'match_data_processed'
+          ? 'border-l-amber-500'
+          : type === 'fantasy_points_calculated'
+            ? 'border-l-violet-500'
+            : 'border-l-cyan-500',
     };
   }
   if (['player_removed', 'player_unavailable'].includes(type) || (type === 'system' && metadata?.player_id)) {
@@ -222,7 +257,7 @@ export default function NotificationsScreen() {
         <View>
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Updates</Text>
           <Text className="mt-2 text-3xl font-bold text-white">Notifications</Text>
-          <Text className="mt-1 text-sm leading-5 text-slate-400">Live match, deadline, scoring, market, and league alerts.</Text>
+          <Text className="mt-1 text-sm leading-5 text-slate-400">Match lifecycle, deadline, scoring, market, and league alerts.</Text>
           <Link href="/profile" asChild>
             <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start">
               <Text className="font-semibold text-brand-300">Notification preferences →</Text>

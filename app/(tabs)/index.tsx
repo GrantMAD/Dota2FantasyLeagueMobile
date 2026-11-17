@@ -432,7 +432,9 @@ export default function HomeScreen() {
                   const tournamentsList = whatsNewQuery.data.events ?? [];
                   const priceChanges = dashboardUpdates.filter((u) => u.kind === 'price_change');
                   const availabilityUpdates = dashboardUpdates.filter((u) => u.kind === 'availability');
-                  const liveMatchUpdates = dashboardUpdates.filter((u) => u.kind === 'live_match');
+                  const matchLifecycleUpdates = dashboardUpdates.filter(
+                    (update): update is Extract<typeof update, { matchId: number }> => 'matchId' in update,
+                  );
 
                   const shouldCollapseFriends = whatsNewTab === 'all' && friendsList.length >= 5;
                   const shouldCollapsePrice = whatsNewTab === 'all' && priceChanges.length >= 5;
@@ -591,9 +593,41 @@ export default function HomeScreen() {
                         </Pressable>
                       )}
 
-                      {/* Live squad match alerts */}
+                      {/* Match lifecycle alerts */}
                       {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
-                        liveMatchUpdates.map((update) => (
+                        matchLifecycleUpdates.map((update) => {
+                          const presentation = ({
+                            live_match: {
+                              label: 'Match starting',
+                              icon: { ios: 'dot.radiowaves.left.and.right', android: 'radio', web: 'radio' },
+                              color: '#22d3ee',
+                              border: '#06b6d4',
+                              background: isDark ? 'rgba(6, 182, 212, 0.08)' : 'rgba(8, 145, 178, 0.06)',
+                            },
+                            match_finished: {
+                              label: 'Match finished',
+                              icon: { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' },
+                              color: '#34d399',
+                              border: '#10b981',
+                              background: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(5, 150, 105, 0.06)',
+                            },
+                            match_data_processed: {
+                              label: 'Match data processed',
+                              icon: { ios: 'chart.bar.doc.horizontal.fill', android: 'analytics', web: 'analytics' },
+                              color: '#fbbf24',
+                              border: '#f59e0b',
+                              background: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+                            },
+                            fantasy_points_calculated: {
+                              label: 'Fantasy points calculated',
+                              icon: { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' },
+                              color: '#a78bfa',
+                              border: '#8b5cf6',
+                              background: isDark ? 'rgba(139, 92, 246, 0.08)' : 'rgba(124, 58, 237, 0.06)',
+                            },
+                          } as const)[update.kind];
+
+                          return (
                           <Link key={`live-match-${update.id}`} href={`/match/${update.matchId}`} asChild>
                             <Pressable
                               onPress={() => {
@@ -602,26 +636,27 @@ export default function HomeScreen() {
                               className="flex-row items-start gap-3 rounded-xl p-3"
                               style={{
                                 borderLeftWidth: 3,
-                                borderLeftColor: '#06b6d4',
-                                backgroundColor: isDark ? 'rgba(6, 182, 212, 0.08)' : 'rgba(8, 145, 178, 0.06)',
+                                borderLeftColor: presentation.border,
+                                backgroundColor: presentation.background,
                               }}
                             >
                               <SymbolView
-                                name={{ ios: 'dot.radiowaves.left.and.right', android: 'radio', web: 'radio' }}
+                                name={presentation.icon}
                                 size={17}
-                                tintColor="#22d3ee"
+                                tintColor={presentation.color}
                               />
                               <View className="flex-1 gap-1">
-                                <Text className="text-[10px] font-bold uppercase tracking-wider text-cyan-300">
-                                  Live match
+                                <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: presentation.color }}>
+                                  {presentation.label}
                                 </Text>
                                 <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{update.title}</Text>
                                 <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
                               </View>
-                              <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                              <Text className="pt-1 font-bold" style={{ color: presentation.color }}>›</Text>
                             </Pressable>
                           </Link>
-                        ))}
+                          );
+                        })}
 
                       {/* Player price changes */}
                       {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
