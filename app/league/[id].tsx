@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { Screen } from '@/src/components/Screen';
+import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import {
   getLeague,
   getLeagueActivity,
@@ -165,7 +166,8 @@ export default function LeagueDetailScreen() {
                     onPress={() => setSelectedManager(standing)}
                   >
                     <Text className="w-8 text-center text-sm font-bold text-slate-400">{standing.rank ?? index + 1}</Text>
-                    <View className="flex-1">
+                    <PlayerAvatar uri={standing.avatarUrl} label={standing.manager} size={36} />
+                    <View className="min-w-0 flex-1">
                       <Text className={`font-semibold ${isCurrentUser ? 'text-brand-200' : 'text-slate-50'}`}>
                         {standing.manager}{isCurrentUser ? ' · You' : ''}
                       </Text>

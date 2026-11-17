@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
+import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import {
   createLeague,
   getLeagues,
@@ -413,15 +414,17 @@ export default function LeaguesScreen() {
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel={`View ${standing.manager} profile`}
-                            className="flex-row items-center justify-between gap-3"
+                            className="flex-row items-center gap-3"
                             key={standing.userId}
                             onPress={(event) => {
                               event.stopPropagation();
                               setSelectedManager({ leagueName: league.name, leagueType: league.type, manager: standing });
                             }}
                           >
-                            <Text numberOfLines={1} className="flex-1 text-sm text-slate-300">
-                              {standing.rank ?? index + 1}. {standing.manager}
+                            <Text className="w-5 text-xs font-semibold text-slate-500">{standing.rank ?? index + 1}.</Text>
+                            <PlayerAvatar uri={standing.avatarUrl} label={standing.manager} size={28} />
+                            <Text numberOfLines={1} className="min-w-0 flex-1 text-sm text-slate-300">
+                              {standing.manager}
                             </Text>
                             <Text className="text-xs font-semibold text-slate-400">
                               {league.type === 'h2h'

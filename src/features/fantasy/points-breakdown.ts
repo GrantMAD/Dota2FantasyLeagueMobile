@@ -55,6 +55,37 @@ export interface DashboardPointsBreakdown {
   gameweeks: GameweekPointsBreakdown[];
 }
 
+export function getCurrentGameweekContributions(
+  gameweeks: GameweekPointsBreakdown[],
+  currentGameweekId: number | null,
+  currentGameweekNumber: number | null,
+): GameweekPointsBreakdown[] {
+  const contributions = currentGameweekNumber === null
+    ? [...gameweeks]
+    : gameweeks.filter((gameweek) => gameweek.gameweekNumber <= currentGameweekNumber);
+
+  if (
+    currentGameweekId !== null
+    && currentGameweekNumber !== null
+    && !contributions.some((gameweek) => gameweek.gameweekId === currentGameweekId)
+  ) {
+    contributions.push({
+      gameweekId: currentGameweekId,
+      gameweekNumber: currentGameweekNumber,
+      points: 0,
+      benchBoost: false,
+      contributors: [],
+      categories: EMPTY_CATEGORIES(),
+    });
+  }
+
+  return contributions.sort((a, b) => {
+    if (a.gameweekId === currentGameweekId) return -1;
+    if (b.gameweekId === currentGameweekId) return 1;
+    return b.gameweekNumber - a.gameweekNumber;
+  });
+}
+
 interface PointsLineup {
   gameweekId: number;
   gameweekNumber: number;

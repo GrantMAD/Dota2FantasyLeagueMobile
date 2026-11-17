@@ -1062,10 +1062,14 @@ export default function HomeScreen() {
 
         {query.isRefetching ? <ActivityIndicator accessibilityLabel="Updating dashboard" color="#14b8a6" /> : null}
       </ScreenScrollView>
-      <DashboardPointsModal
-        visible={pointsBreakdownOpen}
-        onClose={() => setPointsBreakdownOpen(false)}
-      />
+      {pointsBreakdownOpen ? (
+        <DashboardPointsModal
+          visible
+          onClose={() => setPointsBreakdownOpen(false)}
+          currentGameweekId={query.data?.gameweek?.id ?? null}
+          currentGameweekNumber={query.data?.gameweek?.gameweekNumber ?? null}
+        />
+      ) : null}
     </Screen>
   );
 }

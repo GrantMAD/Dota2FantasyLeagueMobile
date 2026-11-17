@@ -1,4 +1,8 @@
-import { parseDashboardPointsBreakdown } from '../src/features/fantasy/points-breakdown';
+import {
+  getCurrentGameweekContributions,
+  parseDashboardPointsBreakdown,
+  type GameweekPointsBreakdown,
+} from '../src/features/fantasy/points-breakdown';
 
 const categories = (overrides: Partial<Record<string, number>> = {}) => ({
   combat: 0,
@@ -14,6 +18,25 @@ const categories = (overrides: Partial<Record<string, number>> = {}) => ({
 });
 
 describe('parseDashboardPointsBreakdown', () => {
+  it('shows the current gameweek first, excludes future lineups, and includes it when unsaved', () => {
+    const contribution = (gameweekId: number, gameweekNumber: number): GameweekPointsBreakdown => ({
+      gameweekId,
+      gameweekNumber,
+      points: 10,
+      benchBoost: false,
+      contributors: [],
+      categories: categories(),
+    });
+
+    expect(getCurrentGameweekContributions([
+      contribution(12, 12),
+      contribution(5, 5),
+    ], 6, 6)).toMatchObject([
+      { gameweekId: 6, gameweekNumber: 6, points: 0 },
+      { gameweekId: 5, gameweekNumber: 5, points: 10 },
+    ]);
+  });
+
   it('applies auto-subs, vice-captain fallback, and Triple Captain to the scoring categories', () => {
     const breakdown = parseDashboardPointsBreakdown({
       seasonName: 'Season 1',

@@ -2,19 +2,42 @@ import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { getDashboardPointsBreakdown } from '@/src/features/fantasy/api';
-import { POINT_CATEGORIES } from '@/src/features/fantasy/points-breakdown';
+import {
+  getCurrentGameweekContributions,
+  POINT_CATEGORIES,
+  type PointCategory,
+} from '@/src/features/fantasy/points-breakdown';
 import { useMobileTheme } from '@/src/lib/theme';
 
 interface DashboardPointsModalProps {
   visible: boolean;
   onClose: () => void;
+  currentGameweekId: number | null;
+  currentGameweekNumber: number | null;
 }
+
+const CATEGORY_ACCENTS: Record<PointCategory, string> = {
+  combat: '#fb7185',
+  economy: '#fbbf24',
+  objective: '#34d399',
+  teamfight: '#a78bfa',
+  win: '#facc15',
+  series: '#22d3ee',
+  performance: '#60a5fa',
+  consistency: '#2dd4bf',
+  penalty: '#f87171',
+};
 
 function formatPoints(points: number): string {
   return `${points > 0 ? '+' : ''}${points.toFixed(2)}`;
 }
 
-export function DashboardPointsModal({ visible, onClose }: DashboardPointsModalProps) {
+export function DashboardPointsModal({
+  visible,
+  onClose,
+  currentGameweekId,
+  currentGameweekNumber,
+}: DashboardPointsModalProps) {
   const { theme } = useMobileTheme();
   const isDark = theme === 'dark';
   const colors = {
@@ -39,8 +62,16 @@ export function DashboardPointsModal({ visible, onClose }: DashboardPointsModalP
     staleTime: 60_000,
   });
   const breakdown = breakdownQuery.data;
-  const initialGameweekId = breakdown?.gameweeks[0]?.gameweekId ?? null;
+  const gameweekContributions = getCurrentGameweekContributions(
+    breakdown?.gameweeks ?? [],
+    currentGameweekId,
+    currentGameweekNumber,
+  );
+  const initialGameweekId = gameweekContributions[0]?.gameweekId ?? null;
   const expandedId = expandedGameweekId === undefined ? initialGameweekId : expandedGameweekId;
+  const categorySubtotal = breakdown
+    ? POINT_CATEGORIES.reduce((sum, [key]) => sum + breakdown.categoryTotals[key], 0)
+    : 0;
 
   return (
     <Modal
@@ -137,22 +168,51 @@ export function DashboardPointsModal({ visible, onClose }: DashboardPointsModalP
                   </Text>
                 </View>
 
-                <View className="gap-2">
-                  <Text className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.secondaryText }}>Scoring categories</Text>
-                  {POINT_CATEGORIES.map(([key, label]) => (
-                    <View key={key} className="flex-row items-center justify-between gap-3 rounded-lg border px-3 py-2.5" style={{ backgroundColor: colors.categorySurface, borderColor: colors.divider }}>
-                      <Text className="text-sm" style={{ color: colors.secondaryText }}>{label}</Text>
-                      <Text className="text-sm font-semibold" style={{ color: colors.primaryText }}>{formatPoints(breakdown.categoryTotals[key])} pts</Text>
+                <View className="gap-3 rounded-2xl border p-4" style={{ backgroundColor: colors.categorySurface, borderColor: colors.border }}>
+                  <View className="flex-row items-center justify-between gap-3">
+                    <View>
+                      <Text className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.secondaryText }}>Scoring categories</Text>
+                      <Text className="mt-1 text-xs" style={{ color: colors.mutedText }}>Category subtotal</Text>
                     </View>
-                  ))}
-                  {Math.abs(breakdown.unitemizedPoints) >= 0.01 ? (
-                    <View className="gap-1 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
-                      <View className="flex-row items-center justify-between gap-3">
-                        <Text className="text-sm text-amber-200">Unitemized difference</Text>
-                        <Text className="text-sm font-semibold text-amber-100">{formatPoints(breakdown.unitemizedPoints)} pts</Text>
+                    <Text className="font-mono text-base font-bold" style={{ color: colors.primaryText }}>
+                      {formatPoints(categorySubtotal)} pts
+                    </Text>
+                  </View>
+                  <View className="flex-row flex-wrap justify-between gap-y-2">
+                    {POINT_CATEGORIES.map(([key, label]) => (
+                      <View
+                        key={key}
+                        className="gap-2 rounded-xl border p-3"
+                        style={{
+                          width: '48%',
+                          minHeight: 68,
+                          backgroundColor: colors.surface,
+                          borderColor: colors.divider,
+                        }}
+                      >
+                        <View className="flex-row items-center gap-2">
+                          <View className="h-2 w-2 rounded-full" style={{ backgroundColor: CATEGORY_ACCENTS[key] }} />
+                          <Text numberOfLines={1} className="flex-1 text-xs font-medium" style={{ color: colors.mutedText }}>
+                            {label}
+                          </Text>
+                        </View>
+                        <Text className="font-mono text-base font-semibold" style={{ color: colors.primaryText }}>
+                          {formatPoints(breakdown.categoryTotals[key])}
+                          <Text className="font-sans text-xs font-medium" style={{ color: colors.mutedText }}> pts</Text>
+                        </Text>
                       </View>
-                      <Text className="text-xs leading-4 text-slate-400">
-                        Historical scoring details may be unavailable for this portion of the saved total.
+                    ))}
+                  </View>
+                  {Math.abs(breakdown.unitemizedPoints) >= 0.01 ? (
+                    <View className="gap-2 border-t pt-3" style={{ borderColor: colors.divider }}>
+                      <View className="flex-row items-center justify-between gap-3">
+                        <Text className="text-sm font-medium" style={{ color: colors.secondaryText }}>Unitemized adjustment</Text>
+                        <Text className="font-mono text-sm font-semibold" style={{ color: colors.primaryText }}>
+                          {formatPoints(breakdown.unitemizedPoints)} pts
+                        </Text>
+                      </View>
+                      <Text className="text-xs leading-4" style={{ color: colors.mutedText }}>
+                        Historical scoring details may be incomplete for this portion of the saved total.
                       </Text>
                     </View>
                   ) : null}
@@ -160,12 +220,12 @@ export function DashboardPointsModal({ visible, onClose }: DashboardPointsModalP
 
                 <View className="gap-2">
                   <Text className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.secondaryText }}>Gameweek contributions</Text>
-                  {breakdown.gameweeks.length === 0 ? (
+                  {gameweekContributions.length === 0 ? (
                     <Text className="rounded-xl border p-4 text-sm" style={{ color: colors.secondaryText, backgroundColor: colors.categorySurface, borderColor: colors.border }}>
                       No saved gameweek lineups are available yet.
                     </Text>
                   ) : (
-                    breakdown.gameweeks.map((gameweek) => {
+                    gameweekContributions.map((gameweek) => {
                       const expanded = expandedId === gameweek.gameweekId;
                       return (
                         <View key={gameweek.gameweekId} className="overflow-hidden rounded-xl border" style={{ backgroundColor: colors.categorySurface, borderColor: colors.divider }}>

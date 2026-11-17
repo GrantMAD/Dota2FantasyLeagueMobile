@@ -522,17 +522,82 @@ export default function RulesScreen() {
         </RuleSection> : null}
 
         {visibleSections.some((section) => section.id === 'leagues') ? <RuleSection id="leagues" title="League formats" expanded={isSectionExpanded('leagues')} onToggle={() => toggleSection('leagues')} onLayout={(event) => onSectionLayout('leagues', event)}>
-          <View className="gap-2 rounded-xl bg-slate-950 p-3">
-            <Text className="font-semibold text-amber-300">Classic leagues</Text>
-            <RuleText>Managers rank by cumulative season fantasy points. Each gameweek lineup total contributes to the season total.</RuleText>
+          <View className="gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <View className="flex-row items-center justify-between gap-2">
+              <View className="flex-1">
+                <Text className="text-[10px] font-bold uppercase tracking-[2px] text-amber-300">Classic</Text>
+                <Text className="mt-1 text-base font-bold text-slate-50">Season-long points race</Text>
+              </View>
+              <Text className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-200">
+                Total points
+              </Text>
+            </View>
+            <RuleText>Each gameweek lineup total adds to your season fantasy points. Managers are ranked by their cumulative total.</RuleText>
+            <View className="rounded-xl border border-amber-500/20 bg-slate-950/70 px-3 py-2.5">
+              <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Ranking basis</Text>
+              <Text className="mt-1 text-sm font-bold text-slate-100">Cumulative fantasy points</Text>
+            </View>
           </View>
-          <View className="gap-2 rounded-xl bg-slate-950 p-3">
-            <Text className="font-semibold text-amber-300">Head-to-head leagues</Text>
-            <RuleText>Each gameweek, your lineup total is compared with your scheduled opponent’s. A higher score wins; equal scores are a draw. Standings award 3 league points per win, 1 per draw, and 0 per loss. Ties are broken by cumulative H2H score difference, then total H2H points scored; managers still tied share a rank. Fantasy totals are shown separately and do not determine H2H rank.</RuleText>
+          <View className="gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/5 p-4">
+            <View>
+              <Text className="text-[10px] font-bold uppercase tracking-[2px] text-violet-300">Head-to-head</Text>
+              <Text className="mt-1 text-base font-bold text-slate-50">One opponent each gameweek</Text>
+            </View>
+            <RuleText>Your lineup total is compared with your scheduled opponent&apos;s. A higher score wins; equal scores are a draw.</RuleText>
+            <View className="flex-row gap-2">
+              {[
+                { label: 'Win', points: '3 pts', style: 'border-emerald-500/30 bg-emerald-500/10', text: 'text-emerald-300' },
+                { label: 'Draw', points: '1 pt', style: 'border-amber-500/30 bg-amber-500/10', text: 'text-amber-200' },
+                { label: 'Loss', points: '0 pts', style: 'border-slate-700 bg-slate-950/70', text: 'text-slate-200' },
+              ].map((result) => (
+                <View key={result.label} className={`min-w-0 flex-1 items-center rounded-xl border px-1 py-2.5 ${result.style}`}>
+                  <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{result.label}</Text>
+                  <Text className={`mt-1 text-sm font-black ${result.text}`}>{result.points}</Text>
+                </View>
+              ))}
+            </View>
+            <View className="gap-2 rounded-xl border border-violet-500/20 bg-slate-950/70 p-3">
+              <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Tie-break order</Text>
+              <View className="flex-row flex-wrap gap-2">
+                <Text className="rounded-lg bg-violet-500/10 px-2.5 py-1.5 text-xs font-semibold text-violet-200">
+                  1 · H2H score difference
+                </Text>
+                <Text className="rounded-lg bg-violet-500/10 px-2.5 py-1.5 text-xs font-semibold text-violet-200">
+                  2 · H2H points scored
+                </Text>
+              </View>
+              <Text className="text-xs leading-5 text-slate-400">
+                Exact ties share a rank. Fantasy totals are shown separately and do not determine H2H rank.
+              </Text>
+            </View>
           </View>
-          <Bullet>Create a league for 4–32 managers (10 by default).</Bullet>
-          <Bullet>In an H2H league with an odd number of participants, one manager receives a bye and an automatic win for that round.</Bullet>
-          <Bullet>Private leagues can be joined using their invite code. Public and private leagues are available from the Leagues screen.</Bullet>
+          <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <Text className="text-sm font-bold text-slate-100">League size and byes</Text>
+            <View className="flex-row gap-2">
+              <View className="flex-1 rounded-xl border border-slate-800 bg-slate-900 p-3">
+                <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">League size</Text>
+                <Text className="mt-1 text-lg font-black text-slate-50">4–32</Text>
+                <Text className="text-xs text-slate-400">managers</Text>
+              </View>
+              <View className="flex-1 rounded-xl border border-slate-800 bg-slate-900 p-3">
+                <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Default size</Text>
+                <Text className="mt-1 text-lg font-black text-slate-50">10</Text>
+                <Text className="text-xs text-slate-400">managers</Text>
+              </View>
+            </View>
+            <RuleText>With an odd number of managers in H2H, one receives a bye and an automatic win for that round.</RuleText>
+          </View>
+          <View className="flex-row flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4">
+            <View className="min-w-0 flex-1 gap-1">
+              <Text className="font-semibold text-slate-100">Public and private leagues</Text>
+              <Text className="text-xs leading-5 text-slate-400">Use an invite code to join a private league.</Text>
+            </View>
+            <Link href="/leagues" asChild>
+              <Pressable accessibilityRole="button" className="min-h-10 flex-row items-center rounded-xl bg-cyan-500/10 px-3">
+                <Text className="text-xs font-bold text-cyan-200">Open Leagues →</Text>
+              </Pressable>
+            </Link>
+          </View>
         </RuleSection> : null}
 
         {visibleSections.some((section) => section.id === 'faq') ? <RuleSection id="faq" title="Frequently asked questions" expanded={isSectionExpanded('faq')} onToggle={() => toggleSection('faq')} onLayout={(event) => onSectionLayout('faq', event)}>
