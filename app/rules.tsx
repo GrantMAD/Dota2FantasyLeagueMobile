@@ -585,7 +585,7 @@ export default function RulesScreen() {
                 <Text className="text-xs text-slate-400">managers</Text>
               </View>
             </View>
-            <RuleText>With an odd number of managers in H2H, one receives a bye and an automatic win for that round.</RuleText>
+            <RuleText>With an odd number of managers in H2H, one receives a bye, an automatic win, and 3 league points. The bye does not add fantasy points to tie-break totals.</RuleText>
           </View>
           <View className="flex-row flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-4">
             <View className="min-w-0 flex-1 gap-1">
