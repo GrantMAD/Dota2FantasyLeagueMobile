@@ -135,7 +135,7 @@ function PulsingAccentLine() {
 
 export function MatchSeriesCard({ group, appearance, onPress }: MatchSeriesCardProps) {
   const { match, games } = group;
-  const score = summarizeMatchSeries(games);
+  const score = summarizeMatchSeries(games, match.radiant_team_id, match.dire_team_id);
   const gamesAwaitingPlayerStats = getCompletedGamesAwaitingPlayerStats(games);
   const hasSquadConnection = appearance.kind !== 'none';
   const isLive = score.isLive && !score.isComplete;
