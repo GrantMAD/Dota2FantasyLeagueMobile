@@ -190,4 +190,25 @@ describe('Friends screen', () => {
     await fireEvent.press(view.getByRole('button', { name: 'Unfollow Teal Manager' }));
     await waitFor(() => expect(mockedSetFollow).toHaveBeenCalledWith(manager.id, false));
   });
+
+  it('shows illustrated empty states with manager-search actions', async () => {
+    mockedGetFollowing.mockResolvedValue([]);
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+        mutations: { retry: false, gcTime: 0 },
+      },
+    });
+    queryClient = client;
+    const view = render(
+      <QueryClientProvider client={client}>
+        <FriendsScreen />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(view.getByText('Your following list is empty')).toBeTruthy());
+    expect(view.getByText('Your activity feed is waiting')).toBeTruthy();
+    expect(view.getAllByRole('button', { name: 'Find managers to follow' })).toHaveLength(2);
+    await fireEvent.press(view.getAllByRole('button', { name: 'Find managers to follow' })[0]);
+  });
 });

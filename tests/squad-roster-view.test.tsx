@@ -90,4 +90,11 @@ describe('SquadRosterView', () => {
     expect(view.getByText('Starting 5 5')).toBeTruthy();
     expect(view.getByText('Bench 1')).toBeTruthy();
   });
+
+  it('links vacant pitch roles to Discover with the matching role filter', () => {
+    const view = render(<SquadRosterView players={[player(2, 'mid')]} lineup={[]} />);
+    const roleLink = view.getByRole('link', { name: 'Find a player for Carry · Pos 1' });
+
+    expect(roleLink.props.href).toBe('/discover?role=Carry');
+  });
 });

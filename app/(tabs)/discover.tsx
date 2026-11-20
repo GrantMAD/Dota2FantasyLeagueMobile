@@ -3,7 +3,7 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useRouter } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
@@ -21,6 +21,13 @@ import { getOwnershipPresentation } from '@/src/lib/ownership';
 const PAGE_SIZE = 20;
 const roles = ['', 'Carry', 'Mid', 'Offlane', 'Support', 'Hard Support'];
 type SortField = 'price' | 'ownership' | 'points';
+
+export function parseDiscoverRole(value: string | string[] | undefined): string {
+  const requestedRole = Array.isArray(value) ? value[0] : value;
+  return roles.find((candidate) =>
+    candidate !== '' && candidate.toLowerCase() === requestedRole?.trim().toLowerCase()
+  ) ?? '';
+}
 
 export function getRoleBadgeClass(role: string | null | undefined): { text: string; bg: string; border: string } {
   switch (role) {
@@ -43,14 +50,71 @@ function playerName(player: { in_game_name: string | null; name: string }): stri
   return player.in_game_name || player.name;
 }
 
+export function CompareSelectionBar({
+  selectedCount,
+  onClear,
+  onCompare,
+}: {
+  selectedCount: number;
+  onClear: () => void;
+  onCompare: () => void;
+}) {
+  const canCompare = selectedCount >= 2;
+  const selectionLabel = `${selectedCount} ${selectedCount === 1 ? 'player' : 'players'} selected`;
+
+  return (
+    <View className="gap-3 border-t border-slate-800 bg-slate-950 px-5 pb-2 pt-3">
+      <View className="flex-row items-center justify-between gap-3">
+        <View accessibilityLiveRegion="polite" className="flex-1 gap-1">
+          <Text className="font-semibold text-slate-100">{selectionLabel}</Text>
+          <Text className="text-xs text-slate-400">
+            {selectedCount === 0
+              ? 'Choose up to four players to compare.'
+              : canCompare
+                ? 'Your selection is ready to compare.'
+                : 'Select one more player to compare.'}
+          </Text>
+        </View>
+        {selectedCount > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Clear comparison selection"
+            className="min-h-11 items-center justify-center rounded-lg border border-slate-700 px-3"
+            onPress={onClear}
+          >
+            <Text className="text-sm font-semibold text-slate-300">Clear</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Compare ${selectedCount} ${selectedCount === 1 ? 'player' : 'players'}`}
+        accessibilityState={{ disabled: !canCompare }}
+        className={`min-h-12 items-center justify-center rounded-xl ${
+          canCompare ? 'bg-cyan-700' : 'bg-slate-800'
+        }`}
+        disabled={!canCompare}
+        onPress={onCompare}
+      >
+        <Text className={`font-bold ${canCompare ? 'text-white' : 'text-slate-500'}`}>
+          {canCompare ? `Compare ${selectedCount} players` : 'Select at least 2 players'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function DiscoverScreen() {
   const router = useRouter();
+  const { role: roleParam } = useLocalSearchParams<{ role?: string | string[] }>();
+  const requestedRole = parseDiscoverRole(roleParam);
   const { colors, theme } = useMobileTheme();
   const isDark = theme === 'dark';
   const fantasyContext = useFantasyContext();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [role, setRole] = useState('');
+  const [role, setRole] = useState(requestedRole);
+  const [previousRequestedRole, setPreviousRequestedRole] = useState(requestedRole);
   const [teamId, setTeamId] = useState<number | null>(null);
   const [availableOnly, setAvailableOnly] = useState(true);
   const [pinOwnedFirst, setPinOwnedFirst] = useState(true);
@@ -64,6 +128,11 @@ export default function DiscoverScreen() {
   const [teamModalVisible, setTeamModalVisible] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
+  if (requestedRole !== previousRequestedRole) {
+    setPreviousRequestedRole(requestedRole);
+    setRole(requestedRole);
+    setOffset(0);
+  }
   const teamsQuery = useQuery({
     queryKey: ['professional-teams'],
     queryFn: getProfessionalTeams,
@@ -646,18 +715,6 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        {compareIds.length >= 2 ? (
-          <Pressable
-            accessibilityRole="button"
-            className="min-h-12 items-center justify-center rounded-xl bg-cyan-700"
-            onPress={() => router.push(`/compare-players?ids=${compareIds.join(',')}`)}
-          >
-            <Text className="font-bold text-white">Compare {compareIds.length} players</Text>
-          </Pressable>
-        ) : compareIds.length === 1 ? (
-          <Text className="text-center text-xs text-slate-400">Select one more player to compare.</Text>
-        ) : null}
-
         {query.isSuccess && (hasMore || offset > 0) ? (
           <View className="flex-row gap-3">
             {offset > 0 ? (
@@ -682,6 +739,13 @@ export default function DiscoverScreen() {
         ) : null}
         {query.isRefetching ? <ActivityIndicator accessibilityLabel="Refreshing players" color="#14b8a6" /> : null}
       </ScrollView>
+      {compareMode ? (
+        <CompareSelectionBar
+          selectedCount={compareIds.length}
+          onClear={() => setCompareIds([])}
+          onCompare={() => router.push(`/compare-players?ids=${compareIds.join(',')}`)}
+        />
+      ) : null}
 
       {/* Role Picker Modal */}
       <Modal

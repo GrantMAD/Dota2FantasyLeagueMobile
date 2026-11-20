@@ -355,8 +355,27 @@ export function SquadRosterView({
                 ) : (
                   <View key={slot} className="min-h-16 flex-row items-center gap-3 rounded-xl border border-dashed border-slate-700 bg-slate-950/60 p-3">
                     <View className={`h-2 w-2 rounded-full ${pitchRoleColors(slot).accent}`} />
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</Text>
-                    <Text className="ml-auto text-xs text-slate-500">No player assigned</Text>
+                    <View className="min-w-0 flex-1">
+                      <Text className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</Text>
+                      <Text className="mt-1 text-[10px] text-slate-500">No player assigned</Text>
+                    </View>
+                    <Link
+                      href={{
+                        pathname: '/(tabs)/discover',
+                        params: {
+                          role: slot.split('_').map((part) => part[0].toUpperCase() + part.slice(1)).join(' '),
+                        },
+                      }}
+                      asChild
+                    >
+                      <Pressable
+                        accessibilityRole="link"
+                        accessibilityLabel={`Find a player for ${label}`}
+                        className="min-h-11 flex-row items-center justify-center rounded-lg border border-brand-500/40 bg-brand-500/10 px-3"
+                      >
+                        <Text className="text-xs font-semibold text-brand-300">+ Find</Text>
+                      </Pressable>
+                    </Link>
                   </View>
                 )
               );

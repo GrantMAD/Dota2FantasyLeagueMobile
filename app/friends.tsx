@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -229,6 +229,45 @@ function ActivityCard({
   );
 }
 
+function FriendsEmptyState({
+  title,
+  description,
+  buttonLabel,
+  accessibilityLabel,
+  onPress,
+}: {
+  title: string;
+  description: string;
+  buttonLabel: string;
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  return (
+    <View className="items-center gap-3 rounded-2xl border border-dashed border-slate-700 bg-slate-900/70 p-5">
+      <View className="h-14 w-14 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10">
+        <SymbolView
+          name={{ ios: 'person.2.fill', android: 'group_add', web: 'group_add' }}
+          size={26}
+          tintColor="#2dd4bf"
+          accessibilityLabel="Find friends"
+        />
+      </View>
+      <View className="items-center gap-1">
+        <Text className="text-center text-base font-bold text-slate-100">{title}</Text>
+        <Text className="text-center text-sm leading-5 text-slate-400">{description}</Text>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        className="min-h-11 items-center justify-center rounded-xl bg-brand-500 px-5"
+        onPress={onPress}
+      >
+        <Text className="font-semibold text-on-accent">{buttonLabel}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function FriendsScreen() {
   const [now] = useState(() => Date.now());
   const { colors, theme } = useMobileTheme();
@@ -256,6 +295,7 @@ export default function FriendsScreen() {
         selected: '#ccfbf1',
       };
   const queryClient = useQueryClient();
+  const searchInputRef = useRef<TextInput | null>(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedManager, setSelectedManager] = useState<FriendProfile | null>(null);
@@ -331,6 +371,10 @@ export default function FriendsScreen() {
     void Promise.all([followingQuery.refetch(), feedQuery.refetch()]);
   }
 
+  function focusManagerSearch() {
+    searchInputRef.current?.focus();
+  }
+
   function toggleFollow(profile: FriendProfile) {
     followMutation.mutate({
       userId: profile.id,
@@ -378,6 +422,7 @@ export default function FriendsScreen() {
             placeholder="Search username or display name"
             placeholderTextColor={colors.placeholder}
             returnKeyType="search"
+            ref={searchInputRef}
             value={search}
           />
           {search.trim().replace(/\s/g, '').length < 2 ? (
@@ -509,9 +554,13 @@ export default function FriendsScreen() {
               ))}
             </View>
           ) : (
-            <Text className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-400">
-              You are not following any managers yet. Search above to get started.
-            </Text>
+            <FriendsEmptyState
+              title="Your following list is empty"
+              description="Find managers to follow and their season progress will appear here."
+              buttonLabel="Find managers"
+              accessibilityLabel="Find managers to follow"
+              onPress={focusManagerSearch}
+            />
           )}
         </View>
 
@@ -566,11 +615,15 @@ export default function FriendsScreen() {
               ) : null}
             </View>
           ) : (
-            <Text className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-400">
-              {following.length
-                ? 'New manager activity will appear here as it happens.'
+            <FriendsEmptyState
+              title={following.length ? 'No recent activity yet' : 'Your activity feed is waiting'}
+              description={following.length
+                ? 'New manager activity will appear here as it happens. You can also follow more managers.'
                 : 'Follow managers to see their fantasy activity here.'}
-            </Text>
+              buttonLabel={following.length ? 'Find more managers' : 'Find managers'}
+              accessibilityLabel={following.length ? 'Find more managers' : 'Find managers to follow'}
+              onPress={focusManagerSearch}
+            />
           )}
           {feedQuery.isError ? (
             <Pressable
