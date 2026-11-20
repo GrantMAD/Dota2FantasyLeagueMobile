@@ -9,7 +9,7 @@ import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
 import { Screen } from '@/src/components/Screen';
 import { getManagerProfile } from '@/src/features/account/api';
-import { getDashboardWhatsNew, getTransferRush } from '@/src/features/dashboard/api';
+import { getDashboardWhatsNew, getTransferRush, type DashboardUpdate } from '@/src/features/dashboard/api';
 import { DashboardPointsModal } from '@/src/features/dashboard/DashboardPointsModal';
 import {
   getFriendActivity,
@@ -26,6 +26,12 @@ import { getLeagues } from '@/src/features/leagues/api';
 import { markNotificationRead } from '@/src/features/notifications/api';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
+import {
+  groupMobileWhatsNewItems,
+  getMobileCategoryTheme,
+  type MobileFeedGroupItem,
+  type MobileFeedItemChild,
+} from '@/src/features/dashboard/whats-new-grouping';
 
 function formatMetric(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—';
@@ -72,6 +78,7 @@ export default function HomeScreen() {
     refetchInterval: 60_000,
   });
   const [whatsNewTab, setWhatsNewTab] = useState<'all' | 'friends' | 'squad' | 'tournaments'>('all');
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const friendActivityQuery = useQuery({
     queryKey: ['friend-activity-feed', 'dashboard'],
     queryFn: () => getFriendActivity(null),
@@ -428,339 +435,393 @@ export default function HomeScreen() {
               {/* Feed items */}
               <View className="gap-2">
                 {(() => {
-                  const friendsList = friendActivities;
-                  const tournamentsList = whatsNewQuery.data.events ?? [];
-                  const priceChanges = dashboardUpdates.filter((u) => u.kind === 'price_change');
-                  const availabilityUpdates = dashboardUpdates.filter((u) => u.kind === 'availability');
-                  const matchLifecycleUpdates = dashboardUpdates.filter(
-                    (update): update is Extract<typeof update, { matchId: number }> => 'matchId' in update,
+                  const feedItems = groupMobileWhatsNewItems(
+                    friendActivities,
+                    dashboardUpdates,
+                    whatsNewQuery.data.events ?? [],
+                    whatsNewTab,
                   );
 
-                  const shouldCollapseFriends = whatsNewTab === 'all' && friendsList.length >= 5;
-                  const shouldCollapsePrice = whatsNewTab === 'all' && priceChanges.length >= 5;
-                  const shouldCollapseAvail = whatsNewTab === 'all' && availabilityUpdates.length >= 5;
-                  const shouldCollapseTournaments = whatsNewTab === 'all' && tournamentsList.length >= 5;
+                  const groupedCategoryKeys = feedItems
+                    .filter((item): item is MobileFeedGroupItem => item.type === 'group')
+                    .map((g) => g.category);
+                  const hasGroups = groupedCategoryKeys.length > 0;
+                  const areAllExpanded =
+                    hasGroups && groupedCategoryKeys.every((k) => Boolean(expandedCategories[k]));
 
-                  const visibleFriends = whatsNewTab === 'all'
-                    ? (shouldCollapseFriends ? friendsList.slice(0, 4) : friendsList)
-                    : friendsList;
+                  const toggleAllExpanded = () => {
+                    if (areAllExpanded) {
+                      setExpandedCategories({});
+                    } else {
+                      const next: Record<string, boolean> = {};
+                      for (const k of groupedCategoryKeys) {
+                        next[k] = true;
+                      }
+                      setExpandedCategories(next);
+                    }
+                  };
 
-                  const visiblePrice = whatsNewTab === 'all'
-                    ? (shouldCollapsePrice ? priceChanges.slice(0, 4) : priceChanges)
-                    : priceChanges;
+                  const toggleCategory = (key: string) => {
+                    setExpandedCategories((prev) => ({ ...prev, [key]: !prev[key] }));
+                  };
 
-                  const visibleAvail = whatsNewTab === 'all'
-                    ? (shouldCollapseAvail ? availabilityUpdates.slice(0, 4) : availabilityUpdates)
-                    : availabilityUpdates;
-
-                  const visibleTournaments = whatsNewTab === 'all'
-                    ? (shouldCollapseTournaments ? tournamentsList.slice(0, 4) : tournamentsList.slice(0, 3))
-                    : tournamentsList;
-
-                  return (
-                    <>
-                      {/* Friend moves */}
-                      {(whatsNewTab === 'all' || whatsNewTab === 'friends') &&
-                        visibleFriends.map((activity) => (
-                          <Link key={`f-${activity.activity_id}`} href="/friends" asChild>
-                            <Pressable
-                              className="flex-row items-start gap-3 rounded-xl p-3"
-                              style={{
-                                borderLeftWidth: 3,
-                                borderLeftColor: '#14b8a6',
-                                backgroundColor: isDark ? 'rgba(20, 184, 166, 0.08)' : 'rgba(13, 148, 136, 0.07)',
-                              }}
-                            >
-                              <SymbolView
-                                name={activity.activity_type === 'transfer'
+                  const renderFeedChild = (child: MobileFeedItemChild, isNested = false) => {
+                    if (child.type === 'friend') {
+                      const activity = child.data;
+                      return (
+                        <Link key={`f-${activity.activity_id}`} href="/friends" asChild>
+                          <Pressable
+                            className={`flex-row items-start gap-3 rounded-xl ${isNested ? 'p-2.5' : 'p-3'}`}
+                            style={{
+                              borderLeftWidth: 3,
+                              borderLeftColor: '#14b8a6',
+                              backgroundColor: isDark ? 'rgba(20, 184, 166, 0.08)' : 'rgba(13, 148, 136, 0.07)',
+                            }}
+                          >
+                            <SymbolView
+                              name={
+                                activity.activity_type === 'transfer'
                                   ? { ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }
                                   : activity.activity_type === 'chip'
                                     ? { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }
                                     : activity.activity_type === 'lineup'
                                       ? { ios: 'list.clipboard.fill', android: 'assignment', web: 'assignment' }
-                                      : { ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }}
-                                size={17}
-                                tintColor="#2dd4bf"
-                              />
-                              <View className="flex-1 gap-1">
-                                <View className="flex-row items-center gap-1.5">
-                                  <Text className="text-[10px] font-bold uppercase tracking-wider text-teal-300">Friend Move</Text>
-                                  <Text className="text-xs text-slate-500">·</Text>
-                                  <Text className="text-xs font-bold text-slate-200">
-                                    {activity.display_name?.trim() || activity.username}
-                                  </Text>
-                                </View>
-                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{activity.title}</Text>
-                                {activity.activity_type === 'transfer' && (activity.players_in?.length || activity.players_out?.length) ? (
-                                  <View className="flex-row flex-wrap gap-1.5 mt-0.5">
-                                    {activity.players_in?.map((p) => (
-                                      <Text key={`in-${p}`} className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                                        +{p}
-                                      </Text>
-                                    ))}
-                                    {activity.players_out?.map((p) => (
-                                      <Text key={`out-${p}`} className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
-                                        -{p}
-                                      </Text>
-                                    ))}
-                                  </View>
-                                ) : null}
-                                {activity.activity_type === 'gameweek_score' && activity.gameweek_points !== null ? (
-                                  <Text className="text-xs font-semibold text-teal-300">
-                                    {activity.gameweek_points.toLocaleString()} pts scored
-                                    {activity.gameweek_rank ? ` · Rank #${activity.gameweek_rank.toLocaleString()}` : ''}
-                                  </Text>
-                                ) : null}
-                              </View>
-                              <Text className="pt-1 font-bold text-teal-200">›</Text>
-                            </Pressable>
-                          </Link>
-                        ))}
-
-                      {/* Friend overflow note */}
-                      {shouldCollapseFriends && (
-                        <Pressable
-                          onPress={() => setWhatsNewTab('friends')}
-                          className="flex-row items-center justify-between rounded-xl p-3 border-l-3"
-                          style={{
-                            borderLeftWidth: 3,
-                            borderLeftColor: '#14b8a6',
-                            backgroundColor: isDark ? 'rgba(20, 184, 166, 0.12)' : 'rgba(13, 148, 136, 0.10)',
-                          }}
-                        >
-                          <View className="flex-row items-center gap-2.5 flex-1 pr-2">
-                            <SymbolView name={{ ios: 'person.2.fill', android: 'group', web: 'group' }} size={16} tintColor="#2dd4bf" />
-                            <Text className="text-xs text-slate-200 flex-1">
-                              There are <Text className="font-bold text-teal-300">{friendsList.length - 4} more friend moves</Text>.{' '}
-                              <Text className="font-bold underline text-teal-300">Click here to view all</Text>
-                            </Text>
-                          </View>
-                          <Text className="text-xs font-bold text-teal-300">Friends ›</Text>
-                        </Pressable>
-                      )}
-
-                      {/* Squad availability updates */}
-                      {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
-                        visibleAvail.map((update) => (
-                          <Link key={`${update.kind}-${update.id}`} href={`/player/${update.playerId}`} asChild>
-                            <Pressable
-                              onPress={() => {
-                                void markNotificationRead(update.id).catch(() => {});
-                              }}
-                              className="flex-row items-start gap-3 rounded-xl p-3"
-                              style={{
-                                borderLeftWidth: 3,
-                                borderLeftColor: '#f43f5e',
-                                backgroundColor: isDark ? 'rgba(244, 63, 94, 0.08)' : 'rgba(225, 29, 72, 0.06)',
-                              }}
-                            >
-                              <SymbolView
-                                name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
-                                size={17}
-                                tintColor="#fb7185"
-                              />
-                              <View className="flex-1 gap-1">
-                                <Text className="text-[10px] font-bold uppercase tracking-wider text-rose-300">
-                                  Squad availability
+                                      : { ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }
+                              }
+                              size={17}
+                              tintColor="#2dd4bf"
+                            />
+                            <View className="flex-1 gap-1">
+                              <View className="flex-row items-center gap-1.5">
+                                <Text className="text-[10px] font-bold uppercase tracking-wider text-teal-300">Friend Move</Text>
+                                <Text className="text-xs text-slate-500">·</Text>
+                                <Text className="text-xs font-bold text-slate-200">
+                                  {activity.display_name?.trim() || activity.username}
                                 </Text>
-                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{update.title}</Text>
-                                <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
                               </View>
-                              <Text className="pt-1 font-bold text-cyan-200">›</Text>
-                            </Pressable>
-                          </Link>
-                        ))}
+                              <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>
+                                {activity.title}
+                              </Text>
+                              {activity.activity_type === 'transfer' &&
+                              (activity.players_in?.length || activity.players_out?.length) ? (
+                                <View className="flex-row flex-wrap gap-1.5 mt-0.5">
+                                  {activity.players_in?.map((p) => (
+                                    <Text
+                                      key={`in-${p}`}
+                                      className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300"
+                                    >
+                                      +{p}
+                                    </Text>
+                                  ))}
+                                  {activity.players_out?.map((p) => (
+                                    <Text
+                                      key={`out-${p}`}
+                                      className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300"
+                                    >
+                                      -{p}
+                                    </Text>
+                                  ))}
+                                </View>
+                              ) : null}
+                              {activity.activity_type === 'gameweek_score' && activity.gameweek_points !== null ? (
+                                <Text className="text-xs font-semibold text-teal-300">
+                                  {activity.gameweek_points.toLocaleString()} pts scored
+                                  {activity.gameweek_rank ? ` · Rank #${activity.gameweek_rank.toLocaleString()}` : ''}
+                                </Text>
+                              ) : null}
+                            </View>
+                            <Text className="pt-1 font-bold text-teal-200">›</Text>
+                          </Pressable>
+                        </Link>
+                      );
+                    }
 
-                      {/* Availability overflow note */}
-                      {shouldCollapseAvail && (
+                    if (child.type === 'tournament') {
+                      const event = child.data;
+                      return (
+                        <Link key={`t-${event.id}`} href={`/tournament/${event.id}`} asChild>
+                          <Pressable
+                            className={`flex-row items-start gap-3 rounded-xl ${isNested ? 'p-2.5' : 'p-3'}`}
+                            style={{
+                              borderLeftWidth: 3,
+                              borderLeftColor: '#f59e0b',
+                              backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+                            }}
+                          >
+                            <SymbolView
+                              name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }}
+                              size={17}
+                              tintColor="#fbbf24"
+                            />
+                            <View className="flex-1 gap-1">
+                              <Text className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                                Tournament active
+                              </Text>
+                              <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>
+                                {event.title}
+                              </Text>
+                              <Text className="text-xs leading-5" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
+                                {[
+                                  event.tier,
+                                  `${event.seriesCount} series`,
+                                  `${event.matchCount} matches`,
+                                  ...(event.bestOfFormats.length ? [`Bo${event.bestOfFormats.join(' / Bo')}`] : []),
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </Text>
+                            </View>
+                            <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                          </Pressable>
+                        </Link>
+                      );
+                    }
+
+                    // Update
+                    const update = child.data;
+                    if (update.kind === 'price_change') {
+                      return (
+                        <Link key={`u-${update.id}`} href={`/player/${update.playerId}`} asChild>
+                          <Pressable
+                            onPress={() => {
+                              void markNotificationRead(update.id).catch(() => {});
+                            }}
+                            className={`flex-row items-start gap-3 rounded-xl ${isNested ? 'p-2.5' : 'p-3'}`}
+                            style={{
+                              borderLeftWidth: 3,
+                              borderLeftColor: '#10b981',
+                              backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(5, 150, 105, 0.06)',
+                            }}
+                          >
+                            <SymbolView
+                              name={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
+                              size={17}
+                              tintColor="#34d399"
+                            />
+                            <View className="flex-1 gap-1">
+                              <Text className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                                Player price
+                              </Text>
+                              <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>
+                                {update.title}
+                              </Text>
+                              <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
+                            </View>
+                            <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                          </Pressable>
+                        </Link>
+                      );
+                    }
+
+                    if (update.kind === 'availability') {
+                      return (
+                        <Link key={`u-${update.id}`} href={`/player/${update.playerId}`} asChild>
+                          <Pressable
+                            onPress={() => {
+                              void markNotificationRead(update.id).catch(() => {});
+                            }}
+                            className={`flex-row items-start gap-3 rounded-xl ${isNested ? 'p-2.5' : 'p-3'}`}
+                            style={{
+                              borderLeftWidth: 3,
+                              borderLeftColor: '#f43f5e',
+                              backgroundColor: isDark ? 'rgba(244, 63, 94, 0.08)' : 'rgba(225, 29, 72, 0.06)',
+                            }}
+                          >
+                            <SymbolView
+                              name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }}
+                              size={17}
+                              tintColor="#fb7185"
+                            />
+                            <View className="flex-1 gap-1">
+                              <Text className="text-[10px] font-bold uppercase tracking-wider text-rose-300">
+                                Squad availability
+                              </Text>
+                              <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>
+                                {update.title}
+                              </Text>
+                              <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
+                            </View>
+                            <Text className="pt-1 font-bold text-cyan-200">›</Text>
+                          </Pressable>
+                        </Link>
+                      );
+                    }
+
+                    // Match lifecycle update
+                    const presentation = ({
+                      live_match: {
+                        label: 'Match starting',
+                        icon: { ios: 'dot.radiowaves.left.and.right', android: 'radio', web: 'radio' },
+                        color: '#22d3ee',
+                        border: '#06b6d4',
+                        background: isDark ? 'rgba(6, 182, 212, 0.08)' : 'rgba(8, 145, 178, 0.06)',
+                      },
+                      match_finished: {
+                        label: 'Match finished',
+                        icon: { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' },
+                        color: '#34d399',
+                        border: '#10b981',
+                        background: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(5, 150, 105, 0.06)',
+                      },
+                      match_data_processed: {
+                        label: 'Match data processed',
+                        icon: { ios: 'chart.bar.doc.horizontal.fill', android: 'analytics', web: 'analytics' },
+                        color: '#fbbf24',
+                        border: '#f59e0b',
+                        background: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+                      },
+                      fantasy_points_calculated: {
+                        label: 'Fantasy points calculated',
+                        icon: { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' },
+                        color: '#a78bfa',
+                        border: '#8b5cf6',
+                        background: isDark ? 'rgba(139, 92, 246, 0.08)' : 'rgba(124, 58, 237, 0.06)',
+                      },
+                    } as const)[update.kind];
+
+                    return (
+                      <Link key={`u-${update.id}`} href={`/match/${update.matchId}`} asChild>
                         <Pressable
-                          onPress={() => setWhatsNewTab('squad')}
-                          className="flex-row items-center justify-between rounded-xl p-3 border-l-3"
+                          onPress={() => {
+                            void markNotificationRead(update.id).catch(() => {});
+                          }}
+                          className={`flex-row items-start gap-3 rounded-xl ${isNested ? 'p-2.5' : 'p-3'}`}
                           style={{
                             borderLeftWidth: 3,
-                            borderLeftColor: '#f43f5e',
-                            backgroundColor: isDark ? 'rgba(244, 63, 94, 0.12)' : 'rgba(225, 29, 72, 0.10)',
+                            borderLeftColor: presentation.border,
+                            backgroundColor: presentation.background,
                           }}
                         >
-                          <View className="flex-row items-center gap-2.5 flex-1 pr-2">
-                            <SymbolView name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' }} size={16} tintColor="#fb7185" />
-                            <Text className="text-xs text-slate-200 flex-1">
-                              There are <Text className="font-bold text-rose-300">{availabilityUpdates.length - 4} more availability alerts</Text>.{' '}
-                              <Text className="font-bold underline text-rose-300">Click here to view all</Text>
+                          <SymbolView
+                            name={presentation.icon}
+                            size={17}
+                            tintColor={presentation.color}
+                          />
+                          <View className="flex-1 gap-1">
+                            <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: presentation.color }}>
+                              {presentation.label}
                             </Text>
+                            <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>
+                              {update.title}
+                            </Text>
+                            <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
                           </View>
-                          <Text className="text-xs font-bold text-rose-300">Squad ›</Text>
+                          <Text className="pt-1 font-bold" style={{ color: presentation.color }}>›</Text>
                         </Pressable>
+                      </Link>
+                    );
+                  };
+
+                  return (
+                    <>
+                      {hasGroups && (
+                        <View className="flex-row items-center justify-between px-1 pt-1 pb-0.5">
+                          <Text className="text-[11px]" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
+                            {areAllExpanded ? 'All categories expanded' : 'Tap any category to expand'}
+                          </Text>
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={toggleAllExpanded}
+                            hitSlop={8}
+                            className="flex-row items-center gap-1"
+                          >
+                            <Text className="text-[11px] font-semibold text-cyan-400">
+                              {areAllExpanded ? 'Collapse all' : 'Expand all'}
+                            </Text>
+                          </Pressable>
+                        </View>
                       )}
 
-                      {/* Match lifecycle alerts */}
-                      {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
-                        matchLifecycleUpdates.map((update) => {
-                          const presentation = ({
-                            live_match: {
-                              label: 'Match starting',
-                              icon: { ios: 'dot.radiowaves.left.and.right', android: 'radio', web: 'radio' },
-                              color: '#22d3ee',
-                              border: '#06b6d4',
-                              background: isDark ? 'rgba(6, 182, 212, 0.08)' : 'rgba(8, 145, 178, 0.06)',
-                            },
-                            match_finished: {
-                              label: 'Match finished',
-                              icon: { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' },
-                              color: '#34d399',
-                              border: '#10b981',
-                              background: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(5, 150, 105, 0.06)',
-                            },
-                            match_data_processed: {
-                              label: 'Match data processed',
-                              icon: { ios: 'chart.bar.doc.horizontal.fill', android: 'analytics', web: 'analytics' },
-                              color: '#fbbf24',
-                              border: '#f59e0b',
-                              background: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
-                            },
-                            fantasy_points_calculated: {
-                              label: 'Fantasy points calculated',
-                              icon: { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' },
-                              color: '#a78bfa',
-                              border: '#8b5cf6',
-                              background: isDark ? 'rgba(139, 92, 246, 0.08)' : 'rgba(124, 58, 237, 0.06)',
-                            },
-                          } as const)[update.kind];
+                      {feedItems.map((item) => {
+                        if (item.type === 'group') {
+                          const group = item;
+                          const theme = getMobileCategoryTheme(group.category, isDark);
+                          const isExpanded = Boolean(expandedCategories[group.category]);
+                          const updateItems = group.items
+                            .filter((i): i is { type: 'update'; data: DashboardUpdate } => i.type === 'update')
+                            .map((i) => i.data);
 
                           return (
-                          <Link key={`live-match-${update.id}`} href={`/match/${update.matchId}`} asChild>
-                            <Pressable
-                              onPress={() => {
-                                void markNotificationRead(update.id).catch(() => {});
-                              }}
-                              className="flex-row items-start gap-3 rounded-xl p-3"
-                              style={{
-                                borderLeftWidth: 3,
-                                borderLeftColor: presentation.border,
-                                backgroundColor: presentation.background,
-                              }}
-                            >
-                              <SymbolView
-                                name={presentation.icon}
-                                size={17}
-                                tintColor={presentation.color}
-                              />
-                              <View className="flex-1 gap-1">
-                                <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: presentation.color }}>
-                                  {presentation.label}
-                                </Text>
-                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{update.title}</Text>
-                                <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
-                              </View>
-                              <Text className="pt-1 font-bold" style={{ color: presentation.color }}>›</Text>
-                            </Pressable>
-                          </Link>
+                            <View key={`group-${group.category}`} className="gap-2">
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityState={{ expanded: isExpanded }}
+                                onPress={() => toggleCategory(group.category)}
+                                className="flex-row items-center justify-between rounded-xl p-3"
+                                style={{
+                                  borderLeftWidth: 3,
+                                  borderLeftColor: theme.borderColor,
+                                  backgroundColor: isExpanded ? theme.expandedBg : theme.bg,
+                                }}
+                              >
+                                <View className="flex-row items-center gap-2.5 flex-1 pr-2">
+                                  <SymbolView
+                                    name={theme.icon}
+                                    size={17}
+                                    tintColor={theme.tintColor}
+                                  />
+                                  <View className="flex-1">
+                                    <View className="flex-row items-center gap-1.5 flex-wrap">
+                                      <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: theme.labelColor }}>
+                                        {theme.label}
+                                      </Text>
+                                      <Text className="text-xs text-slate-500">·</Text>
+                                      <Text className="text-xs font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>
+                                        {group.title}
+                                      </Text>
+                                    </View>
+                                    <Text className="text-[11px] mt-0.5" style={{ color: isDark ? '#94a3b8' : '#64748b' }} numberOfLines={1}>
+                                      {group.preview}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <View className="flex-row items-center gap-2">
+                                  <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: theme.pillBg }}>
+                                    <Text className="text-[10px] font-bold" style={{ color: theme.pillText }}>
+                                      {group.count} updates
+                                    </Text>
+                                  </View>
+                                  <SymbolView
+                                    name={
+                                      isExpanded
+                                        ? { ios: 'chevron.up', android: 'expand_less', web: 'expand_less' }
+                                        : { ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }
+                                    }
+                                    size={14}
+                                    tintColor={theme.tintColor}
+                                  />
+                                </View>
+                              </Pressable>
+
+                              {isExpanded && (
+                                <View className="gap-2 pl-3 ml-2 border-l-2" style={{ borderLeftColor: theme.guideColor }}>
+                                  {updateItems.length > 1 && (
+                                    <View className="flex-row items-center justify-between py-1 px-1">
+                                      <Text className="text-[10px]" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
+                                        Showing all {group.count} {theme.itemNoun}
+                                      </Text>
+                                      <Pressable
+                                        accessibilityRole="button"
+                                        onPress={() => {
+                                          void Promise.all(updateItems.map((u) => markNotificationRead(u.id))).catch(() => {});
+                                          void whatsNewQuery.refetch();
+                                        }}
+                                        hitSlop={8}
+                                      >
+                                        <Text className="text-[10px] font-bold text-cyan-400">Mark all as read</Text>
+                                      </Pressable>
+                                    </View>
+                                  )}
+                                  {group.items.map((child) => renderFeedChild(child, true))}
+                                </View>
+                              )}
+                            </View>
                           );
-                        })}
+                        }
 
-                      {/* Player price changes */}
-                      {(whatsNewTab === 'all' || whatsNewTab === 'squad') &&
-                        visiblePrice.map((update) => (
-                          <Link key={`${update.kind}-${update.id}`} href={`/player/${update.playerId}`} asChild>
-                            <Pressable
-                              onPress={() => {
-                                void markNotificationRead(update.id).catch(() => {});
-                              }}
-                              className="flex-row items-start gap-3 rounded-xl p-3"
-                              style={{
-                                borderLeftWidth: 3,
-                                borderLeftColor: '#10b981',
-                                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(5, 150, 105, 0.06)',
-                              }}
-                            >
-                              <SymbolView
-                                name={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
-                                size={17}
-                                tintColor="#34d399"
-                              />
-                              <View className="flex-1 gap-1">
-                                <Text className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                                  Player price
-                                </Text>
-                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{update.title}</Text>
-                                <Text className="text-xs leading-5 text-slate-400">{update.message}</Text>
-                              </View>
-                              <Text className="pt-1 font-bold text-cyan-200">›</Text>
-                            </Pressable>
-                          </Link>
-                        ))}
-
-                      {/* Price change overflow note */}
-                      {shouldCollapsePrice && (
-                        <Pressable
-                          onPress={() => setWhatsNewTab('squad')}
-                          className="flex-row items-center justify-between rounded-xl p-3 border-l-3"
-                          style={{
-                            borderLeftWidth: 3,
-                            borderLeftColor: '#10b981',
-                            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(5, 150, 105, 0.10)',
-                          }}
-                        >
-                          <View className="flex-row items-center gap-2.5 flex-1 pr-2">
-                            <SymbolView name={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }} size={16} tintColor="#34d399" />
-                            <Text className="text-xs text-slate-200 flex-1">
-                              There are <Text className="font-bold text-emerald-300">{priceChanges.length - 4} more price changes</Text>.{' '}
-                              <Text className="font-bold underline text-emerald-300">Click here to view all</Text>
-                            </Text>
-                          </View>
-                          <Text className="text-xs font-bold text-emerald-300">Squad ›</Text>
-                        </Pressable>
-                      )}
-
-                      {/* Tournaments */}
-                      {(whatsNewTab === 'all' || whatsNewTab === 'tournaments') &&
-                        visibleTournaments.map((event) => (
-                          <Link key={event.id} href={`/tournament/${event.id}`} asChild>
-                            <Pressable
-                              className="flex-row items-start gap-3 rounded-xl p-3"
-                              style={{
-                                borderLeftWidth: 3,
-                                borderLeftColor: '#f59e0b',
-                                backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
-                              }}
-                            >
-                              <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={17} tintColor="#fbbf24" />
-                              <View className="flex-1 gap-1">
-                                <Text className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Tournament active</Text>
-                                <Text className="font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>{event.title}</Text>
-                                <Text className="text-xs leading-5" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-                                  {[event.tier, `${event.seriesCount} series`, `${event.matchCount} matches`,
-                                    ...(event.bestOfFormats.length ? [`Bo${event.bestOfFormats.join(' / Bo')}`] : [])]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                </Text>
-                              </View>
-                              <Text className="pt-1 font-bold text-cyan-200">›</Text>
-                            </Pressable>
-                          </Link>
-                        ))}
-
-                      {/* Tournaments overflow note */}
-                      {shouldCollapseTournaments && (
-                        <Pressable
-                          onPress={() => setWhatsNewTab('tournaments')}
-                          className="flex-row items-center justify-between rounded-xl p-3 border-l-3"
-                          style={{
-                            borderLeftWidth: 3,
-                            borderLeftColor: '#f59e0b',
-                            backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(217, 119, 6, 0.10)',
-                          }}
-                        >
-                          <View className="flex-row items-center gap-2.5 flex-1 pr-2">
-                            <SymbolView name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }} size={16} tintColor="#fbbf24" />
-                            <Text className="text-xs text-slate-200 flex-1">
-                              There are <Text className="font-bold text-amber-300">{tournamentsList.length - 4} more active tournaments</Text>.{' '}
-                              <Text className="font-bold underline text-amber-300">Click here to view all</Text>
-                            </Text>
-                          </View>
-                          <Text className="text-xs font-bold text-amber-300">Tournaments ›</Text>
-                        </Pressable>
-                      )}
+                        return renderFeedChild(item);
+                      })}
                     </>
                   );
                 })()}
