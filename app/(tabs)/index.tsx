@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ScreenScrollView } from '@/src/components/ScreenScrollView';
 import { SymbolView } from 'expo-symbols';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { PlayerAvatar } from '@/src/components/PlayerAvatar';
@@ -22,7 +22,8 @@ import { PersonalGoalsProgress } from '@/src/features/fantasy/PersonalGoalsProgr
 import { getMatches } from '@/src/features/competition/api';
 import { getDashboardSquadSummary, type FantasyLineupEntry } from '@/src/features/fantasy/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
-import { getLeagues } from '@/src/features/leagues/api';
+import { getAnalytics } from '@/src/features/analytics/api';
+import { getLeagues, getLeagueActivity } from '@/src/features/leagues/api';
 import { markNotificationRead } from '@/src/features/notifications/api';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
@@ -32,6 +33,13 @@ import {
   type MobileFeedGroupItem,
   type MobileFeedItemChild,
 } from '@/src/features/dashboard/whats-new-grouping';
+import {
+  CaptainScoringGuide,
+  DashboardGreeting,
+  getPointTrend,
+  getRankTrend,
+  LineupProgress,
+} from '@/src/features/dashboard/DashboardPresentation';
 
 function formatMetric(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—';
@@ -60,6 +68,12 @@ export default function HomeScreen() {
   const squadSummaryQuery = useQuery({
     queryKey: ['dashboard-squad-summary', session?.user.id],
     queryFn: getDashboardSquadSummary,
+    enabled: Boolean(session),
+    staleTime: 60_000,
+  });
+  const analyticsQuery = useQuery({
+    queryKey: ['dashboard-analytics-trends'],
+    queryFn: getAnalytics,
     enabled: Boolean(session),
     staleTime: 60_000,
   });
@@ -99,6 +113,13 @@ export default function HomeScreen() {
   const myLeagues = (leaguesQuery.data ?? [])
     .filter((league) => league.standings.some((standing) => standing.userId === session?.user.id))
     .slice(0, 3);
+  const leagueActivityQueries = useQueries({
+    queries: myLeagues.map((league) => ({
+      queryKey: ['league', 'activity', league.id],
+      queryFn: () => getLeagueActivity(league.id),
+      staleTime: 60_000,
+    })),
+  });
   const starters = (query.data?.lineup ?? [])
     .filter((entry) => entry.is_starter)
     .sort((a, b) => STARTER_SLOT_ORDER.indexOf(a.slot) - STARTER_SLOT_ORDER.indexOf(b.slot));
@@ -108,6 +129,8 @@ export default function HomeScreen() {
   const hasSquad = squadSize > 0;
   const hasCompleteLineup = starters.length === 5 && starters.some((entry) => entry.is_captain);
   const displayName = profileQuery.data?.displayName?.trim() || profileQuery.data?.username;
+  const pointTrend = getPointTrend(analyticsQuery.data?.trend ?? []);
+  const rankTrend = getRankTrend(analyticsQuery.data?.trend ?? []);
   const quickActions = !query.data
     ? []
     : !hasSquad
@@ -181,9 +204,10 @@ export default function HomeScreen() {
       >
         <View>
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Fantasy Dota 2</Text>
-          <Text className="mt-2 text-3xl font-bold text-white">
-            {displayName ? `Welcome back, ${displayName}` : 'Your dashboard'}
-          </Text>
+          <DashboardGreeting
+            loading={profileQuery.isPending}
+            displayName={displayName}
+          />
           <Text className="mt-1 text-sm text-slate-400">
             Manage your fantasy squads and compete with players worldwide.
           </Text>
@@ -207,7 +231,7 @@ export default function HomeScreen() {
               <HomeStatCard
                 label="Squad Value"
                 value={`${query.data.ownedPlayers.reduce((total, player) => total + player.current_price, 0).toFixed(1)}M`}
-                detail="Current player prices"
+                detail={analyticsQuery.data ? 'Based on current player prices' : 'Current player prices'}
                 icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
                 tint="#34d399"
                 onPress={() => router.push('/team')}
@@ -225,7 +249,7 @@ export default function HomeScreen() {
               <HomeStatCard
                 label="Total Points"
                 value={formatMetric(query.data.totalPoints)}
-                detail="Tap for breakdown"
+                detail={analyticsQuery.isPending ? 'Tap for breakdown' : pointTrend}
                 icon={{ ios: 'star.fill', android: 'star', web: 'star' }}
                 tint="#f59e0b"
                 onPress={() => setPointsBreakdownOpen(true)}
@@ -235,7 +259,7 @@ export default function HomeScreen() {
               <HomeStatCard
                 label="Global Rank"
                 value={formatMetric(query.data.globalRank)}
-                detail="View standings"
+                detail={analyticsQuery.isPending ? 'View standings' : rankTrend}
                 icon={{ ios: 'globe', android: 'public', web: 'public' }}
                 tint="#2dd4bf"
                 onPress={() => router.push('/leaderboard')}
@@ -952,6 +976,9 @@ export default function HomeScreen() {
                     <Text className="mt-1 text-xs leading-5 text-slate-400">
                       Gameweek {query.data.gameweek?.gameweekNumber ?? 1} · {starters.length}/5 starters set · Tap a player for score details
                     </Text>
+                    <View className="mt-2">
+                      <LineupProgress starters={starters.length} />
+                    </View>
                 </View>
                 <View className="flex-row gap-2">
                   <Link href="/team" asChild>
@@ -1021,6 +1048,7 @@ export default function HomeScreen() {
                     <LeadershipEntry label="Captain · 2×" entry={captain} />
                     <LeadershipEntry label="Vice-captain" entry={viceCaptain} />
                   </View>
+                  <CaptainScoringGuide />
                 </View>
               </View>
             ) : (
@@ -1092,8 +1120,23 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           ) : myLeagues.length ? (
-            myLeagues.map((league) => {
+            myLeagues.map((league, leagueIndex) => {
               const standing = league.standings.find((item) => item.userId === session?.user.id);
+              const rankChange = (leagueActivityQueries[leagueIndex]?.data ?? [])
+                .filter((activity) =>
+                  activity.type === 'rank_change' &&
+                  activity.fromRank !== null &&
+                  activity.toRank !== null &&
+                  (
+                    activity.manager === standing?.displayName ||
+                    activity.manager === standing?.username ||
+                    activity.manager === standing?.manager
+                  )
+                )
+                .at(-1);
+              const rankDelta = rankChange?.fromRank != null && rankChange.toRank != null
+                ? rankChange.fromRank - rankChange.toRank
+                : null;
               return (
                 <Link key={league.id} href={`/league/${league.id}`} asChild>
                   <Pressable className="flex-row items-center justify-between gap-3 border-t border-slate-800 pt-3">
@@ -1104,6 +1147,17 @@ export default function HomeScreen() {
                     <View className="items-end">
                       <Text className="font-bold text-brand-300">#{standing?.rank ?? '—'}</Text>
                       <Text className="text-xs text-slate-400">{standing?.points ?? 0} pts</Text>
+                      {rankDelta !== null ? (
+                        <Text className={`mt-1 text-[10px] font-semibold ${
+                          rankDelta > 0 ? 'text-emerald-300' : rankDelta < 0 ? 'text-rose-300' : 'text-slate-400'
+                        }`}>
+                          {rankDelta > 0
+                            ? `↑ ${rankDelta} place${rankDelta === 1 ? '' : 's'}`
+                            : rankDelta < 0
+                              ? `↓ ${Math.abs(rankDelta)} place${Math.abs(rankDelta) === 1 ? '' : 's'}`
+                              : '— No change'}
+                        </Text>
+                      ) : null}
                     </View>
                   </Pressable>
                 </Link>
