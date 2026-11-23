@@ -1,28 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView as HorizontalScrollView, Text, TextInput, View } from 'react-native';
 import { getDefaultSeriesGame, groupMatchesBySeries, shouldShowMatchSeries, summarizeMatchSeries } from '@/src/features/competition/match-series';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { DataFreshnessBadge } from '@/src/components/DataFreshnessBadge';
 import { getMatchesPage, getTournaments } from '@/src/features/competition/api';
 import { getMatchSeriesSquadAppearance } from '@/src/features/competition/match-squad-appearance';
 import { MatchSeriesCard } from '@/src/features/competition/MatchSeriesCard';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
+import {
+  getActiveMatchFilterCount,
+  getMatchRefreshInterval,
+  type MatchListFilter,
+} from '@/src/features/competition/match-list-state';
+import { useMobileTheme } from '@/src/lib/theme';
 
 const filters = ['all', 'live', 'upcoming', 'completed'] as const;
-type MatchFilter = (typeof filters)[number];
 
 export default function MatchesScreen() {
   const router = useRouter();
+  const { colors } = useMobileTheme();
   const params = useLocalSearchParams<{ gameweekId?: string | string[] }>();
   const rawGameweekId = Array.isArray(params.gameweekId) ? params.gameweekId[0] : params.gameweekId;
   const parsedGameweekId = Number(rawGameweekId);
   const gameweekId = Number.isSafeInteger(parsedGameweekId) && parsedGameweekId > 0
     ? parsedGameweekId
     : undefined;
-  const [filter, setFilter] = useState<MatchFilter>('all');
+  const [filter, setFilter] = useState<MatchListFilter>('all');
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
   const [tournamentId, setTournamentId] = useState<number | null>(null);
@@ -30,6 +36,8 @@ export default function MatchesScreen() {
   const [page, setPage] = useState(1);
   const [tournamentSearchDraft, setTournamentSearchDraft] = useState('');
   const [tournamentSearch, setTournamentSearch] = useState('');
+  const [isScreenFocused, setIsScreenFocused] = useState(false);
+  const hasVisitedMatchesScreen = useRef(false);
   useEffect(() => {
     const timeout = setTimeout(() => setSearch(searchDraft.trim()), 300);
     return () => clearTimeout(timeout);
@@ -53,7 +61,21 @@ export default function MatchesScreen() {
       page,
     }),
     staleTime: 30_000,
+    refetchInterval: (currentQuery) => isScreenFocused
+      ? getMatchRefreshInterval(filter, currentQuery.state.data?.counts.live ?? 0)
+      : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: isScreenFocused && (filter === 'all' || filter === 'live') ? 'always' : false,
   });
+  const refetchMatches = query.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      setIsScreenFocused(true);
+      if (hasVisitedMatchesScreen.current) void refetchMatches();
+      hasVisitedMatchesScreen.current = true;
+      return () => setIsScreenFocused(false);
+    }, [refetchMatches]),
+  );
   const fantasyQuery = useFantasyContext();
   const ownedPlayers = fantasyQuery.data?.ownedPlayers ?? [];
   const totalPages = query.data ? Math.max(1, Math.ceil(query.data.total / query.data.limit)) : 1;
@@ -66,9 +88,26 @@ export default function MatchesScreen() {
     const s = summarizeMatchSeries(group.games);
     return s.isLive && !s.isComplete;
   }).length;
+  const activeFilterCount = getActiveMatchFilterCount({
+    filter,
+    tournamentId,
+    search: searchDraft,
+    gameweekId,
+  });
   const matchingTournaments = (tournamentsQuery.data ?? []).filter((tournament) =>
     tournament.name.toLowerCase().includes(tournamentSearch.toLowerCase()),
   );
+  const clearAllFilters = () => {
+    setFilter('all');
+    setSearchDraft('');
+    setSearch('');
+    setTournamentId(null);
+    setPage(1);
+    setTournamentSearchDraft('');
+    setTournamentSearch('');
+    setShowTournaments(false);
+    if (gameweekId !== undefined) router.replace('/matches');
+  };
   useEffect(() => {
     if (filter === 'upcoming' && query.data?.counts.upcoming === 0) {
       // Keep the selected tab consistent with refreshed server-side match counts.
@@ -89,7 +128,7 @@ export default function MatchesScreen() {
       >
         <View>
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Pro circuit</Text>
-          <Text className="mt-2 text-3xl font-bold text-white">Match Center</Text>
+          <Text className="mt-2 text-3xl font-bold text-slate-50">Match Center</Text>
           <Text className="mt-1 text-sm leading-5 text-slate-400">Live, upcoming, and completed professional matches.</Text>
           <View className="mt-3">
             <DataFreshnessBadge page="matches" />
@@ -114,9 +153,9 @@ export default function MatchesScreen() {
             setPage(1);
           }}
           placeholder="Search teams or tournaments"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
-          className="min-h-12 rounded-xl border border-slate-700 bg-slate-900 px-4 text-white"
+          className="min-h-12 rounded-xl border border-slate-700 bg-slate-900 px-4 text-slate-50"
         />
         <View className="flex-row flex-wrap gap-2">
           {filters
@@ -147,7 +186,7 @@ export default function MatchesScreen() {
             className="min-h-11 justify-center rounded-xl border border-slate-700 bg-slate-900 px-4"
             onPress={() => setShowTournaments((shown) => !shown)}
           >
-            <Text className="font-semibold text-white">
+            <Text className="font-semibold text-slate-50">
               {tournamentId === null
                 ? 'All tournaments'
                 : tournamentsQuery.data?.find((tournament) => tournament.id === tournamentId)?.name ?? 'Selected tournament'}
@@ -160,8 +199,8 @@ export default function MatchesScreen() {
                 value={tournamentSearchDraft}
                 onChangeText={setTournamentSearchDraft}
                 placeholder="Find a tournament"
-                placeholderTextColor="#94a3b8"
-                className="min-h-10 rounded-lg border border-slate-700 px-3 text-white"
+                placeholderTextColor={colors.placeholder}
+                className="min-h-10 rounded-lg border border-slate-700 px-3 text-slate-50"
               />
               {tournamentsQuery.isError ? (
                 <Text accessibilityRole="alert" className="text-sm text-red-200">
@@ -203,18 +242,49 @@ export default function MatchesScreen() {
             </View>
           ) : null}
         </View>
+        {activeFilterCount > 0 ? (
+          <View className="flex-row items-center justify-between gap-3">
+            <Text
+              accessibilityLabel={`${activeFilterCount} active match filter${activeFilterCount === 1 ? '' : 's'}`}
+              accessibilityLiveRegion="polite"
+              className="text-xs font-medium text-slate-300"
+            >
+              Filters
+              <Text className="font-mono font-bold text-brand-300"> ({activeFilterCount})</Text>
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear all match filters"
+              className="min-h-10 justify-center rounded-lg px-3"
+              onPress={clearAllFilters}
+            >
+              <Text className="text-xs font-semibold text-brand-300">Clear all</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {query.isError && query.data ? (
+          <View accessibilityRole="alert" className="gap-2 rounded-xl border border-red-900 bg-red-950 p-4">
+            <Text className="font-semibold text-red-200">Could not refresh matches</Text>
+            <Text className="text-sm leading-5 text-red-100">
+              {query.error instanceof Error ? query.error.message : 'Unable to refresh matches.'}
+            </Text>
+            <Pressable accessibilityRole="button" onPress={() => void query.refetch()}>
+              <Text className="font-semibold text-red-200">Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {query.isPending ? (
           <View accessibilityLabel="Loading matches" className="gap-3">
             {[1, 2, 3].map((item) => <View key={item} className="h-32 rounded-2xl bg-slate-800" />)}
           </View>
-        ) : query.isError ? (
+        ) : query.isError && !query.data ? (
           <View accessibilityRole="alert" className="gap-3 rounded-2xl border border-red-900 bg-red-950 p-5">
             <Text className="font-semibold text-red-200">Matches unavailable</Text>
             <Text className="text-sm leading-5 text-red-100">
               {query.error instanceof Error ? query.error.message : 'Unable to load matches.'}
             </Text>
             <Pressable accessibilityRole="button" onPress={() => void query.refetch()}>
-              <Text className="font-semibold text-white">Try again</Text>
+              <Text className="font-semibold text-red-200">Try again</Text>
             </Pressable>
           </View>
         ) : seriesGroups.length ? (
