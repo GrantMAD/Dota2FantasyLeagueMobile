@@ -269,10 +269,63 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
 
   const isLocked = context.gameweek?.isLocked ?? true;
   const lineupError = getLineupError(lineup);
+  const missingStarterSlots = STARTER_SLOTS.filter(
+    (slot) => !lineup.some((entry) => entry.slot === slot && entry.player_id != null)
+  );
+  const starterEntries = lineup.filter((entry) =>
+    STARTER_SLOTS.includes(entry.slot as (typeof STARTER_SLOTS)[number])
+  );
+  const captainEntries = starterEntries.filter((entry) => entry.is_captain);
+  const viceCaptainEntries = starterEntries.filter((entry) => entry.is_vice_captain);
+  const hasCaptainAndVice = captainEntries.length === 1
+    && viceCaptainEntries.length === 1
+    && captainEntries[0].player_id !== viceCaptainEntries[0].player_id;
+  const hasUniqueSlots = new Set(lineup.map((entry) => entry.slot)).size === lineup.length;
+  const hasUniquePlayers = new Set(lineup.map((entry) => entry.player_id)).size === lineup.length;
+  const readinessItems = [
+    {
+      id: 'starters',
+      ready: missingStarterSlots.length === 0,
+      label: missingStarterSlots.length === 0
+        ? 'All five starting roles are assigned.'
+        : `Choose a player for: ${missingStarterSlots.map((slot) => SLOT_LABELS[slot]).join(', ')}.`,
+    },
+    {
+      id: 'slots',
+      ready: hasUniqueSlots,
+      label: hasUniqueSlots ? 'Each lineup slot is assigned once.' : 'Resolve duplicate lineup slots.',
+    },
+    {
+      id: 'players',
+      ready: hasUniquePlayers,
+      label: hasUniquePlayers ? 'Each player occupies one slot.' : 'A player cannot occupy multiple slots.',
+    },
+    {
+      id: 'leadership',
+      ready: hasCaptainAndVice,
+      label: hasCaptainAndVice
+        ? 'Captain and Vice-Captain are set.'
+        : 'Choose one different Captain and Vice-Captain from your starting five.',
+    },
+  ];
   const currentSlotEntry = activeSlot ? entriesBySlot.get(activeSlot) : undefined;
   const eligiblePlayers = activeSlot
     ? context.ownedPlayers.filter((player) => isEligibleForSlot(player, activeSlot))
     : [];
+  const captainEntry = starterEntries.find((entry) => entry.is_captain);
+  const viceCaptainEntry = starterEntries.find((entry) => entry.is_vice_captain);
+  const captainPlayer = captainEntry
+    ? playersById.get(captainEntry.player_id) ?? captainEntry.professional_players
+    : null;
+  const viceCaptainPlayer = viceCaptainEntry
+    ? playersById.get(viceCaptainEntry.player_id) ?? viceCaptainEntry.professional_players
+    : null;
+  const captainName = captainPlayer
+    ? captainPlayer.in_game_name || captainPlayer.name
+    : captainEntry ? `Player ${captainEntry.player_id}` : 'Not selected';
+  const viceCaptainName = viceCaptainPlayer
+    ? viceCaptainPlayer.in_game_name || viceCaptainPlayer.name
+    : viceCaptainEntry ? `Player ${viceCaptainEntry.player_id}` : 'Not selected';
 
   function assignPlayer(slot: LineupSlot, player: FantasyPlayer) {
     const existingEntry = lineup.find((entry) => entry.player_id === player.id);
@@ -392,14 +445,51 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
         </View>
       ) : null}
 
+      <View className="flex-row items-start gap-2 rounded-xl border border-slate-700 bg-slate-800/50 p-3">
+        <SymbolView
+          name={{ ios: 'info.circle', android: 'info', web: 'info' }}
+          size={18}
+          tintColor={lineupIconTint}
+        />
+        <Text className="flex-1 text-sm leading-5 text-slate-300">
+          Fixture difficulty is a form estimate from up to 10 recent completed matches, not a prediction. Ratings range from 1 (easiest) to 5 (hardest); at least 5 results are required.
+        </Text>
+      </View>
+
       <View className="gap-2">
+        <View className="gap-2 rounded-xl border border-slate-700 bg-slate-800/40 p-3">
+          <Text accessibilityRole="header" className="text-sm font-bold uppercase tracking-wider text-brand-400">
+            Starting Five · Active
+          </Text>
+          <Text className="text-sm leading-5 text-slate-300">
+            Captain: <Text className="font-semibold text-foreground">{captainName}</Text>
+            {' · '}
+            Vice-Captain: <Text className="font-semibold text-foreground">{viceCaptainName}</Text>
+          </Text>
+          <View className="flex-row items-start gap-2 rounded-lg border border-amber-700/40 bg-amber-950/20 p-3">
+            <SymbolView
+              name={{ ios: 'info.circle', android: 'info', web: 'info' }}
+              size={17}
+              tintColor={theme === 'dark' ? '#fbbf24' : '#b45309'}
+            />
+            <Text className="flex-1 text-sm leading-5 text-slate-300">
+              Assign all five starting roles first, then choose a Captain for 2× points and a different Vice-Captain from your starters.
+            </Text>
+          </View>
+        </View>
         {ALL_SLOTS.map((slot) => {
           const entry = entriesBySlot.get(slot);
           const player = entry ? playersById.get(entry.player_id) ?? entry.professional_players : null;
           const isStarter = STARTER_SLOTS.includes(slot as (typeof STARTER_SLOTS)[number]);
 
           return (
-            <View key={slot} className={`rounded-xl border p-3 ${lineupSlotColors(slot)}`}>
+            <View key={slot} className="gap-2">
+              {slot === 'bench_1' ? (
+                <Text accessibilityRole="header" className="mt-3 text-sm font-bold uppercase tracking-wider text-slate-400">
+                  Bench · Reserves
+                </Text>
+              ) : null}
+              <View className={`rounded-xl border p-3 ${lineupSlotColors(slot)}`}>
               <View className="flex-row items-center justify-between gap-2">
             <View className="h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-slate-500/40 bg-slate-900">
               {player?.profile_image_url ? (
@@ -487,6 +577,7 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
                   hasGameweek={Boolean(context.gameweek?.id)}
                 />
               ) : null}
+              </View>
             </View>
           );
         })}
@@ -542,7 +633,26 @@ export function LineupEditor({ context, userId }: LineupEditorProps) {
         </View>
       ) : null}
 
-      {lineupError ? <Text className="text-sm leading-5 text-amber-200">{lineupError}</Text> : null}
+      {lineupError && !isLocked ? (
+        <View accessibilityLiveRegion="polite" className="gap-1.5 rounded-xl border border-amber-700/40 bg-amber-950/20 p-3">
+          {readinessItems.map((item) => (
+            <View key={item.id} className="flex-row items-start gap-2">
+              <SymbolView
+                name={item.ready
+                  ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }
+                  : { ios: 'exclamationmark.circle.fill', android: 'error_outline', web: 'error_outline' }}
+                size={17}
+                tintColor={item.ready
+                  ? theme === 'dark' ? '#34d399' : '#047857'
+                  : theme === 'dark' ? '#fbbf24' : '#b45309'}
+              />
+              <Text className={`flex-1 text-sm leading-5 ${item.ready ? 'text-emerald-300' : 'text-amber-200'}`}>
+                {item.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
       {saveError ? <Text accessibilityRole="alert" className="text-sm leading-5 text-red-300">{saveError}</Text> : null}
       {mutation.isSuccess ? (
         <Text accessibilityRole="text" className="text-sm font-medium text-emerald-300">Lineup saved successfully.</Text>

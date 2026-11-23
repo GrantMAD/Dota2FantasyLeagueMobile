@@ -145,7 +145,7 @@ describe('mobile data access', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('resolves a used Wildcard gameweek number through the authenticated gameweek RPC', async () => {
+  it('resolves historical used chip gameweek numbers through the authenticated gameweek RPC', async () => {
     mobileFantasyContextRpc.mockImplementation(async (name: string) => {
       if (name === 'mobile_get_fantasy_lineup_context') {
         return {
@@ -161,12 +161,12 @@ describe('mobile data access', () => {
             defaultGameweekId: null,
             availableGameweeks: [],
             chips: {
-              tripleCaptainUsed: false,
-              tripleCaptainGameweekId: null,
-              benchBoostUsed: false,
-              benchBoostGameweekId: null,
+              tripleCaptainUsed: true,
+              tripleCaptainGameweekId: 42,
+              benchBoostUsed: true,
+              benchBoostGameweekId: 43,
               wildcardUsed: true,
-              wildcardUsedGameweekId: 42,
+              wildcardUsedGameweekId: 44,
             },
             lineup: [],
             ownedPlayers: [],
@@ -176,7 +176,11 @@ describe('mobile data access', () => {
       }
       if (name === 'mobile_get_gameweeks') {
         return {
-          data: { gameweeks: [{ id: 42, gameweek_number: 11 }] },
+          data: { gameweeks: [
+            { id: 42, gameweek_number: 11 },
+            { id: 43, gameweek_number: 12 },
+            { id: 44, gameweek_number: 13 },
+          ] },
           error: null,
         };
       }
@@ -185,15 +189,19 @@ describe('mobile data access', () => {
 
     await expect(getFantasyContext()).resolves.toMatchObject({
       chips: {
+        tripleCaptainGameweekId: 42,
+        tripleCaptainGameweekNumber: 11,
+        benchBoostGameweekId: 43,
+        benchBoostGameweekNumber: 12,
         wildcardUsed: true,
-        wildcardUsedGameweekId: 42,
-        wildcardUsedGameweekNumber: 11,
+        wildcardUsedGameweekId: 44,
+        wildcardUsedGameweekNumber: 13,
       },
     });
     expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_gameweeks');
   });
 
-  it('surfaces errors when resolving the used Wildcard gameweek', async () => {
+  it('surfaces errors when resolving used chip gameweeks', async () => {
     mobileFantasyContextRpc.mockImplementation(async (name: string) => {
       if (name === 'mobile_get_fantasy_lineup_context') {
         return {
@@ -226,7 +234,7 @@ describe('mobile data access', () => {
     });
 
     await expect(getFantasyContext()).rejects.toThrow(
-      'Unable to load Wildcard usage details: Gameweek schedule unavailable.'
+      'Unable to load chip usage details: Gameweek schedule unavailable.'
     );
   });
 

@@ -188,8 +188,10 @@ function createContext(overrides: Partial<FantasyContext> = {}): FantasyContext 
     chips: {
       tripleCaptainUsed: false,
       tripleCaptainGameweekId: null,
+      tripleCaptainGameweekNumber: null,
       benchBoostUsed: false,
       benchBoostGameweekId: null,
+      benchBoostGameweekNumber: null,
       wildcardUsed: false,
       wildcardUsedGameweekId: null,
       wildcardUsedGameweekNumber: null,
@@ -288,6 +290,22 @@ describe('fantasy management components', () => {
         expect.objectContaining({ playerId: 1, slot: 'carry', isCaptain: false, isViceCaptain: true }),
       ]),
     }, expect.any(Object));
+  });
+
+  it('explains lineup difficulty, shows leadership selections, and lists missing requirements', () => {
+    const completeContext = createContext();
+    const incompleteContext = createContext({
+      lineup: completeContext.lineup.filter((entry) => entry.slot !== 'offlane'),
+    });
+    const view = renderWithQueryClient(<LineupEditor context={incompleteContext} userId="manager-1" />);
+
+    expect(view.getByText('Starting Five · Active')).toBeTruthy();
+    expect(view.getByText(/Fixture difficulty is a form estimate/)).toBeTruthy();
+    expect(view.getByText(/Captain:.*Player 1/)).toBeTruthy();
+    expect(view.getByText(/Vice-Captain:.*Player 2/)).toBeTruthy();
+    expect(view.getByText('Choose a player for: Offlane.')).toBeTruthy();
+    expect(view.getByText('Captain and Vice-Captain are set.')).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Save lineup' }).props.accessibilityState.disabled).toBe(true);
   });
 
   it('shows player avatars in lineup slots and the player picker', async () => {
@@ -710,6 +728,24 @@ describe('fantasy management components', () => {
       fantasySeasonId: 12,
       chip: 'triple-captain',
     }, expect.any(Object));
+  });
+
+  it('shows historical Triple Captain and Bench Boost gameweek numbers', () => {
+    const context = createContext({
+      chips: {
+        ...createContext().chips,
+        tripleCaptainUsed: true,
+        tripleCaptainGameweekId: 18,
+        tripleCaptainGameweekNumber: 4,
+        benchBoostUsed: true,
+        benchBoostGameweekId: 19,
+        benchBoostGameweekNumber: 5,
+      },
+    });
+    const view = renderWithQueryClient(<ChipActivationPanel context={context} userId="manager-1" />);
+
+    expect(view.getByText('Used in Gameweek 4')).toBeTruthy();
+    expect(view.getByText('Used in Gameweek 5')).toBeTruthy();
   });
 
   it('shows the used Wildcard gameweek and next-season availability', () => {

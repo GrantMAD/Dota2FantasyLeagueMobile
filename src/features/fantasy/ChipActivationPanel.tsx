@@ -67,9 +67,7 @@ export function ChipActivationPanel({ context, userId }: ChipActivationPanelProp
         tone="amber"
         isDark={isDark}
         used={context.chips.tripleCaptainUsed}
-        usedGameweekNumber={context.availableGameweeks.find(
-          (gameweek) => gameweek.id === context.chips.tripleCaptainGameweekId
-        )?.gameweekNumber ?? null}
+        usedGameweekNumber={context.chips.tripleCaptainGameweekNumber}
         busy={mutation.isPending}
         locked={context.gameweek?.isLocked ?? true}
         onActivate={() => confirmActivation('triple-captain', 'Triple Captain')}
@@ -79,9 +77,7 @@ export function ChipActivationPanel({ context, userId }: ChipActivationPanelProp
         tone="cyan"
         isDark={isDark}
         used={context.chips.benchBoostUsed}
-        usedGameweekNumber={context.availableGameweeks.find(
-          (gameweek) => gameweek.id === context.chips.benchBoostGameweekId
-        )?.gameweekNumber ?? null}
+        usedGameweekNumber={context.chips.benchBoostGameweekNumber}
         busy={mutation.isPending}
         locked={context.gameweek?.isLocked ?? true}
         onActivate={() => confirmActivation('bench-boost', 'Bench Boost')}

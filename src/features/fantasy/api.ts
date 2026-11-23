@@ -73,8 +73,10 @@ export interface FantasyContext {
   chips: {
     tripleCaptainUsed: boolean;
     tripleCaptainGameweekId: number | null;
+    tripleCaptainGameweekNumber: number | null;
     benchBoostUsed: boolean;
     benchBoostGameweekId: number | null;
+    benchBoostGameweekNumber: number | null;
     wildcardUsed: boolean;
     wildcardUsedGameweekId: number | null;
     wildcardUsedGameweekNumber: number | null;
@@ -389,25 +391,38 @@ export async function getFantasyContext(gameweekId?: number): Promise<FantasyCon
     throw new ApiError('Fantasy data was returned in an unexpected format.', 502);
   }
 
+  let tripleCaptainGameweekNumber: number | null = null;
+  let benchBoostGameweekNumber: number | null = null;
   let wildcardUsedGameweekNumber: number | null = null;
-  if (chips.wildcardUsedGameweekId !== null) {
+  if (
+    chips.tripleCaptainGameweekId !== null ||
+    chips.benchBoostGameweekId !== null ||
+    chips.wildcardUsedGameweekId !== null
+  ) {
     const { data: gameweeksData, error: gameweeksError } = await getSupabaseClient().rpc('mobile_get_gameweeks');
     if (gameweeksError) {
-      throw new ApiError(`Unable to load Wildcard usage details: ${gameweeksError.message}`, 500);
+      throw new ApiError(`Unable to load chip usage details: ${gameweeksError.message}`, 500);
     }
     if (!isRecord(gameweeksData) || !Array.isArray(gameweeksData.gameweeks)) {
-      throw new ApiError('Wildcard usage details were returned in an unexpected format.', 502);
+      throw new ApiError('Chip usage details were returned in an unexpected format.', 502);
     }
+    const gameweeks = gameweeksData.gameweeks;
 
-    const wildcardGameweek = gameweeksData.gameweeks.find(
-      (rawGameweek) => isRecord(rawGameweek) && rawGameweek.id === chips.wildcardUsedGameweekId
-    );
-    if (wildcardGameweek !== undefined) {
-      if (!isRecord(wildcardGameweek) || !Number.isInteger(wildcardGameweek.gameweek_number)) {
-        throw new ApiError('Wildcard usage details were returned in an unexpected format.', 502);
+    const resolveUsedGameweekNumber = (gameweekId: number | null, chipName: string): number | null => {
+      if (gameweekId === null) return null;
+      const usedGameweek = gameweeks.find(
+        (rawGameweek) => isRecord(rawGameweek) && rawGameweek.id === gameweekId
+      );
+      if (usedGameweek === undefined) return null;
+      if (!isRecord(usedGameweek) || !Number.isInteger(usedGameweek.gameweek_number)) {
+        throw new ApiError(`${chipName} usage details were returned in an unexpected format.`, 502);
       }
-      wildcardUsedGameweekNumber = Number(wildcardGameweek.gameweek_number);
-    }
+      return Number(usedGameweek.gameweek_number);
+    };
+
+    tripleCaptainGameweekNumber = resolveUsedGameweekNumber(chips.tripleCaptainGameweekId, 'Triple Captain');
+    benchBoostGameweekNumber = resolveUsedGameweekNumber(chips.benchBoostGameweekId, 'Bench Boost');
+    wildcardUsedGameweekNumber = resolveUsedGameweekNumber(chips.wildcardUsedGameweekId, 'Wildcard');
   }
 
   const availableGameweeks = value.availableGameweeks.map((rawGameweek) => {
@@ -470,8 +485,10 @@ export async function getFantasyContext(gameweekId?: number): Promise<FantasyCon
     chips: {
       tripleCaptainUsed: chips.tripleCaptainUsed,
       tripleCaptainGameweekId: chips.tripleCaptainGameweekId,
+      tripleCaptainGameweekNumber,
       benchBoostUsed: chips.benchBoostUsed,
       benchBoostGameweekId: chips.benchBoostGameweekId,
+      benchBoostGameweekNumber,
       wildcardUsed: chips.wildcardUsed,
       wildcardUsedGameweekId: chips.wildcardUsedGameweekId,
       wildcardUsedGameweekNumber,
