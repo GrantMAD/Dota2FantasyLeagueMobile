@@ -140,7 +140,7 @@ export function SquadBuilder({
   return (
     <View className="gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
       <View>
-        <Text className="text-lg font-bold text-white">
+        <Text className="text-lg font-bold text-foreground">
           {context.ownedPlayers.length === 0 ? 'Build your squad' : 'Complete your squad'}
         </Text>
         <Text className="mt-1 text-sm leading-5 text-slate-400">
@@ -152,7 +152,7 @@ export function SquadBuilder({
         accessibilityLabel="Search players to add to your squad"
         autoCapitalize="none"
         autoCorrect={false}
-        className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-base text-white"
+        className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-base text-foreground"
         editable={!addMutation.isPending}
         onChangeText={setSearch}
         placeholder="Search available players"
@@ -161,7 +161,22 @@ export function SquadBuilder({
       />
 
       <View>
-        <Text className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Filter by role</Text>
+        <View className="mb-2 flex-row items-center justify-between gap-2">
+          <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Filter by role</Text>
+          {(search || roleFilter !== 'all') ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear search and role filters"
+              className="min-h-9 justify-center px-2"
+              onPress={() => {
+                setSearch('');
+                setRoleFilter('all');
+              }}
+            >
+              <Text className="text-xs font-semibold text-brand-600">Clear filters</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <View className="flex-row flex-wrap gap-2">
           {(['all', 'carry', 'mid', 'offlane', 'support', 'hard_support'] as const).map((role) => (
             <Pressable
@@ -198,7 +213,7 @@ export function SquadBuilder({
             {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
           </Text>
           <Pressable accessibilityRole="button" onPress={() => void marketQuery.refetch()}>
-            <Text className="font-semibold text-white">Try again</Text>
+            <Text className="font-semibold text-brand-600">Try again</Text>
           </Pressable>
         </View>
       ) : (
@@ -262,7 +277,7 @@ export function SquadBuilder({
                   }}
                 >
                   <View className="flex-row items-center justify-between gap-2">
-                    <Text className="flex-1 font-semibold text-white" numberOfLines={1}>{playerName(player)}</Text>
+                    <Text className="flex-1 font-semibold text-foreground" numberOfLines={1}>{playerName(player)}</Text>
                     {player.ownership_percentage != null ? (
                       <Text className={`rounded-full px-2 py-1 text-[10px] font-semibold ${ownership.badgeBg} ${ownership.badgeText}`}>
                         {player.ownership_percentage.toFixed(1)}% owned
@@ -319,7 +334,7 @@ export function SquadBuilder({
         {addMutation.isPending ? (
           <ActivityIndicator accessibilityLabel="Adding players" color={colors.onAccent} />
         ) : (
-          <Text className="font-semibold text-white">Add selected players</Text>
+          <Text className="font-semibold text-on-accent">Add selected players</Text>
         )}
       </Pressable>
     </View>

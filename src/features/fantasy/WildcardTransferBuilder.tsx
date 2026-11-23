@@ -28,7 +28,8 @@ function playerName(player: { in_game_name: string | null; name: string }): stri
 export function WildcardTransferBuilder({ context, userId }: WildcardTransferBuilderProps) {
   const queryClient = useQueryClient();
   const { confirm, notify } = useMobileFeedback();
-  const { colors } = useMobileTheme();
+  const { colors, theme } = useMobileTheme();
+  const isDark = theme === 'dark';
   const [search, setSearch] = useState('');
   const [selectedOutId, setSelectedOutId] = useState<number | null>(null);
   const [pairs, setPairs] = useState<TransferPair[]>([]);
@@ -118,7 +119,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
   return (
     <View className="gap-4 rounded-2xl border border-amber-800/70 bg-slate-900 p-4">
       <View>
-        <Text className="text-lg font-bold text-white">Wildcard transfer builder</Text>
+        <Text className="text-lg font-bold text-foreground">Wildcard transfer builder</Text>
         <Text className="mt-1 text-sm leading-5 text-slate-400">
           Build multiple role-for-role swaps and submit them together. The server checks the final budget, roster limits, and deadline.
         </Text>
@@ -149,7 +150,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
                 transferMutation.reset();
               }}
             >
-              <Text className="font-semibold text-white">{playerName(player)}{paired ? ' · Selected' : ''}</Text>
+              <Text className="font-semibold text-foreground">{playerName(player)}{paired ? ' · Selected' : ''}</Text>
               <Text className="mt-1 text-xs text-slate-400">{player.primary_role ?? 'Role unavailable'} · {formatPlayerPriceCompact(player.current_price)}</Text>
             </Pressable>
           );
@@ -164,7 +165,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
           accessibilityLabel="Search Wildcard replacement players"
           autoCapitalize="none"
           autoCorrect={false}
-          className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-base text-white"
+          className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-base text-foreground"
           editable={!context.gameweek?.isLocked && !transferMutation.isPending}
           onChangeText={setSearch}
           placeholder={selectedOut ? `Search ${selectedOut.primary_role ?? 'players'}` : 'Select a player to sell first'}
@@ -179,7 +180,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
               {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
             </Text>
             <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void marketQuery.refetch()}>
-              <Text className="font-semibold text-white">Try again</Text>
+              <Text className="font-semibold text-brand-600">Try again</Text>
             </Pressable>
           </View>
         ) : availableMarketPlayers.length > 0 ? (
@@ -193,7 +194,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
               onPress={() => addPair(player)}
             >
               <View className="flex-row items-center justify-between gap-2">
-                <Text className="flex-1 font-semibold text-white" numberOfLines={1}>{playerName(player)}</Text>
+                <Text className="flex-1 font-semibold text-foreground" numberOfLines={1}>{playerName(player)}</Text>
                 {player.ownership_percentage != null ? (
                   <Text className="text-[10px] font-medium text-cyan-300">{player.ownership_percentage.toFixed(1)}% owned</Text>
                 ) : null}
@@ -213,7 +214,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
 
       {pairs.length > 0 ? (
         <View className="gap-2 border-t border-slate-800 pt-4">
-          <Text className="text-sm font-semibold text-white">Planned transfers · {pairs.length}</Text>
+          <Text className="text-sm font-semibold text-foreground">Planned transfers · {pairs.length}</Text>
           {pairs.map((pair) => (
             <View key={pair.playerOut.id} className="flex-row items-center justify-between gap-3 rounded-xl bg-slate-950 p-3">
               <View className="flex-1">
@@ -229,7 +230,14 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
               </Pressable>
             </View>
           ))}
-          <Text className={`text-sm font-semibold ${estimatedBankAfter >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+          <Text
+            className="text-sm font-semibold"
+            style={{
+              color: estimatedBankAfter >= 0
+                ? (isDark ? '#6ee7b7' : '#047857')
+                : (isDark ? '#fda4af' : '#be123c'),
+            }}
+          >
             Estimated bank after swaps: {estimatedBankAfter.toFixed(1)}M
           </Text>
           <Text className="text-xs leading-5 text-slate-400">
@@ -258,12 +266,14 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
           disabled={!canSubmit}
           onPress={confirmTransfers}
         >
-          <Text className="font-bold text-white">Review {pairs.length || ''} Wildcard transfer{pairs.length === 1 ? '' : 's'}</Text>
+          <Text className="font-bold" style={{ color: '#0f172a' }}>
+            Review {pairs.length || ''} Wildcard transfer{pairs.length === 1 ? '' : 's'}
+          </Text>
         </Pressable>
       )}
 
       <View className="border-t border-slate-800 pt-4">
-        <Text className="text-base font-semibold text-white">Recent transfers</Text>
+        <Text className="text-base font-semibold text-foreground">Recent transfers</Text>
         {historyQuery.isPending ? (
           <ActivityIndicator accessibilityLabel="Loading transfer history" className="mt-3" color="#14b8a6" />
         ) : historyQuery.isError ? (
@@ -272,7 +282,7 @@ export function WildcardTransferBuilder({ context, userId }: WildcardTransferBui
               {historyQuery.error instanceof Error ? historyQuery.error.message : 'Transfer history unavailable.'}
             </Text>
             <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void historyQuery.refetch()}>
-              <Text className="font-semibold text-white">Try again</Text>
+              <Text className="font-semibold text-brand-600">Try again</Text>
             </Pressable>
           </View>
         ) : historyQuery.data?.length ? (

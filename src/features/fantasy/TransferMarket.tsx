@@ -238,9 +238,17 @@ export function TransferMarket({
         </View>
       ) : null}
 
-      <View className="gap-3 rounded-xl border border-indigo-500/30 bg-indigo-950/30 p-4">
+      <View
+        className="gap-3 rounded-xl border border-indigo-500/30 bg-indigo-950/30 p-4"
+        style={{
+          borderColor: isDark ? '#4338ca' : '#c7d2fe',
+          backgroundColor: isDark ? 'rgba(30, 27, 75, 0.45)' : '#eef2ff',
+        }}
+      >
         <View>
-          <Text className="text-base font-bold text-white">Smart transfer suggestions</Text>
+          <Text className="text-base font-bold" style={{ color: isDark ? '#f8fafc' : '#1e1b4b' }}>
+            Smart transfer suggestions
+          </Text>
           <Text className="mt-1 text-xs leading-5 text-slate-300">
             Role-matched swaps based on recent scoring, price movement, your budget, and squad limits.
             Suggestions are advisory; the transfer server checks the final transaction.
@@ -260,7 +268,7 @@ export function TransferMarket({
                 : 'Transfer suggestions could not be loaded.'}
             </Text>
             <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void suggestionsQuery.refetch()}>
-              <Text className="font-semibold text-white">Try again</Text>
+              <Text className="font-semibold text-brand-600">Try again</Text>
             </Pressable>
           </View>
         ) : suggestionsQuery.data?.recommendations.length ? (
@@ -268,11 +276,15 @@ export function TransferMarket({
             <View
               key={`${suggestion.playerOutId}-${suggestion.playerInId}`}
               className="gap-2 rounded-lg border border-slate-700 bg-slate-900 p-3"
+              style={{
+                borderColor: isDark ? '#334155' : '#cbd5e1',
+                backgroundColor: isDark ? '#0f172a' : '#ffffff',
+              }}
             >
-              <Text className="text-sm font-semibold text-white">
-                <Text className="text-rose-300">{suggestion.playerOutName}</Text>
+              <Text className="text-sm font-semibold" style={{ color: isDark ? '#f8fafc' : '#0f172a' }}>
+                <Text style={{ color: isDark ? '#fda4af' : '#be123c' }}>{suggestion.playerOutName}</Text>
                 <Text className="text-slate-500"> → </Text>
-                <Text className="text-emerald-300">{suggestion.playerInName}</Text>
+                <Text style={{ color: isDark ? '#6ee7b7' : '#047857' }}>{suggestion.playerInName}</Text>
               </Text>
               <Text className="text-xs text-slate-400">
                 {suggestion.playerInRole} · {formatPlayerPriceCompact(suggestion.playerInCurrentPrice)} ·
@@ -285,6 +297,7 @@ export function TransferMarket({
                 accessibilityRole="button"
                 disabled={transferMutation.isPending}
                 className="min-h-11 items-center justify-center rounded-lg bg-indigo-500/20 px-3"
+                style={{ backgroundColor: isDark ? 'rgba(99, 102, 241, 0.22)' : '#e0e7ff' }}
                 onPress={() => {
                   setSelectedOutId(suggestion.playerOutId);
                   setSuggestedSelection(suggestion);
@@ -296,7 +309,9 @@ export function TransferMarket({
                   transferMutation.reset();
                 }}
               >
-                <Text className="text-xs font-semibold text-indigo-200">Select this swap</Text>
+                <Text className="text-xs font-semibold" style={{ color: isDark ? '#c7d2fe' : '#3730a3' }}>
+                  Select this swap
+                </Text>
               </Pressable>
             </View>
           ))
@@ -450,12 +465,30 @@ export function TransferMarket({
       </View>
 
       <View className="gap-2">
-        <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Search replacement</Text>
+        <View className="flex-row items-center justify-between gap-2">
+          <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Search replacement</Text>
+          {(search || selectedTeamId !== null) ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Clear search and team filters"
+              className="min-h-9 justify-center px-2"
+              onPress={() => {
+                setSearch('');
+                setSelectedTeamId(null);
+                setSuggestedSelection(null);
+                setSelectionOverride({ quickAddId: quickAddPlayerId, playerId: null });
+                setDismissedQuickAddId(null);
+              }}
+            >
+              <Text className="text-xs font-semibold text-brand-600">Clear filters</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <TextInput
           accessibilityLabel="Search available players"
           autoCapitalize="none"
           autoCorrect={false}
-          className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-base text-white"
+          className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-base text-foreground"
           editable={!transferMutation.isPending}
           onChangeText={(value) => {
             setSearch(value);
@@ -485,7 +518,7 @@ export function TransferMarket({
                 className="min-h-10 justify-center self-start"
                 onPress={() => void professionalTeamsQuery.refetch()}
               >
-                <Text className="font-semibold text-white">Try again</Text>
+                <Text className="font-semibold text-brand-600">Try again</Text>
               </Pressable>
             </View>
           ) : (
@@ -506,31 +539,11 @@ export function TransferMarket({
                   tintColor={isDark ? '#5eead4' : '#0f766e'}
                 />
               </Pressable>
-              {selectedTeamId !== null ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear professional team filter"
-                  className="min-h-9 flex-row items-center justify-center self-start gap-1 rounded-lg border border-slate-700 bg-slate-900 px-3"
-                  style={{
-                    borderColor: isDark ? '#334155' : '#cbd5e1',
-                    backgroundColor: isDark ? '#0f172a' : '#f8fafc',
-                  }}
-                  onPress={() => setSelectedTeamId(null)}
-                >
-                  <SymbolView
-                    name={{ ios: 'xmark', android: 'close', web: 'close' }}
-                    size={13}
-                    tintColor={isDark ? '#cbd5e1' : '#475569'}
-                  />
-                  <Text className="text-xs font-semibold" style={{ color: isDark ? '#cbd5e1' : '#334155' }}>
-                    Clear
-                  </Text>
-                </Pressable>
-              ) : (
+              {selectedTeamId === null ? (
                 <Text className="text-xs text-slate-500">
                   No team filter is applied until you choose one.
                 </Text>
-              )}
+              ) : null}
               <Modal
                 accessibilityViewIsModal
                 animationType="fade"
@@ -683,7 +696,7 @@ export function TransferMarket({
               {marketQuery.error instanceof Error ? marketQuery.error.message : 'Player market unavailable.'}
             </Text>
             <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void marketQuery.refetch()}>
-              <Text className="font-semibold text-white">Try again</Text>
+              <Text className="font-semibold text-brand-600">Try again</Text>
             </Pressable>
           </View>
         ) : visibleIncomingPlayers.length > 0 ? (
@@ -694,7 +707,7 @@ export function TransferMarket({
                 {quickAddQuery.error instanceof Error ? quickAddQuery.error.message : 'Unable to load the selected player.'}
               </Text>
               <Pressable accessibilityRole="button" onPress={() => void quickAddQuery.refetch()}>
-                <Text className="font-semibold text-white">Try again</Text>
+                <Text className="font-semibold text-brand-600">Try again</Text>
               </Pressable>
             </View>
           ) : null}
@@ -838,8 +851,14 @@ export function TransferMarket({
       ) : null}
 
       {selectedOut && selectedIn && selectedIn.current_price !== null ? (
-        <View className="gap-1 rounded-xl border border-cyan-900/60 bg-cyan-950/30 p-3">
-          <Text className="text-sm font-semibold text-cyan-100">
+        <View
+          className="gap-1 rounded-xl border border-cyan-900/60 bg-cyan-950/30 p-3"
+          style={{
+            borderColor: isDark ? '#155e75' : '#a5f3fc',
+            backgroundColor: isDark ? 'rgba(8, 51, 68, 0.3)' : '#ecfeff',
+          }}
+        >
+          <Text className="text-sm font-semibold" style={{ color: isDark ? '#cffafe' : '#0e7490' }}>
             Estimated bank after swap: {(context.budget + selectedOut.current_price - selectedIn.current_price).toFixed(1)}M
           </Text>
           <Text className="text-xs leading-5 text-slate-300">
@@ -870,12 +889,12 @@ export function TransferMarket({
           disabled={!canTransfer}
           onPress={requestTransferConfirmation}
         >
-          <Text className="font-bold text-white">Review transfer</Text>
+          <Text className="font-bold text-on-accent">Review transfer</Text>
         </Pressable>
       )}
 
       <View className="border-t border-slate-800 pt-4">
-        <Text className="text-base font-semibold text-white">Recent transfers</Text>
+        <Text className="text-base font-semibold text-foreground">Recent transfers</Text>
         {historyQuery.isPending ? (
           <ActivityIndicator accessibilityLabel="Loading transfer history" className="mt-3" color="#14b8a6" />
         ) : historyQuery.isError ? (
@@ -884,7 +903,7 @@ export function TransferMarket({
               {historyQuery.error instanceof Error ? historyQuery.error.message : 'Transfer history unavailable.'}
             </Text>
             <Pressable accessibilityRole="button" className="min-h-10 justify-center self-start" onPress={() => void historyQuery.refetch()}>
-              <Text className="font-semibold text-white">Try again</Text>
+              <Text className="font-semibold text-brand-600">Try again</Text>
             </Pressable>
           </View>
         ) : historyQuery.data?.length ? (

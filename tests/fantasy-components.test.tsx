@@ -12,6 +12,7 @@ import type { FixtureDifficultyResult } from '../src/features/fantasy/fixture-di
 import { LineupEditor } from '../src/features/fantasy/LineupEditor';
 import { SquadBuilder } from '../src/features/fantasy/SquadBuilder';
 import { TransferMarket } from '../src/features/fantasy/TransferMarket';
+import { WildcardTransferBuilder } from '../src/features/fantasy/WildcardTransferBuilder';
 import { ChipActivationPanel } from '../src/features/fantasy/ChipActivationPanel';
 import { WildcardPanel } from '../src/features/fantasy/WildcardPanel';
 import {
@@ -27,9 +28,10 @@ import {
 } from '../src/features/fantasy/api';
 import { getProfessionalTeams } from '../src/features/players/api';
 import { MobileFeedbackProvider } from '../src/components/MobileFeedbackProvider';
+import { useMobileTheme } from '../src/lib/theme';
 
 jest.mock('../src/lib/theme', () => ({
-  useMobileTheme: () => ({ colors: { onAccent: '#ffffff', placeholder: '#999999' }, theme: 'dark' }),
+  useMobileTheme: jest.fn(),
 }));
 
 jest.mock('../src/features/fantasy/api', () => ({
@@ -58,7 +60,44 @@ const mockedGetTransferSuggestions = jest.mocked(getTransferSuggestions);
 const mockedGetFixtureDifficultyForTeams = jest.mocked(getFixtureDifficultyForTeams);
 const mockedGetUpcomingFixturesForTeams = jest.mocked(getUpcomingFixturesForTeams);
 const mockedGetProfessionalTeams = jest.mocked(getProfessionalTeams);
+const mockedUseMobileTheme = jest.mocked(useMobileTheme);
 let queryClients: QueryClient[] = [];
+type ThemePreference = ReturnType<typeof useMobileTheme>['theme'];
+
+function getMockMobileTheme(theme: ThemePreference): ReturnType<typeof useMobileTheme> {
+  const shared = {
+    isLoading: false,
+    isSaving: false,
+    error: null,
+    setTheme: async (nextTheme: ThemePreference) => nextTheme,
+  };
+  if (theme === 'dark') {
+    return {
+      ...shared,
+      theme,
+      colors: {
+        placeholder: '#94a3b8',
+        onAccent: '#ffffff',
+        tabBarBackground: '#020617',
+        tabBarBorder: '#1e293b',
+        tabBarActive: '#14b8a6',
+        tabBarInactive: '#94a3b8',
+      },
+    };
+  }
+  return {
+    ...shared,
+    theme,
+    colors: {
+      placeholder: '#506070',
+      onAccent: '#0f172a',
+      tabBarBackground: '#e8eef5',
+      tabBarBorder: '#9fb4c9',
+      tabBarActive: '#0f766e',
+      tabBarInactive: '#506070',
+    },
+  };
+}
 
 function createPlayer(id: number, role: string): FantasyPlayer {
   return {
@@ -196,6 +235,7 @@ async function selectProfessionalTeam(view: ReturnType<typeof render>, teamName 
 describe('fantasy management components', () => {
   beforeEach(() => {
     queryClients = [];
+    mockedUseMobileTheme.mockReturnValue(getMockMobileTheme('dark'));
     mockedSaveLineup.mockReset();
     mockedProcessTransfer.mockReset();
     mockedActivateChip.mockReset();
@@ -427,6 +467,7 @@ describe('fantasy management components', () => {
   });
 
   it('previews estimated bank and warns when no free transfers remain', async () => {
+    mockedUseMobileTheme.mockReturnValue(getMockMobileTheme('light'));
     const incoming: MarketPlayer = {
       id: 11,
       name: 'Higher Priced Carry',
@@ -444,12 +485,16 @@ describe('fantasy management components', () => {
       <TransferMarket context={createContext({ freeTransfers: 0 })} userId="manager-1" />,
     );
 
+    expect(view.getByLabelText('Search available players').props.className).toContain('text-foreground');
     await selectProfessionalTeam(view);
     await fireEvent.press(view.getByText('Player 1'));
     await waitFor(() => expect(view.getByText('Higher Priced Carry')).toBeTruthy());
     await fireEvent.press(view.getByText('Higher Priced Carry'));
 
-    expect(view.getByText('Estimated bank after swap: 98.0M')).toBeTruthy();
+    const bankEstimate = view.getByText('Estimated bank after swap: 98.0M');
+    expect(bankEstimate).toBeTruthy();
+    expect(bankEstimate.props.style).toMatchObject({ color: '#0e7490' });
+    expect(view.getByText('Review transfer').props.className).toContain('text-on-accent');
     expect(view.getByText(/No free transfers remain; a transfer hit may apply/)).toBeTruthy();
   });
 
@@ -490,8 +535,11 @@ describe('fantasy management components', () => {
     expect(view.getByLabelText('Radiant Carry avatar')).toBeTruthy();
     expect(view.getAllByText('Radiant').length).toBeGreaterThan(0);
     expect(view.queryByText('Dire Carry')).toBeNull();
-    expect(view.getByText('Clear')).toBeTruthy();
-    await fireEvent.press(view.getByRole('button', { name: 'Clear professional team filter' }));
+    await fireEvent.changeText(view.getByLabelText('Search available players'), 'carry');
+    await waitFor(() => expect(mockedGetPlayerMarket).toHaveBeenCalledWith('carry', 8));
+    await fireEvent.press(view.getByRole('button', { name: 'Clear search and team filters' }));
+    expect(view.getByLabelText('Search available players').props.value).toBe('');
+    expect(view.getByText('Choose a team')).toBeTruthy();
     expect(view.getByText('Choose a professional team above to see eligible replacement players.')).toBeTruthy();
   });
 
@@ -599,6 +647,28 @@ describe('fantasy management components', () => {
 
     expect(view.getByText('Market Hard Support')).toBeTruthy();
     expect(view.queryByText('Market Carry')).toBeNull();
+    await fireEvent.press(view.getByRole('button', { name: 'Clear search and role filters' }));
+    expect(view.getByText('Market Carry')).toBeTruthy();
+    expect(view.getByText('Market Hard Support')).toBeTruthy();
+  });
+
+  it('uses a readable light-theme bank status in the Wildcard transfer builder', async () => {
+    mockedUseMobileTheme.mockReturnValue(getMockMobileTheme('light'));
+    mockedGetPlayerMarket.mockResolvedValue([
+      createMarketPlayer(32, 'carry', 'Replacement Carry'),
+    ]);
+    mockedGetTransferHistory.mockResolvedValue([]);
+
+    const view = renderWithQueryClient(
+      <WildcardTransferBuilder context={createContext()} userId="manager-1" />,
+    );
+
+    await fireEvent.press(view.getByText('Player 1'));
+    await waitFor(() => expect(view.getByText('Replacement Carry')).toBeTruthy());
+    await fireEvent.press(view.getByText('Replacement Carry'));
+
+    const bankEstimate = view.getByText('Estimated bank after swaps: 100.0M');
+    expect(bankEstimate.props.style).toMatchObject({ color: '#047857' });
   });
 
   it('pins and preselects the quick-added player in the transfer market', async () => {
