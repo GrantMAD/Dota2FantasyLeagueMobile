@@ -23,7 +23,7 @@ import { getMatches } from '@/src/features/competition/api';
 import { getDashboardSquadSummary, type FantasyLineupEntry } from '@/src/features/fantasy/api';
 import { useFantasyContext } from '@/src/features/fantasy/hooks';
 import { getAnalytics } from '@/src/features/analytics/api';
-import { getLeagues, getLeagueActivity } from '@/src/features/leagues/api';
+import { getLeagues, getLeagueActivity, getLatestRankChangeForUser } from '@/src/features/leagues/api';
 import { markNotificationRead } from '@/src/features/notifications/api';
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
@@ -35,6 +35,7 @@ import {
 } from '@/src/features/dashboard/whats-new-grouping';
 import {
   CaptainScoringGuide,
+  DashboardRetryAlert,
   DashboardGreeting,
   getPointTrend,
   getRankTrend,
@@ -129,8 +130,18 @@ export default function HomeScreen() {
   const hasSquad = squadSize > 0;
   const hasCompleteLineup = starters.length === 5 && starters.some((entry) => entry.is_captain);
   const displayName = profileQuery.data?.displayName?.trim() || profileQuery.data?.username;
-  const pointTrend = getPointTrend(analyticsQuery.data?.trend ?? []);
-  const rankTrend = getRankTrend(analyticsQuery.data?.trend ?? []);
+  const pointTrend = analyticsQuery.isError
+    ? { text: 'Trend unavailable' }
+    : analyticsQuery.isPending
+      ? { text: 'Trend loading' }
+      : getPointTrend(analyticsQuery.data?.trend ?? []);
+  const rankTrend = query.data?.globalRank == null
+    ? { text: 'Unranked' }
+    : analyticsQuery.isError
+      ? { text: 'Trend unavailable' }
+      : analyticsQuery.isPending
+        ? { text: 'Trend loading' }
+        : getRankTrend(analyticsQuery.data?.trend ?? []);
   const quickActions = !query.data
     ? []
     : !hasSquad
@@ -216,14 +227,30 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {query.isError ? (
+          <DashboardRetryAlert
+            title={query.data ? 'Dashboard refresh failed' : 'Dashboard unavailable'}
+            message={[
+              query.data ? 'Previously loaded data may be out of date.' : null,
+              query.error instanceof Error ? query.error.message : 'Please try again.',
+            ].filter(Boolean).join(' ')}
+            onRetry={() => void query.refetch()}
+          />
+        ) : null}
+
         {query.data ? (
           <View className="gap-3">
             <View className="flex-row gap-3">
               <HomeStatCard
-                label="Manage Squad"
-                subLabel={squadSummaryQuery.data?.activeSquadCount === 1 ? 'Active squad' : 'Active squads'}
+                label="Active Squads"
                 value={squadSummaryQuery.isPending ? '…' : formatMetric(squadSummaryQuery.data?.activeSquadCount)}
-                detail="View and manage your squads"
+                detail={
+                  squadSummaryQuery.isPending
+                    ? 'Squad details loading'
+                    : squadSummaryQuery.isError
+                      ? 'Squad details unavailable'
+                      : `${squadSummaryQuery.data?.activeSquadCount ?? 0} active ${(squadSummaryQuery.data?.activeSquadCount ?? 0) === 1 ? 'squad' : 'squads'}`
+                }
                 icon={{ ios: 'shield.fill', android: 'shield', web: 'shield' }}
                 tint="#22d3ee"
                 onPress={() => router.push('/team')}
@@ -231,7 +258,7 @@ export default function HomeScreen() {
               <HomeStatCard
                 label="Squad Value"
                 value={`${query.data.ownedPlayers.reduce((total, player) => total + player.current_price, 0).toFixed(1)}M`}
-                detail={analyticsQuery.data ? 'Based on current player prices' : 'Current player prices'}
+                detail={squadSize > 0 ? `${squadSize} ${squadSize === 1 ? 'player' : 'players'}` : 'No players yet'}
                 icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
                 tint="#34d399"
                 onPress={() => router.push('/team')}
@@ -241,7 +268,7 @@ export default function HomeScreen() {
               <HomeStatCard
                 label="Bank Balance"
                 value={typeof query.data.budget === 'number' && Number.isFinite(query.data.budget) ? `${query.data.budget.toFixed(1)}M` : '—'}
-                detail="Available funds"
+                detail="Available for transfers"
                 icon={{ ios: 'dollarsign.circle.fill', android: 'paid', web: 'paid' }}
                 tint="#fbbf24"
                 onPress={() => router.push('/team')}
@@ -249,7 +276,8 @@ export default function HomeScreen() {
               <HomeStatCard
                 label="Total Points"
                 value={formatMetric(query.data.totalPoints)}
-                detail={analyticsQuery.isPending ? 'Tap for breakdown' : pointTrend}
+                detail={pointTrend.text}
+                trendDirection={pointTrend.direction}
                 icon={{ ios: 'star.fill', android: 'star', web: 'star' }}
                 tint="#f59e0b"
                 onPress={() => setPointsBreakdownOpen(true)}
@@ -259,7 +287,8 @@ export default function HomeScreen() {
               <HomeStatCard
                 label="Global Rank"
                 value={formatMetric(query.data.globalRank)}
-                detail={analyticsQuery.isPending ? 'View standings' : rankTrend}
+                detail={rankTrend.text}
+                trendDirection={rankTrend.direction}
                 icon={{ ios: 'globe', android: 'public', web: 'public' }}
                 tint="#2dd4bf"
                 onPress={() => router.push('/leaderboard')}
@@ -267,7 +296,7 @@ export default function HomeScreen() {
               <HomeStatCard
                 label="Free Transfers"
                 value={formatMetric(query.data.freeTransfers)}
-                detail="Manage transfers"
+                detail={query.data.freeTransfers > 0 ? 'Available this gameweek' : 'No transfers remaining'}
                 icon={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
                 tint="#fb923c"
                 onPress={() => router.push('/team')}
@@ -300,6 +329,16 @@ export default function HomeScreen() {
               </View>
             ))}
           </View>
+        ) : null}
+
+        {analyticsQuery.isError ? (
+          <DashboardRetryAlert
+            title="Dashboard trends unavailable"
+            message={analyticsQuery.error instanceof Error
+              ? analyticsQuery.error.message
+              : 'Points and rank trends could not be loaded.'}
+            onRetry={() => void analyticsQuery.refetch()}
+          />
         ) : null}
 
         {query.data?.fantasySeasonId !== null &&
@@ -944,21 +983,7 @@ export default function HomeScreen() {
               <View className="h-28 flex-1 rounded-2xl bg-slate-800" />
             </View>
           </View>
-        ) : query.isError ? (
-          <View accessibilityRole="alert" className="rounded-2xl border border-red-900 bg-red-950 p-5">
-            <Text className="font-semibold text-red-200">Dashboard unavailable</Text>
-            <Text className="mt-2 text-sm leading-5 text-red-100">
-              {query.error instanceof Error ? query.error.message : 'Please try again.'}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              className="mt-4 min-h-11 justify-center"
-              onPress={() => void query.refetch()}
-            >
-              <Text className="font-semibold text-white">Try again</Text>
-            </Pressable>
-          </View>
-        ) : query.data ? (
+        ) : query.isError ? null : query.data ? (
           <>
             <PersonalGoalsProgress
               totalPoints={query.data.totalPoints}
@@ -1122,18 +1147,10 @@ export default function HomeScreen() {
           ) : myLeagues.length ? (
             myLeagues.map((league, leagueIndex) => {
               const standing = league.standings.find((item) => item.userId === session?.user.id);
-              const rankChange = (leagueActivityQueries[leagueIndex]?.data ?? [])
-                .filter((activity) =>
-                  activity.type === 'rank_change' &&
-                  activity.fromRank !== null &&
-                  activity.toRank !== null &&
-                  (
-                    activity.manager === standing?.displayName ||
-                    activity.manager === standing?.username ||
-                    activity.manager === standing?.manager
-                  )
-                )
-                .at(-1);
+              const rankChange = getLatestRankChangeForUser(
+                leagueActivityQueries[leagueIndex]?.data ?? [],
+                session?.user.id,
+              );
               const rankDelta = rankChange?.fromRank != null && rankChange.toRank != null
                 ? rankChange.fromRank - rankChange.toRank
                 : null;
@@ -1191,24 +1208,29 @@ export default function HomeScreen() {
 
 function HomeStatCard({
   label,
-  subLabel,
   value,
   detail,
+  trendDirection,
   icon,
   tint,
   onPress,
 }: {
   label: string;
-  subLabel?: string;
   value: string;
   detail: string;
+  trendDirection?: 'up' | 'down';
   icon: ComponentProps<typeof SymbolView>['name'];
   tint: string;
   onPress: () => void;
 }) {
+  const detailTint = trendDirection === 'up'
+    ? '#34d399'
+    : trendDirection === 'down'
+      ? '#fb7185'
+      : '#94a3b8';
   return (
     <Pressable
-      accessibilityLabel={`${label}${subLabel ? `, ${subLabel}` : ''}: ${value}. ${detail}`}
+      accessibilityLabel={`${label}: ${value}. ${detail}`}
       accessibilityRole="button"
       className="min-h-32 flex-1 justify-between overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-3"
       onPress={onPress}
@@ -1219,13 +1241,21 @@ function HomeStatCard({
         </View>
         <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</Text>
         <Text className="mt-1 text-xl font-black text-white">{value}</Text>
-        {subLabel ? (
-          <Text className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-            {subLabel}
-          </Text>
-        ) : null}
       </View>
-      <Text numberOfLines={1} className="mt-2 text-[10px] font-medium text-slate-400">{detail}</Text>
+      <View className="mt-2 min-w-0 flex-row items-center gap-1">
+        {trendDirection ? (
+          <SymbolView
+            name={trendDirection === 'up'
+              ? { ios: 'arrow.up.right', android: 'trending_up', web: 'trending_up' }
+              : { ios: 'arrow.down.right', android: 'trending_down', web: 'trending_down' }}
+            size={13}
+            tintColor={detailTint}
+          />
+        ) : null}
+        <Text numberOfLines={1} className="min-w-0 flex-1 text-[10px] font-medium" style={{ color: detailTint }}>
+          {detail}
+        </Text>
+      </View>
     </Pressable>
   );
 }

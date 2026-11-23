@@ -20,6 +20,7 @@ import {
   createLeague,
   getLeagueActivity,
   getLeagues,
+  getLatestRankChangeForUser,
   joinLeague,
   sortLeagueStandings,
 } from '../src/features/leagues/api';
@@ -1500,6 +1501,7 @@ describe('mobile data access', () => {
         id: 1,
         type: 'transfer',
         createdAt: '2026-10-18T12:00:00Z',
+        actorUserId: '4c4fc28e-2b47-41e9-a8f7-c2e85a4ba5af',
         manager: 'Manager One',
         gameweekNumber: 4,
         fromRank: null,
@@ -1514,6 +1516,7 @@ describe('mobile data access', () => {
     await expect(getLeagueActivity(21)).resolves.toMatchObject([{
       id: 1,
       type: 'transfer',
+      actorUserId: '4c4fc28e-2b47-41e9-a8f7-c2e85a4ba5af',
       manager: 'Manager One',
       playersIn: ['Player In'],
       playersOut: ['Player Out'],
@@ -1528,6 +1531,54 @@ describe('mobile data access', () => {
     mobileFantasyContextRpc.mockResolvedValue({ data: { activities: [{ id: 'invalid' }] }, error: null });
 
     await expect(getLeagueActivity(21)).rejects.toThrow('League activity entry was returned in an unexpected format.');
+  });
+
+  it('requires an actor user ID in league activity entries', async () => {
+    mobileFantasyContextRpc.mockResolvedValue({ data: {
+      activities: [{
+        id: 1,
+        type: 'rank_change',
+        createdAt: '2026-10-18T12:00:00Z',
+        manager: 'Manager One',
+        gameweekNumber: 4,
+        fromRank: 8,
+        toRank: 5,
+        playersIn: [],
+        playersOut: [],
+        captain: null,
+        viceCaptain: null,
+      }],
+    }, error: null });
+
+    await expect(getLeagueActivity(21)).rejects.toThrow('League activity entry was returned in an unexpected format.');
+  });
+
+  it('selects the newest rank activity for the matching manager ID', () => {
+    const newest = {
+      id: 2,
+      type: 'rank_change' as const,
+      createdAt: '2026-10-19T12:00:00Z',
+      actorUserId: 'manager-1',
+      manager: 'Same Display Name',
+      gameweekNumber: 5,
+      fromRank: 8,
+      toRank: 4,
+      playersIn: [],
+      playersOut: [],
+      captain: null,
+      viceCaptain: null,
+    };
+    const older = {
+      ...newest,
+      id: 1,
+      createdAt: '2026-10-18T12:00:00Z',
+      fromRank: 10,
+      toRank: 8,
+    };
+    const otherManager = { ...newest, id: 3, actorUserId: 'manager-2' };
+
+    expect(getLatestRankChangeForUser([older, otherManager, newest], 'manager-1')).toEqual(newest);
+    expect(getLatestRankChangeForUser([newest], 'manager-3')).toBeNull();
   });
 
   it('creates and joins leagues through authenticated RPCs', async () => {

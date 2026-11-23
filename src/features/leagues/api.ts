@@ -65,6 +65,7 @@ export interface LeagueActivity {
   id: number;
   type: 'transfer' | 'captain_pick' | 'rank_change';
   createdAt: string;
+  actorUserId: string;
   manager: string;
   gameweekNumber: number | null;
   fromRank: number | null;
@@ -73,6 +74,24 @@ export interface LeagueActivity {
   playersOut: string[];
   captain: string | null;
   viceCaptain: string | null;
+}
+
+export function getLatestRankChangeForUser(
+  activities: LeagueActivity[],
+  userId: string | undefined,
+): LeagueActivity | null {
+  if (!userId) return null;
+  return activities.reduce<LeagueActivity | null>((latest, activity) => {
+    if (
+      activity.type !== 'rank_change' ||
+      activity.actorUserId !== userId ||
+      activity.fromRank === null ||
+      activity.toRank === null
+    ) return latest;
+    return !latest || Date.parse(activity.createdAt) > Date.parse(latest.createdAt)
+      ? activity
+      : latest;
+  }, null);
 }
 
 export interface CreateLeagueInput {
@@ -254,6 +273,9 @@ export async function getLeagueActivity(leagueId: number): Promise<LeagueActivit
       !Number.isSafeInteger(activity.id) ||
       (activity.type !== 'transfer' && activity.type !== 'captain_pick' && activity.type !== 'rank_change') ||
       typeof activity.createdAt !== 'string' ||
+      !Number.isFinite(Date.parse(activity.createdAt)) ||
+      typeof activity.actorUserId !== 'string' ||
+      activity.actorUserId.length === 0 ||
       typeof activity.manager !== 'string' ||
       !(activity.gameweekNumber === null || Number.isInteger(activity.gameweekNumber)) ||
       !(activity.fromRank === null || Number.isInteger(activity.fromRank)) ||
@@ -271,6 +293,7 @@ export async function getLeagueActivity(leagueId: number): Promise<LeagueActivit
       id: Number(activity.id),
       type: activity.type,
       createdAt: activity.createdAt,
+      actorUserId: activity.actorUserId,
       manager: activity.manager,
       gameweekNumber: activity.gameweekNumber === null ? null : Number(activity.gameweekNumber),
       fromRank: activity.fromRank === null ? null : Number(activity.fromRank),
