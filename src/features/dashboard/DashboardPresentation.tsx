@@ -94,6 +94,20 @@ export interface DashboardTrend {
   direction?: DashboardTrendDirection;
 }
 
+export function getDashboardDetailColor({
+  isDark,
+  direction,
+  accent,
+}: {
+  isDark: boolean;
+  direction?: DashboardTrendDirection;
+  accent?: string;
+}): string {
+  if (direction === 'up') return isDark ? '#34d399' : '#047857';
+  if (direction === 'down') return isDark ? '#fb7185' : '#be123c';
+  return accent ?? (isDark ? '#94a3b8' : '#506070');
+}
+
 export function getPointTrend(trend: { userScore: number }[]): DashboardTrend {
   if (trend.length < 2) return { text: 'Not enough gameweek history' };
   const delta = trend[trend.length - 1].userScore - trend[trend.length - 2].userScore;

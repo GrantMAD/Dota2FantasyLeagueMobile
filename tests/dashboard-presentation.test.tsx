@@ -4,6 +4,7 @@ import {
   CaptainScoringGuide,
   DashboardRetryAlert,
   DashboardGreeting,
+  getDashboardDetailColor,
   getPointTrend,
   getRankTrend,
   LineupProgress,
@@ -66,5 +67,16 @@ describe('Dashboard presentation parity', () => {
     expect(getRankTrend([{ rank: 1 }, { rank: null }])).toEqual({
       text: 'Rank unavailable',
     });
+  });
+
+  it('uses readable theme-aware colors for neutral, accented, and directional details', () => {
+    expect(getDashboardDetailColor({ isDark: true })).toBe('#94a3b8');
+    expect(getDashboardDetailColor({ isDark: false })).toBe('#506070');
+    expect(getDashboardDetailColor({ isDark: true, accent: '#22d3ee' })).toBe('#22d3ee');
+    expect(getDashboardDetailColor({ isDark: false, accent: '#0e7490' })).toBe('#0e7490');
+    expect(getDashboardDetailColor({ isDark: true, direction: 'up' })).toBe('#34d399');
+    expect(getDashboardDetailColor({ isDark: false, direction: 'up' })).toBe('#047857');
+    expect(getDashboardDetailColor({ isDark: true, direction: 'down' })).toBe('#fb7185');
+    expect(getDashboardDetailColor({ isDark: false, direction: 'down' })).toBe('#be123c');
   });
 });

@@ -37,6 +37,7 @@ import {
   CaptainScoringGuide,
   DashboardRetryAlert,
   DashboardGreeting,
+  getDashboardDetailColor,
   getPointTrend,
   getRankTrend,
   LineupProgress,
@@ -127,6 +128,8 @@ export default function HomeScreen() {
   const captain = query.data?.lineup.find((entry) => entry.is_captain) ?? null;
   const viceCaptain = query.data?.lineup.find((entry) => entry.is_vice_captain) ?? null;
   const squadSize = query.data?.ownedPlayers.length ?? 0;
+  const activeSquadCount = squadSummaryQuery.data?.activeSquadCount ?? 0;
+  const hasActiveSquad = !squadSummaryQuery.isPending && !squadSummaryQuery.isError && activeSquadCount > 0;
   const hasSquad = squadSize > 0;
   const hasCompleteLineup = starters.length === 5 && starters.some((entry) => entry.is_captain);
   const displayName = profileQuery.data?.displayName?.trim() || profileQuery.data?.username;
@@ -253,6 +256,10 @@ export default function HomeScreen() {
                 }
                 icon={{ ios: 'shield.fill', android: 'shield', web: 'shield' }}
                 tint="#22d3ee"
+                detailIcon={hasActiveSquad
+                  ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }
+                  : undefined}
+                detailAccent={hasActiveSquad ? (isDark ? '#22d3ee' : '#0e7490') : undefined}
                 onPress={() => router.push('/team')}
               />
               <HomeStatCard
@@ -261,6 +268,8 @@ export default function HomeScreen() {
                 detail={squadSize > 0 ? `${squadSize} ${squadSize === 1 ? 'player' : 'players'}` : 'No players yet'}
                 icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
                 tint="#34d399"
+                detailIcon={{ ios: 'person.fill', android: 'person', web: 'person' }}
+                detailAccent={squadSize > 0 ? (isDark ? '#34d399' : '#047857') : undefined}
                 onPress={() => router.push('/team')}
               />
             </View>
@@ -271,6 +280,8 @@ export default function HomeScreen() {
                 detail="Available for transfers"
                 icon={{ ios: 'dollarsign.circle.fill', android: 'paid', web: 'paid' }}
                 tint="#fbbf24"
+                detailIcon={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
+                detailAccent={isDark ? '#fbbf24' : '#92400e'}
                 onPress={() => router.push('/team')}
               />
               <HomeStatCard
@@ -299,6 +310,8 @@ export default function HomeScreen() {
                 detail={query.data.freeTransfers > 0 ? 'Available this gameweek' : 'No transfers remaining'}
                 icon={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
                 tint="#fb923c"
+                detailIcon={{ ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' }}
+                detailAccent={query.data.freeTransfers > 0 ? (isDark ? '#fb923c' : '#c2410c') : undefined}
                 onPress={() => router.push('/team')}
               />
             </View>
@@ -1070,8 +1083,8 @@ export default function HomeScreen() {
                 <View className="gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
                   <Text className="text-xs font-bold uppercase tracking-wider text-amber-200">Leadership</Text>
                   <View className="flex-row gap-3">
-                    <LeadershipEntry label="Captain · 2×" entry={captain} />
-                    <LeadershipEntry label="Vice-captain" entry={viceCaptain} />
+                    <LeadershipEntry role="captain" isDark={isDark} entry={captain} />
+                    <LeadershipEntry role="vice" isDark={isDark} entry={viceCaptain} />
                   </View>
                   <CaptainScoringGuide />
                 </View>
@@ -1211,6 +1224,8 @@ function HomeStatCard({
   value,
   detail,
   trendDirection,
+  detailIcon,
+  detailAccent,
   icon,
   tint,
   onPress,
@@ -1219,15 +1234,20 @@ function HomeStatCard({
   value: string;
   detail: string;
   trendDirection?: 'up' | 'down';
+  detailIcon?: ComponentProps<typeof SymbolView>['name'];
+  detailAccent?: string;
   icon: ComponentProps<typeof SymbolView>['name'];
   tint: string;
   onPress: () => void;
 }) {
-  const detailTint = trendDirection === 'up'
-    ? '#34d399'
-    : trendDirection === 'down'
-      ? '#fb7185'
-      : '#94a3b8';
+  const { theme } = useMobileTheme();
+  const isDark = theme === 'dark';
+  const detailTint = getDashboardDetailColor({ isDark, direction: trendDirection, accent: detailAccent });
+  const detailSymbol: ComponentProps<typeof SymbolView>['name'] | undefined = trendDirection
+    ? trendDirection === 'up'
+      ? { ios: 'arrow.up.right', android: 'trending_up', web: 'trending_up' }
+      : { ios: 'arrow.down.right', android: 'trending_down', web: 'trending_down' }
+    : detailIcon;
   return (
     <Pressable
       accessibilityLabel={`${label}: ${value}. ${detail}`}
@@ -1240,18 +1260,10 @@ function HomeStatCard({
           <SymbolView name={icon} size={19} tintColor={tint} />
         </View>
         <Text className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</Text>
-        <Text className="mt-1 text-xl font-black text-white">{value}</Text>
+        <Text className="mt-1 text-xl font-black text-slate-50">{value}</Text>
       </View>
       <View className="mt-2 min-w-0 flex-row items-center gap-1">
-        {trendDirection ? (
-          <SymbolView
-            name={trendDirection === 'up'
-              ? { ios: 'arrow.up.right', android: 'trending_up', web: 'trending_up' }
-              : { ios: 'arrow.down.right', android: 'trending_down', web: 'trending_down' }}
-            size={13}
-            tintColor={detailTint}
-          />
-        ) : null}
+        {detailSymbol ? <SymbolView name={detailSymbol} size={13} tintColor={detailTint} /> : null}
         <Text numberOfLines={1} className="min-w-0 flex-1 text-[10px] font-medium" style={{ color: detailTint }}>
           {detail}
         </Text>
@@ -1261,18 +1273,34 @@ function HomeStatCard({
 }
 
 function LeadershipEntry({
-  label,
+  role,
+  isDark,
   entry,
 }: {
-  label: string;
+  role: 'captain' | 'vice';
+  isDark: boolean;
   entry: FantasyLineupEntry | null;
 }) {
   const player = entry?.professional_players;
   const name = player?.in_game_name || player?.name;
+  const isCaptain = role === 'captain';
+  const accent = isCaptain
+    ? isDark ? '#fbbf24' : '#92400e'
+    : isDark ? '#2dd4bf' : '#0f766e';
+  const icon: ComponentProps<typeof SymbolView>['name'] = isCaptain
+    ? { ios: 'crown.fill', android: 'workspace_premium', web: 'workspace_premium' }
+    : { ios: 'shield.fill', android: 'shield', web: 'shield' };
   return (
     <View className="min-h-20 flex-1 justify-center rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-      <Text className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</Text>
-      <Text numberOfLines={1} className="mt-1 font-semibold text-white">{name ?? 'Not set'}</Text>
+      <View className="flex-row items-center gap-1.5">
+        <SymbolView name={icon} size={13} tintColor={accent} />
+        <Text className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
+          {isCaptain ? 'Captain · 2×' : 'Vice-Captain'}
+        </Text>
+      </View>
+      <Text numberOfLines={1} className={`mt-1 font-semibold ${name ? 'text-slate-50' : 'text-slate-400'}`}>
+        {name || 'Not set'}
+      </Text>
       {player?.professional_teams?.name ? (
         <Text numberOfLines={1} className="mt-0.5 text-xs text-slate-400">{player.professional_teams.name}</Text>
       ) : null}
