@@ -1,6 +1,11 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
-import { CompareSelectionBar, parseDiscoverRole } from '../app/(tabs)/discover';
+import {
+  CompareSelectionBar,
+  getDiscoverSortAccessibilityHint,
+  parseDiscoverRole,
+  scrollDiscoverToTop,
+} from '../app/(tabs)/discover';
 
 jest.mock('@/src/components/Screen', () => ({
   Screen: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -52,5 +57,20 @@ describe('Discover comparison selection', () => {
     expect(view.getByText('Select one more player to compare.')).toBeTruthy();
     fireEvent.press(compareButton);
     expect(onCompare).not.toHaveBeenCalled();
+  });
+});
+
+describe('Discover directory controls', () => {
+  it('scrolls the directory to the top when changing pages', () => {
+    const scrollTo = jest.fn();
+
+    scrollDiscoverToTop({ scrollTo });
+
+    expect(scrollTo).toHaveBeenCalledWith({ y: 0, animated: true });
+  });
+
+  it('explains how to reverse the active sort direction to assistive technology', () => {
+    expect(getDiscoverSortAccessibilityHint(true)).toBe('Tap again to reverse sort direction.');
+    expect(getDiscoverSortAccessibilityHint(false)).toBe('Tap to sort by this field.');
   });
 });

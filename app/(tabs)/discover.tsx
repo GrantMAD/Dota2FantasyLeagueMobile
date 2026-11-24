@@ -1,6 +1,15 @@
 import { formatPlayerPriceCompact } from '../../src/lib/format-price';
-import { useDeferredValue, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
+import { useDeferredValue, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  RefreshControl,
+  Text,
+  TextInput,
+  View,
+  type ScrollView as ScrollViewInstance,
+} from 'react-native';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,6 +36,14 @@ export function parseDiscoverRole(value: string | string[] | undefined): string 
   return roles.find((candidate) =>
     candidate !== '' && candidate.toLowerCase() === requestedRole?.trim().toLowerCase()
   ) ?? '';
+}
+
+export function getDiscoverSortAccessibilityHint(isActive: boolean): string {
+  return isActive ? 'Tap again to reverse sort direction.' : 'Tap to sort by this field.';
+}
+
+export function scrollDiscoverToTop(scrollView: Pick<ScrollViewInstance, 'scrollTo'> | null): void {
+  scrollView?.scrollTo({ y: 0, animated: true });
 }
 
 export function getRoleBadgeClass(role: string | null | undefined): { text: string; bg: string; border: string } {
@@ -128,6 +145,7 @@ export default function DiscoverScreen() {
   const [teamModalVisible, setTeamModalVisible] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   if (requestedRole !== previousRequestedRole) {
     setPreviousRequestedRole(requestedRole);
     setRole(requestedRole);
@@ -284,11 +302,15 @@ export default function DiscoverScreen() {
     setOffset(0);
   };
 
-  
+  const changePage = (nextOffset: number) => {
+    scrollDiscoverToTop(scrollRef.current);
+    setOffset(nextOffset);
+  };
 
   return (
     <Screen>
       <ScrollView
+        ref={scrollRef}
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         keyboardShouldPersistTaps="handled"
@@ -523,6 +545,7 @@ export default function DiscoverScreen() {
                   key={opt.id}
                   accessibilityRole="button"
                   accessibilityLabel={`Sort by ${opt.label} ${isActive ? (sortDesc ? 'descending' : 'ascending') : ''}`}
+                  accessibilityHint={getDiscoverSortAccessibilityHint(isActive)}
                   className={`flex-row items-center gap-1 rounded-lg px-2.5 py-1 ${isActive ? 'bg-brand-500/20 border border-brand-500/50' : 'border border-transparent'
                     }`}
                   onPress={() => {
@@ -721,7 +744,7 @@ export default function DiscoverScreen() {
               <Pressable
                 accessibilityRole="button"
                 className="min-h-11 flex-1 items-center justify-center rounded-xl border border-slate-700 bg-slate-900"
-                onPress={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))}
+                onPress={() => changePage(Math.max(0, offset - PAGE_SIZE))}
               >
                 <Text className="font-semibold text-slate-200">Previous</Text>
               </Pressable>
@@ -730,7 +753,7 @@ export default function DiscoverScreen() {
               <Pressable
                 accessibilityRole="button"
                 className="min-h-11 flex-1 items-center justify-center rounded-xl border border-brand-500/50 bg-brand-500/10"
-                onPress={() => setOffset((current) => current + PAGE_SIZE)}
+                onPress={() => changePage(offset + PAGE_SIZE)}
               >
                 <Text className="font-semibold text-brand-200">Next players</Text>
               </Pressable>
