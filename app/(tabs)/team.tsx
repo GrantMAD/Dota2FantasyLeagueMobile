@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  LayoutChangeEvent,
   Modal,
   Pressable,
   RefreshControl,
@@ -10,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollView';
@@ -29,77 +28,67 @@ import type { TransferInsight } from '@/src/features/fantasy/transfer-history-an
 import { useAuth } from '@/src/lib/auth';
 import { useMobileTheme } from '@/src/lib/theme';
 
-function SquadValueChart({ data }: { data: { gameweekNumber: number; value: number | null }[] }) {
-  const [width, setWidth] = useState(0);
-  const height = 190;
-  const left = 42;
-  const right = 12;
-  const top = 14;
-  const bottom = 22;
-  const values = data.flatMap((point) => point.value === null ? [] : [point.value]);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const plotWidth = Math.max(0, width - left - right);
-  const plotHeight = height - top - bottom;
-  const xForIndex = (index: number) => left + (data.length <= 1 ? plotWidth / 2 : index * plotWidth / (data.length - 1));
-  const yForValue = (value: number) => top + ((max - value) / range) * plotHeight;
-  const segments: string[] = [];
-  let segment = '';
+function SquadValueChart({
+  data,
+  theme,
+}: {
+  data: { gameweekNumber: number; value: number | null }[];
+  theme: 'dark' | 'light';
+}) {
+  const chartWidth = 340;
+  const chartHeight = 140;
+  const chartPadding = 36;
+  const chartInnerWidth = chartWidth - chartPadding * 2;
+  const chartInnerHeight = chartHeight - chartPadding * 2;
+  const points = data
+    .filter((point): point is { gameweekNumber: number; value: number } => point.value !== null)
+    .sort((a, b) => a.gameweekNumber - b.gameweekNumber);
+  const isDark = theme === 'dark';
+  const gridColor = isDark ? '#334155' : '#94a3b8';
+  const axisLabelColor = isDark ? '#94a3b8' : '#475569';
+  const lineColor = isDark ? '#22d3ee' : '#0f766e';
+  const pointFillColor = isDark ? '#22d3ee' : '#14b8a6';
+  const emptyTextClass = isDark ? 'text-slate-400' : 'text-slate-500';
+  const labelMutedClass = isDark ? 'text-slate-500' : 'text-slate-500';
+  const labelClass = isDark ? 'text-slate-400' : 'text-slate-500';
 
-  data.forEach((point, index) => {
-    if (point.value === null) {
-      if (segment) segments.push(segment);
-      segment = '';
-      return;
-    }
-    segment += `${segment ? ' L' : 'M'} ${xForIndex(index)} ${yForValue(point.value)}`;
-  });
-  if (segment) segments.push(segment);
+  if (!points.length) {
+    return (
+      <Text accessibilityRole="alert" className={`py-8 text-center text-xs ${emptyTextClass}`}>
+        No squad value history is available yet.
+      </Text>
+    );
+  }
+
+  const minValue = Math.min(...points.map((point) => point.value));
+  const maxValue = Math.max(...points.map((point) => point.value));
+  const range = maxValue - minValue || 1;
+
+  const xStep = points.length > 1 ? chartInnerWidth / (points.length - 1) : chartInnerWidth / 2;
+  const getX = (index: number) => (points.length > 1 ? index * xStep : chartInnerWidth / 2) + chartPadding;
+  const getY = (value: number) => chartHeight - chartPadding - ((value - minValue) / range) * chartInnerHeight;
+  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${getX(index)} ${getY(point.value)}`).join(' ');
+  const midValue = minValue + range / 2;
 
   return (
-    <View
-      accessibilityLabel="Squad market value by completed gameweek, excluding bank balance"
-      className="h-48 w-full"
-      onLayout={(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width)}
-    >
-      {width > 0 && values.length > 0 ? (
-        <Svg height={height} width={width}>
-          {[0, 0.5, 1].map((fraction) => {
-            const y = top + fraction * plotHeight;
-            return <Line key={fraction} x1={left} x2={width - right} y1={y} y2={y} stroke="#334155" strokeDasharray="4 4" />;
-          })}
-          {segments.map((path, index) => (
-            <Path key={index} d={path} fill="none" stroke="#22d3ee" strokeWidth={2.5} />
-          ))}
-          {data.map((point, index) => point.value === null ? null : (
-            <Circle
-              key={point.gameweekNumber}
-              cx={xForIndex(index)}
-              cy={yForValue(point.value)}
-              r={3.5}
-              fill="#22d3ee"
-            />
-          ))}
-        </Svg>
-      ) : (
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-center text-xs text-slate-400">
-            {data.length ? 'No complete price snapshots are available to chart.' : 'Completed gameweek history is not available yet.'}
-          </Text>
-        </View>
-      )}
-      {values.length > 0 ? (
-        <View className="flex-row justify-between px-1">
-          <Text className="text-[10px] text-slate-500">GW {data[0]?.gameweekNumber}</Text>
-          <Text className="text-[10px] text-slate-500">GW {data[data.length - 1]?.gameweekNumber}</Text>
-        </View>
-      ) : null}
-      {values.length > 0 ? (
-        <Text className="mt-1 text-center text-[10px] text-slate-500">
-          Player value ($M): {min.toFixed(1)}–{max.toFixed(1)}
-        </Text>
-      ) : null}
+    <View className="mt-3 items-center gap-2">
+      <Svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
+        <Line x1={chartPadding} y1={chartPadding} x2={chartWidth - chartPadding} y2={chartPadding} stroke={gridColor} strokeDasharray="4 4" strokeWidth="1" />
+        <Line x1={chartPadding} y1={chartPadding + chartInnerHeight / 2} x2={chartWidth - chartPadding} y2={chartPadding + chartInnerHeight / 2} stroke={gridColor} strokeDasharray="4 4" strokeWidth="1" />
+        <Line x1={chartPadding} y1={chartHeight - chartPadding} x2={chartWidth - chartPadding} y2={chartHeight - chartPadding} stroke={gridColor} strokeDasharray="4 4" strokeWidth="1" />
+        <SvgText x={chartPadding - 6} y={chartPadding + 4} fill={axisLabelColor} fontSize="9" textAnchor="end">${maxValue.toFixed(1)}M</SvgText>
+        <SvgText x={chartPadding - 6} y={chartPadding + chartInnerHeight / 2 + 4} fill={axisLabelColor} fontSize="9" textAnchor="end">${midValue.toFixed(1)}M</SvgText>
+        <SvgText x={chartPadding - 6} y={chartHeight - chartPadding + 4} fill={axisLabelColor} fontSize="9" textAnchor="end">${minValue.toFixed(1)}M</SvgText>
+        <Path d={linePath} fill="none" stroke={lineColor} strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+        {points.map((point, index) => (
+          <Circle key={point.gameweekNumber} cx={getX(index)} cy={getY(point.value)} r="4" fill={pointFillColor} />
+        ))}
+      </Svg>
+      <View className="w-full flex-row justify-between px-2">
+        <Text className={`text-[10px] ${labelMutedClass}`}>GW {points[0].gameweekNumber}</Text>
+        <Text className={`text-[10px] font-semibold ${labelClass}`}>Squad value by gameweek</Text>
+        <Text className={`text-[10px] ${labelMutedClass}`}>GW {points[points.length - 1].gameweekNumber}</Text>
+      </View>
     </View>
   );
 }
@@ -112,30 +101,42 @@ function TransferInsightCard({ title, insight, positive, hasTransfers, loading, 
   loading: boolean;
   error: boolean;
 }) {
+  const gameweekLabel = insight?.gameweekNumbers.length
+    ? `GW ${insight.gameweekNumbers.join(', ')}`
+    : null;
+
   return (
-    <View className="flex-1 min-w-[45%] rounded-xl border border-slate-800 bg-slate-900 p-3">
-      <Text className="text-xs font-bold text-white">{title}</Text>
-      {insight ? (
+    <View className={`flex-1 min-w-[45%] rounded-xl border p-3 ${
+      positive ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'
+    }`}>
+      <Text className={`text-[10px] font-semibold uppercase tracking-wider ${
+        positive ? 'text-emerald-400' : 'text-rose-400'
+      }`}>
+        {title}
+      </Text>
+      {loading ? (
+        <ActivityIndicator accessibilityLabel={`Loading ${title.toLowerCase()}`} className="mt-3 self-start" color={positive ? '#34d399' : '#fb7185'} size="small" />
+      ) : error ? (
+        <Text accessibilityRole="alert" className="mt-2 text-xs text-red-300">
+          Analytics unavailable.
+        </Text>
+      ) : insight ? (
         <>
-          <Text className="mt-2 text-xs text-slate-200" numberOfLines={2}>
+          <Text className="mt-2 text-sm font-bold text-slate-50" numberOfLines={1}>
             {insight.playerOut} → {insight.playerIn}
           </Text>
-          <Text className={`mt-1 text-base font-bold ${positive ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {insight.netPoints > 0 ? '+' : ''}{insight.netPoints.toFixed(1)} pts
+          <Text className={`mt-1 font-mono text-xs font-bold ${positive ? 'text-emerald-300' : 'text-rose-300'}`}>
+            {`${insight.netPoints > 0 ? '+' : ''}${insight.netPoints.toFixed(1)} pts`}
           </Text>
-          <Text className="mt-1 text-[10px] text-slate-400">
-            Net points over GW {insight.gameweekNumbers.join(', ')}
-          </Text>
+          {gameweekLabel ? (
+            <Text className="mt-1 text-[10px] text-slate-400">{gameweekLabel}</Text>
+          ) : null}
         </>
       ) : (
         <Text className="mt-2 text-xs text-slate-400">
-          {error
-            ? 'Transfer insights could not be loaded.'
-            : loading
-              ? 'Loading transfer insights…'
-              : hasTransfers
-                ? 'No swap has a fully completed three-gameweek window yet.'
-                : 'No transfer swaps are recorded yet.'}
+          {hasTransfers
+            ? 'No fully priced three-gameweek comparison is available yet.'
+            : 'No transfer swaps are recorded yet.'}
         </Text>
       )}
     </View>
@@ -276,7 +277,7 @@ export default function TeamScreen() {
       >
         <View>
           <Text className="text-sm font-semibold uppercase tracking-[3px] text-brand-400">Fantasy Dota 2</Text>
-          <Text className="mt-2 text-3xl font-bold text-white">My Team</Text>
+          <Text className="mt-2 text-3xl font-bold text-slate-50">My Team</Text>
           <Text className="mt-1 text-sm text-slate-400">
             {query.data?.gameweek
               ? `Gameweek ${query.data.gameweek.gameweekNumber} · ${query.data.gameweek.status}`
@@ -304,7 +305,7 @@ export default function TeamScreen() {
               className="mt-4 min-h-11 justify-center"
               onPress={() => void query.refetch()}
             >
-              <Text className="font-semibold text-white">Try again</Text>
+              <Text className="font-semibold text-slate-50">Try again</Text>
             </Pressable>
           </View>
         ) : query.data && query.data.ownedPlayers.length > 0 ? (
@@ -316,7 +317,7 @@ export default function TeamScreen() {
                   Budget & Valuation
                 </Text>
                 <Text className="text-xs font-bold text-slate-400">
-                  Total: <Text className="font-mono text-white">${totalAccountValue.toFixed(1)}M</Text>
+                  Total: <Text className="font-mono text-slate-50">${totalAccountValue.toFixed(1)}M</Text>
                 </Text>
               </View>
 
@@ -336,7 +337,7 @@ export default function TeamScreen() {
                 <View className="flex-row items-center gap-1.5">
                   <View className="h-2 w-2 rounded-full bg-cyan-400" />
                   <Text className="text-xs text-slate-300">
-                    Squad: <Text className="font-mono font-bold text-white">${squadValue.toFixed(1)}M</Text>
+                    Squad: <Text className="font-mono font-bold text-slate-50">${squadValue.toFixed(1)}M</Text>
                   </Text>
                 </View>
                 <View className="flex-row items-center gap-1.5">
@@ -380,7 +381,7 @@ export default function TeamScreen() {
                 <View className="flex-row flex-wrap gap-2">
                   <View className="flex-1 min-w-[45%] rounded-xl border border-slate-800 bg-slate-900 p-3">
                     <Text className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Transactions</Text>
-                    <Text className="mt-1 text-lg font-bold text-white">
+                    <Text className="mt-1 text-lg font-bold text-slate-50">
                       {historySummaryUnavailable ? '—' : historySummary.totalTransfers}
                     </Text>
                   </View>
@@ -420,7 +421,7 @@ export default function TeamScreen() {
                           ? 'text-emerald-400'
                           : historyQuery.data.analytics.netBudgetChange < 0
                             ? 'text-rose-400'
-                            : 'text-white'
+                            : 'text-slate-50'
                     }`}>
                       {!historyQuery.data || historyQuery.data.analytics.netBudgetChange === null
                         ? 'Unavailable'
@@ -439,7 +440,7 @@ export default function TeamScreen() {
                         className="min-h-10 justify-center self-start"
                         onPress={() => void historyQuery.refetch()}
                       >
-                        <Text className="font-semibold text-white">Retry analytics</Text>
+                        <Text className="font-semibold text-slate-50">Retry analytics</Text>
                       </Pressable>
                     </View>
                   ) : (
@@ -448,18 +449,18 @@ export default function TeamScreen() {
                     </Text>
                   )}
                   <View className="border-t border-slate-800 pt-3">
-                    <Text className="text-sm font-semibold text-white">Owned Squad Value</Text>
+                    <Text className="text-sm font-semibold text-slate-50">Owned Squad Value</Text>
                     <Text className="mt-1 text-xs text-slate-400">
                       Historical player market value by completed gameweek, excluding bank balance.
                     </Text>
                     {historyQuery.data ? (
-                      <SquadValueChart data={historyQuery.data.analytics.squadValueHistory} />
+                      <SquadValueChart data={historyQuery.data.analytics.squadValueHistory} theme={theme} />
                     ) : historyQuery.isError ? (
                       <Text accessibilityRole="alert" className="py-8 text-center text-xs text-red-300">
                         Unable to load squad value history.
                       </Text>
                     ) : (
-                      <ActivityIndicator accessibilityLabel="Loading squad value history" className="py-8" color="#14b8a6" />
+                      <ActivityIndicator accessibilityLabel={"Loading squad value history"} className={"py-8"} color={theme === 'dark' ? '#14b8a6' : '#0f766e'} />
                     )}
                     {historyQuery.data?.analytics.squadValueHistory.some((point) => point.value === null) ? (
                       <Text className="text-[10px] text-slate-500">
@@ -502,7 +503,7 @@ export default function TeamScreen() {
                       className="min-h-10 justify-center self-start"
                       onPress={() => void transferHistoryQuery.refetch()}
                     >
-                      <Text className="font-semibold text-white">Try again</Text>
+                      <Text className="font-semibold text-slate-50">Try again</Text>
                     </Pressable>
                   </View>
                 ) : transferHistoryQuery.data?.length ? (
@@ -809,7 +810,7 @@ export default function TeamScreen() {
                         className="mt-3 min-h-11 justify-center"
                         onPress={() => void lineupQuery.refetch()}
                       >
-                        <Text className="font-semibold text-white">Try again</Text>
+                        <Text className="font-semibold text-slate-50">Try again</Text>
                       </Pressable>
                     </View>
                   ) : lineupContext ? (
@@ -848,11 +849,11 @@ export default function TeamScreen() {
                 <View className="flex-row gap-3">
                   <View className="flex-1 rounded-2xl border border-slate-800 bg-slate-900 p-4">
                     <Text className="text-xs font-medium uppercase tracking-wider text-slate-400">Players</Text>
-                    <Text className="mt-2 text-2xl font-bold text-white">{query.data.ownedPlayers.length}</Text>
+                    <Text className="mt-2 text-2xl font-bold text-slate-50">{query.data.ownedPlayers.length}</Text>
                   </View>
                   <View className="flex-1 rounded-2xl border border-slate-800 bg-slate-900 p-4">
                     <Text className="text-xs font-medium uppercase tracking-wider text-slate-400">Lineup set</Text>
-                    <Text className="mt-2 text-2xl font-bold text-white">{query.data.lineup.length}</Text>
+                    <Text className="mt-2 text-2xl font-bold text-slate-50">{query.data.lineup.length}</Text>
                   </View>
                 </View>
                 <View className="gap-2">
@@ -874,7 +875,7 @@ export default function TeamScreen() {
             />
           ) : (
             <View className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <Text className="font-semibold text-white">No squad found</Text>
+              <Text className="font-semibold text-slate-50">No squad found</Text>
               <Text className="mt-2 text-sm leading-5 text-slate-400">
                 Your squad will appear here once it has been created.
               </Text>
