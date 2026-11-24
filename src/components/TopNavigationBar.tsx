@@ -63,6 +63,7 @@ const profileMenuItems: {
   { label: 'Gameweeks', href: '/gameweeks', icon: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' } },
   { label: 'Squad Planner', href: '/squad-planner', icon: { ios: 'calendar.badge.clock', android: 'event_note', web: 'event_note' } },
   { label: 'Notifications', href: '/notifications', icon: { ios: 'bell', android: 'notifications', web: 'notifications' } },
+  { label: 'Report Issue', href: '/report-issue', icon: { ios: 'exclamationmark.bubble.fill', android: 'feedback', web: 'feedback' } },
 ];
 
 function getAvatarUrl(value: unknown): string | null {
@@ -440,6 +441,45 @@ export function TopNavigationBar() {
                   ) : null}
                 </View>
                 <View>
+                  {!isPremiumUser(profileQuery.data) ? (
+                    <Pressable
+                      accessibilityLabel="Upgrade to Premium"
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: signingOut }}
+                      disabled={signingOut}
+                      style={{
+                        minHeight: 44,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.35)' : 'rgba(217, 119, 6, 0.35)',
+                        backgroundColor: theme === 'dark' ? 'rgba(245, 158, 11, 0.12)' : 'rgba(251, 191, 36, 0.12)',
+                        paddingHorizontal: 12,
+                        marginBottom: 4,
+                      }}
+                      onPress={() => {
+                        closeDropdown();
+                        router.push('/premium');
+                      }}
+                    >
+                      <SymbolView
+                        name={{ ios: 'crown.fill', android: 'workspace_premium', web: 'workspace_premium' }}
+                        size={18}
+                        tintColor={theme === 'dark' ? '#fbbf24' : '#b45309'}
+                      />
+                      <Text
+                        style={{
+                          marginLeft: 12,
+                          color: theme === 'dark' ? '#fcd34d' : '#92400e',
+                          fontSize: 14,
+                          fontWeight: '700',
+                        }}
+                      >
+                        Upgrade to Premium
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   {profileMenuItems.map((item) => (
                     <Pressable
                       key={item.label}
