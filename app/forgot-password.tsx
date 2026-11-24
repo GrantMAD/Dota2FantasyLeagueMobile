@@ -4,6 +4,7 @@ import { Link } from 'expo-router';
 import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { AuthBackground } from '@/src/components/auth/AuthBackground';
 import { AuthCard } from '@/src/components/auth/AuthCard';
+import { AuthFeedback } from '@/src/components/auth/AuthFeedback';
 import { AuthInput } from '@/src/components/auth/AuthInput';
 import { Button } from '@/src/components/Button';
 import { requestManagerPasswordReset } from '@/src/features/account/api';
@@ -66,9 +67,9 @@ export default function ForgotPasswordScreen() {
                   </Text>
                 </View>
                 {errorMessage ? (
-                  <Text accessibilityRole="alert" className="rounded-xl border border-red-500/30 bg-red-950/40 p-3 text-sm text-red-200">
+                  <AuthFeedback type="error">
                     {errorMessage}
-                  </Text>
+                  </AuthFeedback>
                 ) : null}
                 <AuthInput
                   label="Email address"

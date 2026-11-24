@@ -4,6 +4,7 @@ import * as Linking from 'expo-linking';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { AuthBackground } from '@/src/components/auth/AuthBackground';
 import { AuthCard } from '@/src/components/auth/AuthCard';
+import { AuthFeedback, type AuthFeedbackType } from '@/src/components/auth/AuthFeedback';
 import { Button } from '@/src/components/Button';
 import { exchangeMobileAuthCode, resendManagerConfirmation } from '@/src/features/account/api';
 
@@ -24,7 +25,7 @@ export default function AuthCallbackScreen() {
   const [verification, setVerification] = useState<{ code: string; error?: string } | null>(null);
   const [email, setEmail] = useState('');
   const [resending, setResending] = useState(false);
-  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<{ type: AuthFeedbackType; message: string } | null>(null);
   const processedCode = useRef<string | null>(null);
 
   useEffect(() => {
@@ -64,9 +65,15 @@ export default function AuthCallbackScreen() {
     setResendMessage(null);
     try {
       await resendManagerConfirmation(email, Linking.createURL('callback'));
-      setResendMessage('If this email needs confirmation, a new link will arrive shortly. Check your inbox and spam folder.');
+      setResendMessage({
+        type: 'success',
+        message: 'If this email needs confirmation, a new link will arrive shortly. Check your inbox and spam folder.',
+      });
     } catch (error) {
-      setResendMessage(error instanceof Error ? error.message : 'Unable to resend the confirmation email.');
+      setResendMessage({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Unable to resend the confirmation email.',
+      });
     } finally {
       setResending(false);
     }
@@ -96,9 +103,9 @@ export default function AuthCallbackScreen() {
               <>
                 <Text className="text-xs font-bold uppercase tracking-widest text-red-300">Confirmation unavailable</Text>
                 <Text className="text-2xl font-black text-white">Unable to verify email</Text>
-                <Text accessibilityRole="alert" className="text-sm leading-6 text-red-200">
+                <AuthFeedback type="error">
                   {errorMessage}
-                </Text>
+                </AuthFeedback>
                 <Text className="text-sm leading-5 text-slate-300">
                   If the link expired, enter your signup email and request a fresh confirmation link.
                 </Text>
@@ -125,7 +132,9 @@ export default function AuthCallbackScreen() {
                     {resending ? 'Sending…' : 'Resend confirmation email'}
                   </Text>
                 </Pressable>
-                {resendMessage ? <Text accessibilityRole="alert" className="text-sm leading-5 text-emerald-200">{resendMessage}</Text> : null}
+                {resendMessage ? (
+                  <AuthFeedback type={resendMessage.type}>{resendMessage.message}</AuthFeedback>
+                ) : null}
                 <Link href="/sign-in" asChild>
                   <Button label="Back to sign in" />
                 </Link>

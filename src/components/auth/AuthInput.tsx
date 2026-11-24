@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -14,11 +15,17 @@ interface AuthInputProps extends TextInputProps {
 }
 
 /**
- * Premium auth input with teal focus ring, label, error message, and optional hint.
+ * Auth input with accessible field feedback and an optional password visibility control.
  * Adapts the web AuthInput for React Native.
  */
 export function AuthInput({ label, error, hint, style, ...inputProps }: AuthInputProps) {
   const [focused, setFocused] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const isPassword = Boolean(inputProps.secureTextEntry);
+  const passwordToggleLabel = `${passwordVisible ? 'Hide' : 'Show'} ${label.toLowerCase()}`;
+  const fieldAccessibilityHint = [error, hint, inputProps.accessibilityHint]
+    .filter(Boolean)
+    .join(' ') || undefined;
 
   return (
     <View style={styles.wrapper}>
@@ -32,7 +39,9 @@ export function AuthInput({ label, error, hint, style, ...inputProps }: AuthInpu
       >
         <TextInput
           {...inputProps}
+          secureTextEntry={isPassword ? !passwordVisible : inputProps.secureTextEntry}
           accessibilityLabel={label}
+          accessibilityHint={fieldAccessibilityHint}
           onFocus={(e) => {
             setFocused(true);
             inputProps.onFocus?.(e);
@@ -42,15 +51,28 @@ export function AuthInput({ label, error, hint, style, ...inputProps }: AuthInpu
             inputProps.onBlur?.(e);
           }}
           placeholderTextColor="rgba(148, 163, 184, 0.5)"
-          style={[styles.input, style]}
+          style={[styles.input, isPassword && styles.inputWithPasswordToggle, style]}
         />
+        {isPassword ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={passwordToggleLabel}
+            onPress={() => setPasswordVisible((visible) => !visible)}
+            style={({ pressed }) => [styles.passwordToggle, pressed && styles.passwordTogglePressed]}
+          >
+            <Text style={styles.passwordToggleText}>{passwordVisible ? 'Hide' : 'Show'}</Text>
+          </Pressable>
+        ) : null}
       </View>
+      {hint ? <Text style={styles.hintText}>{hint}</Text> : null}
       {error ? (
-        <Text style={styles.errorText} accessibilityRole="alert">
+        <Text
+          style={styles.errorText}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+        >
           {error}
         </Text>
-      ) : hint ? (
-        <Text style={styles.hintText}>{hint}</Text>
       ) : null}
     </View>
   );
@@ -88,6 +110,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 15,
     color: '#f1f5f9', // slate-100
+  },
+  inputWithPasswordToggle: {
+    paddingRight: 76,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    top: 0,
+    right: 4,
+    bottom: 0,
+    minWidth: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  passwordTogglePressed: {
+    opacity: 0.65,
+  },
+  passwordToggleText: {
+    color: '#5eead4',
+    fontSize: 12,
+    fontWeight: '700',
   },
   errorText: {
     fontSize: 12,

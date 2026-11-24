@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '@/src/components/auth/AuthBackground';
 import { AuthCard } from '@/src/components/auth/AuthCard';
+import { AuthFeedback, type AuthFeedbackType } from '@/src/components/auth/AuthFeedback';
 import { AuthInput } from '@/src/components/auth/AuthInput';
 import { resendManagerConfirmation } from '@/src/features/account/api';
 import { useAuth } from '@/src/lib/auth';
@@ -31,7 +32,7 @@ export default function SignInScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [confirmationRequired, setConfirmationRequired] = useState(false);
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
-  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<{ type: AuthFeedbackType; message: string } | null>(null);
 
   if (ready && session) return <Redirect href={returnRoute} />;
 
@@ -59,9 +60,15 @@ export default function SignInScreen() {
     setResendMessage(null);
     try {
       await resendManagerConfirmation(email, Linking.createURL('callback'));
-      setResendMessage('If this email needs confirmation, a new link will arrive shortly. Check your inbox and spam folder.');
+      setResendMessage({
+        type: 'success',
+        message: 'If this email needs confirmation, a new link will arrive shortly. Check your inbox and spam folder.',
+      });
     } catch (error) {
-      setResendMessage(error instanceof Error ? error.message : 'Unable to resend the confirmation email.');
+      setResendMessage({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Unable to resend the confirmation email.',
+      });
     } finally {
       setResendingConfirmation(false);
     }
@@ -110,6 +117,8 @@ export default function SignInScreen() {
                   </View>
                 ) : (
                   <View style={styles.form}>
+                    {errorMessage ? <AuthFeedback type="error">{errorMessage}</AuthFeedback> : null}
+
                     <AuthInput
                       label="Email"
                       autoCapitalize="none"
@@ -134,7 +143,6 @@ export default function SignInScreen() {
                       secureTextEntry
                       textContentType="password"
                       value={password}
-                      error={errorMessage}
                     />
 
                     {confirmationRequired ? (
@@ -153,7 +161,9 @@ export default function SignInScreen() {
                             {resendingConfirmation ? 'Sending…' : 'Resend confirmation email'}
                           </Text>
                         </Pressable>
-                        {resendMessage ? <Text accessibilityRole="alert" className="text-xs leading-5 text-emerald-200">{resendMessage}</Text> : null}
+                        {resendMessage ? (
+                          <AuthFeedback type={resendMessage.type}>{resendMessage.message}</AuthFeedback>
+                        ) : null}
                       </View>
                     ) : null}
 

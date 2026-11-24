@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackground } from '@/src/components/auth/AuthBackground';
 import { AuthCard } from '@/src/components/auth/AuthCard';
+import { AuthFeedback, type AuthFeedbackType } from '@/src/components/auth/AuthFeedback';
 import { AuthInput } from '@/src/components/auth/AuthInput';
 import { PasswordStrength } from '@/src/components/auth/PasswordStrength';
 import { NetworkStatusBanner } from '@/src/lib/connectivity';
@@ -117,7 +118,7 @@ function SuccessOverlay({
   email?: string;
   onResend?: () => void;
   resending?: boolean;
-  resendMessage?: string | null;
+  resendMessage?: { type: AuthFeedbackType; message: string } | null;
 }) {
   return (
     <View style={success.overlay}>
@@ -135,7 +136,9 @@ function SuccessOverlay({
           <Text style={success.guidance}>
             Check your inbox and spam folder. Confirmation links expire, but you can request a new email here.
           </Text>
-          {resendMessage ? <Text accessibilityRole="alert" style={success.resendMessage}>{resendMessage}</Text> : null}
+          {resendMessage ? (
+            <AuthFeedback type={resendMessage.type}>{resendMessage.message}</AuthFeedback>
+          ) : null}
           <Pressable
             onPress={onResend}
             disabled={resending}
@@ -196,11 +199,6 @@ const success = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  resendMessage: {
-    fontSize: 13,
-    color: '#6ee7b7',
-    textAlign: 'center',
-  },
   resendButton: {
     minHeight: 48,
     borderRadius: 12,
@@ -246,17 +244,21 @@ export default function SignUpScreen() {
   const [confirmationMessage, setConfirmationMessage] = useState('');
   const [requiresEmailConfirmation, setRequiresEmailConfirmation] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
-  const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<{ type: AuthFeedbackType; message: string } | null>(null);
 
   async function handleSignUp() {
     setErrorMessage(null);
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match.');
+    setPasswordError(null);
+    setConfirmPasswordError(null);
+    if (password.length < 8) {
+      setPasswordError('Your password must be at least 8 characters.');
       return;
     }
-    if (password.length < 8) {
-      setErrorMessage('Your password must be at least 8 characters.');
+    if (password !== confirmPassword) {
+      setConfirmPasswordError('Passwords do not match.');
       return;
     }
     setSubmitting(true);
@@ -283,9 +285,15 @@ export default function SignUpScreen() {
     setResendMessage(null);
     try {
       await resendManagerConfirmation(email, Linking.createURL('callback'));
-      setResendMessage('If this email needs confirmation, a new link will arrive shortly.');
+      setResendMessage({
+        type: 'success',
+        message: 'If this email needs confirmation, a new link will arrive shortly.',
+      });
     } catch (error) {
-      setResendMessage(error instanceof Error ? error.message : 'Unable to resend the confirmation email.');
+      setResendMessage({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Unable to resend the confirmation email.',
+      });
     } finally {
       setResending(false);
     }
@@ -355,6 +363,8 @@ export default function SignUpScreen() {
                   </Text>
 
                   <View style={styles.form}>
+                    {errorMessage ? <AuthFeedback type="error">{errorMessage}</AuthFeedback> : null}
+
                     <AuthInput
                       label="Email"
                       autoCapitalize="none"
@@ -383,12 +393,17 @@ export default function SignUpScreen() {
                         label="Password"
                         autoCapitalize="none"
                         autoComplete="new-password"
-                        onChangeText={setPassword}
+                        onChangeText={(value) => {
+                          setPassword(value);
+                          setPasswordError(null);
+                          setConfirmPasswordError(null);
+                        }}
                         placeholder="At least 8 characters"
                         secureTextEntry
                         textContentType="newPassword"
                         value={password}
                         hint="Minimum 8 characters"
+                        error={passwordError}
                       />
                       <PasswordStrength password={password} />
                     </View>
@@ -397,11 +412,16 @@ export default function SignUpScreen() {
                       label="Confirm password"
                       autoCapitalize="none"
                       autoComplete="new-password"
-                      onChangeText={setConfirmPassword}
+                      onChangeText={(value) => {
+                        setConfirmPassword(value);
+                        setPasswordError(null);
+                        setConfirmPasswordError(null);
+                      }}
                       placeholder="Enter your password again"
                       secureTextEntry
                       textContentType="newPassword"
                       value={confirmPassword}
+                      error={confirmPasswordError}
                     />
 
                     {/* Create account button */}
@@ -431,11 +451,6 @@ export default function SignUpScreen() {
                       )}
                     </Pressable>
                   </View>
-                  {errorMessage ? (
-                    <Text accessibilityRole="alert" style={styles.legalError}>
-                      {errorMessage}
-                    </Text>
-                  ) : null}
                 </View>
               </AuthCard>
 
@@ -586,11 +601,5 @@ const styles = StyleSheet.create({
   legalLink: {
     color: '#94a3b8',
     textDecorationLine: 'underline',
-  },
-  legalError: {
-    marginTop: 8,
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#f87171',
   },
 });

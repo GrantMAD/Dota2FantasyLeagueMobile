@@ -3,6 +3,7 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 import { AuthBackground } from '@/src/components/auth/AuthBackground';
 import { AuthCard } from '@/src/components/auth/AuthCard';
+import { AuthFeedback } from '@/src/components/auth/AuthFeedback';
 import { AuthInput } from '@/src/components/auth/AuthInput';
 import { PasswordStrength } from '@/src/components/auth/PasswordStrength';
 import { Button } from '@/src/components/Button';
@@ -25,6 +26,8 @@ export default function ResetPasswordScreen() {
   const linkError = firstParam(params.error_description) || firstParam(params.error_code);
   const [verification, setVerification] = useState<{ code: string; error?: string } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,12 +72,14 @@ export default function ResetPasswordScreen() {
 
   async function savePassword() {
     setFormError(null);
+    setPasswordError(null);
+    setConfirmPasswordError(null);
     if (password.length < 8) {
-      setFormError('Your new password must be at least 8 characters.');
+      setPasswordError('Your new password must be at least 8 characters.');
       return;
     }
     if (password !== confirmPassword) {
-      setFormError('The passwords do not match.');
+      setConfirmPasswordError('The passwords do not match.');
       return;
     }
 
@@ -119,9 +124,9 @@ export default function ResetPasswordScreen() {
                 <View className="gap-2">
                   <Text className="text-xs font-bold uppercase tracking-widest text-red-300">Link unavailable</Text>
                   <Text className="text-2xl font-black text-white">Request a new link</Text>
-                  <Text accessibilityRole="alert" className="text-sm leading-6 text-red-200">
+                  <AuthFeedback type="error">
                     {verificationError}
-                  </Text>
+                  </AuthFeedback>
                 </View>
                 <Link href="/forgot-password" asChild>
                   <Button label="Request another reset link" />
@@ -135,29 +140,41 @@ export default function ResetPasswordScreen() {
                   <Text className="text-sm leading-6 text-slate-400">Set a password with at least 8 characters.</Text>
                 </View>
                 {formError ? (
-                  <Text accessibilityRole="alert" className="text-sm text-red-300">{formError}</Text>
+                  <AuthFeedback type="error">{formError}</AuthFeedback>
                 ) : null}
                 <AuthInput
                   label="New password"
                   autoCapitalize="none"
                   autoComplete="new-password"
-                  onChangeText={setPassword}
+                  onChangeText={(value) => {
+                    setPassword(value);
+                    setPasswordError(null);
+                    setConfirmPasswordError(null);
+                    setFormError(null);
+                  }}
                   placeholder="At least 8 characters"
                   secureTextEntry
                   textContentType="newPassword"
                   value={password}
                   hint="Use at least 8 characters."
+                  error={passwordError}
                 />
                 <PasswordStrength password={password} />
                 <AuthInput
                   label="Confirm new password"
                   autoCapitalize="none"
                   autoComplete="new-password"
-                  onChangeText={setConfirmPassword}
+                  onChangeText={(value) => {
+                    setConfirmPassword(value);
+                    setPasswordError(null);
+                    setConfirmPasswordError(null);
+                    setFormError(null);
+                  }}
                   placeholder="Enter your new password again"
                   secureTextEntry
                   textContentType="newPassword"
                   value={confirmPassword}
+                  error={confirmPasswordError}
                 />
                 <Button
                   disabled={!password || !confirmPassword}

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { AccessibilityInfo, Animated, StyleSheet, View } from 'react-native';
 
 /**
  * Cinematic auth screen background.
@@ -7,25 +7,58 @@ import { Animated, StyleSheet, View } from 'react-native';
  * that slowly breathe using the Animated API — matching the web app aesthetic
  * without requiring canvas.
  */
-export function AuthBackground({ children }: { children: React.ReactNode }) {
+export function AuthBackground({ children }: { children: ReactNode }) {
   const [orb1] = useState(() => new Animated.Value(0));
   const [orb2] = useState(() => new Animated.Value(0));
   const [orb3] = useState(() => new Animated.Value(0));
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const loop = (anim: Animated.Value, duration: number, delay: number) =>
+    let active = true;
+    let preferenceChanged = false;
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      preferenceChanged = true;
+      setReduceMotionEnabled(enabled);
+    });
+
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (active && !preferenceChanged) setReduceMotionEnabled(enabled);
+      })
+      .catch((error: unknown) => {
+        if (!active || preferenceChanged) return;
+        console.warn('Unable to read reduced-motion preference for auth background.', error);
+        setReduceMotionEnabled(true);
+      });
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotionEnabled !== false) return;
+
+    const createLoop = (anim: Animated.Value, duration: number, delay: number) =>
       Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
           Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
           Animated.timing(anim, { toValue: 0, duration, useNativeDriver: true }),
-        ])
-      ).start();
+        ]),
+      );
+    const animations = [
+      createLoop(orb1, 3200, 0),
+      createLoop(orb2, 4000, 800),
+      createLoop(orb3, 3600, 1600),
+    ];
+    animations.forEach((animation) => animation.start());
 
-    loop(orb1, 3200, 0);
-    loop(orb2, 4000, 800);
-    loop(orb3, 3600, 1600);
-  }, [orb1, orb2, orb3]);
+    return () => {
+      animations.forEach((animation) => animation.stop());
+    };
+  }, [orb1, orb2, orb3, reduceMotionEnabled]);
 
   const orbStyle = (anim: Animated.Value) => ({
     opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.38] }),
