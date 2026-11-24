@@ -8,6 +8,7 @@ import { ScreenScrollView as ScrollView } from '@/src/components/ScreenScrollVie
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
+import { AnalyticsExplainer } from '@/src/features/analytics/AnalyticsExplainer';
 import { getAnalytics } from '@/src/features/analytics/api';
 import type { AnalyticsPlayer, AnalyticsRole, AnalyticsTrend } from '@/src/features/analytics/api';
 import {
@@ -16,8 +17,37 @@ import {
   serializeAnalyticsCsv,
   type AnalyticsTrendRange,
 } from '@/src/features/analytics/presentation';
+import { useMobileTheme } from '@/src/lib/theme';
 
 const roleColors = ['#06b6d4', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'];
+
+const chartColorsByTheme = {
+  dark: {
+    grid: '#475569',
+    axis: '#94a3b8',
+    score: '#22d3ee',
+    average: '#94a3b8',
+    rank: '#f59e0b',
+    rankLabel: '#fbbf24',
+  },
+  light: {
+    grid: '#b7c8d8',
+    axis: '#506070',
+    score: '#0e7490',
+    average: '#506070',
+    rank: '#b45309',
+    rankLabel: '#92400e',
+  },
+} as const;
+
+type AnalyticsChartColors = {
+  grid: string;
+  axis: string;
+  score: string;
+  average: string;
+  rank: string;
+  rankLabel: string;
+};
 
 type AnalyticsIconName = ComponentProps<typeof SymbolView>['name'];
 
@@ -72,7 +102,7 @@ function Metric({ label, value, icon, compact = false }: {
   );
 }
 
-function TrendChart({ trends }: { trends: AnalyticsTrend[] }) {
+function TrendChart({ trends, colors }: { trends: AnalyticsTrend[]; colors: AnalyticsChartColors }) {
   const [width, setWidth] = useState(0);
   const height = 220;
   const left = 38;
@@ -115,24 +145,24 @@ function TrendChart({ trends }: { trends: AnalyticsTrend[] }) {
         >
           {[0, 0.5, 1].map((fraction) => {
             const y = top + fraction * plotHeight;
-            return <Line key={fraction} x1={left} x2={width - right} y1={y} y2={y} stroke="#475569" strokeDasharray="4 4" />;
+            return <Line key={fraction} x1={left} x2={width - right} y1={y} y2={y} stroke={colors.grid} strokeDasharray="4 4" />;
           })}
-          <SvgText x={left - 5} y={top + 4} fill="#94a3b8" fontSize="9" textAnchor="end">{maxScore.toFixed(0)}</SvgText>
-          <SvgText x={left - 5} y={top + plotHeight} fill="#94a3b8" fontSize="9" textAnchor="end">0</SvgText>
+          <SvgText x={left - 5} y={top + 4} fill={colors.axis} fontSize="9" textAnchor="end">{maxScore.toFixed(0)}</SvgText>
+          <SvgText x={left - 5} y={top + plotHeight} fill={colors.axis} fontSize="9" textAnchor="end">0</SvgText>
           {ranks.length ? (
             <>
-              <SvgText x={width - right + 5} y={top + 4} fill="#fbbf24" fontSize="9">#{minRank}</SvgText>
-              <SvgText x={width - right + 5} y={top + plotHeight} fill="#fbbf24" fontSize="9">#{maxRank}</SvgText>
+              <SvgText x={width - right + 5} y={top + 4} fill={colors.rankLabel} fontSize="9">#{minRank}</SvgText>
+              <SvgText x={width - right + 5} y={top + plotHeight} fill={colors.rankLabel} fontSize="9">#{maxRank}</SvgText>
             </>
           ) : null}
-          <Path d={linePath((row) => scoreY(row.userScore))} fill="none" stroke="#22d3ee" strokeWidth="3" />
-          <Path d={linePath((row) => scoreY(row.globalAverage))} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 4" />
-          <Path d={linePath((row) => row.rank == null ? null : rankY(row.rank))} fill="none" stroke="#f59e0b" strokeWidth="2.5" />
+          <Path d={linePath((row) => scoreY(row.userScore))} fill="none" stroke={colors.score} strokeWidth="3" />
+          <Path d={linePath((row) => scoreY(row.globalAverage))} fill="none" stroke={colors.average} strokeWidth="2" strokeDasharray="5 4" />
+          <Path d={linePath((row) => row.rank == null ? null : rankY(row.rank))} fill="none" stroke={colors.rank} strokeWidth="2.5" />
           {trends.map((row, index) => (
-            <Circle key={`${row.gameweekId}-score`} cx={x(index)} cy={scoreY(row.userScore)} r={3.5} fill="#22d3ee" />
+            <Circle key={`${row.gameweekId}-score`} cx={x(index)} cy={scoreY(row.userScore)} r={3.5} fill={colors.score} />
           ))}
           {labelIndexes.map((index) => (
-            <SvgText key={index} x={x(index)} y={height - 6} fill="#94a3b8" fontSize="9" textAnchor="middle">
+            <SvgText key={index} x={x(index)} y={height - 6} fill={colors.axis} fontSize="9" textAnchor="middle">
               GW {trends[index].gameweekId}
             </SvgText>
           ))}
@@ -181,6 +211,8 @@ function getDreamTeamLineup(players: AnalyticsPlayer[]) {
 }
 
 export default function AnalyticsScreen() {
+  const { theme } = useMobileTheme();
+  const chartColors = chartColorsByTheme[theme];
   const [tab, setTab] = useState<'my' | 'market' | 'dream'>('my');
   const [trendRange, setTrendRange] = useState<AnalyticsTrendRange>('all');
   const [exportingCsv, setExportingCsv] = useState(false);
@@ -390,9 +422,9 @@ export default function AnalyticsScreen() {
                 </Text>
                 <View className="flex-row flex-wrap gap-x-4 gap-y-2">
                   {[
-                    ['#22d3ee', 'Your score'],
-                    ['#94a3b8', 'Global average'],
-                    ['#f59e0b', 'Global rank'],
+                    [chartColors.score, 'Your score'],
+                    [chartColors.average, 'Global average'],
+                    [chartColors.rank, 'Global rank'],
                   ].map(([color, label]) => (
                     <View key={label} className="flex-row items-center gap-1.5">
                       <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
@@ -423,7 +455,7 @@ export default function AnalyticsScreen() {
               </View>
               {visibleTrend.length ? (
                 <>
-                  <TrendChart trends={visibleTrend} />
+                  <TrendChart trends={visibleTrend} colors={chartColors} />
                   <View
                     accessible
                     accessibilityRole="header"
@@ -466,7 +498,21 @@ export default function AnalyticsScreen() {
                     </View>
                   ))}
                 </>
-              ) : <Text className="text-sm text-slate-400">No gameweek scores are available yet.</Text>}
+              ) : (
+                <View className="items-start gap-2 rounded-xl border border-dashed border-slate-700 bg-slate-950/50 p-4">
+                  <Text className="font-semibold text-white">
+                    Your performance trends will appear after your first scored gameweek.
+                  </Text>
+                  <Text className="text-sm leading-5 text-slate-400">
+                    Set your lineup now, then come back after scores are recorded to see your progress.
+                  </Text>
+                  <Link href={{ pathname: '/team', params: { tab: 'lineup' } }} asChild>
+                    <Pressable accessibilityRole="button" className="mt-1 min-h-11 justify-center rounded-lg bg-brand-500 px-4">
+                      <Text className="text-sm font-semibold text-on-accent">Set your lineup</Text>
+                    </Pressable>
+                  </Link>
+                </View>
+              )}
             </View>
 
             <View className="gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
@@ -540,6 +586,11 @@ export default function AnalyticsScreen() {
                   icon={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' }}
                 />
                 <Text className="text-xs leading-5 text-slate-400">Best role-balanced scorers from the latest available gameweek.</Text>
+                <AnalyticsExplainer title="How is the Dream Team selected?">
+                  <Text className="text-sm leading-5 text-slate-300">
+                    It selects the highest-scoring available player for each starting role in the analytics gameweek. The next three highest-scoring players who were not selected for a starting role make up the bench.
+                  </Text>
+                </AnalyticsExplainer>
                 {query.data.dreamTeam.length ? (() => {
                   const { starters, bench } = getDreamTeamLineup(query.data.dreamTeam);
                   return (
@@ -636,6 +687,14 @@ export default function AnalyticsScreen() {
                     icon={{ ios: 'dollarsign.circle.fill', android: 'paid', web: 'paid' }}
                   />
                   <Text className="text-xs text-slate-400">High-return players by points per $10M.</Text>
+                  <AnalyticsExplainer title="How are ROI and ownership calculated?">
+                    <Text className="text-sm leading-5 text-slate-300">
+                      ROI is the player’s fantasy points in the analytics gameweek divided by their latest price, multiplied by 10 (points per $10M).
+                    </Text>
+                    <Text className="text-sm leading-5 text-slate-300">
+                      Owned is the percentage of managers who own the player in the latest price snapshot; it is not a change-over-time measure.
+                    </Text>
+                  </AnalyticsExplainer>
                   {query.data.market.length ? query.data.market.slice(0, 6).map((player, index) => (
                     <View key={`${player.playerName}-${index}`} className="gap-3 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
                       <View className="flex-row items-start justify-between gap-3">
