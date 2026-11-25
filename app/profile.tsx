@@ -190,7 +190,11 @@ export default function ProfileScreen() {
             contentContainerClassName="gap-5 px-5 pb-8"
             style={{ display: activeTab === 'profile' ? 'flex' : 'none' }}
           >
-            <ProfileOverview profile={query.data} onSaved={showSaveToast} />
+            <ProfileOverview
+              profile={query.data}
+              onSaved={showSaveToast}
+              onEditProfile={() => setActiveTab('settings')}
+            />
             <ProfileAchievementsSection profile={query.data} />
           </ScrollView>
           <ScrollView
@@ -223,12 +227,41 @@ export default function ProfileScreen() {
   );
 }
 
+function formatTimezoneLabel(timezone: string | null | undefined): string {
+  if (!timezone) return 'Not set';
+  try {
+    const now = new Date();
+    const longName = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'longGeneric',
+    })
+      .formatToParts(now)
+      .find((part) => part.type === 'timeZoneName')?.value;
+    const offset = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'shortOffset',
+    })
+      .formatToParts(now)
+      .find((part) => part.type === 'timeZoneName')?.value
+      ?.replace('GMT', 'UTC');
+
+    if (longName && offset) return `${longName} (${offset})`;
+    if (longName) return longName;
+    if (offset) return `${timezone} (${offset})`;
+    return timezone;
+  } catch {
+    return timezone;
+  }
+}
+
 function ProfileOverview({
   profile,
   onSaved,
+  onEditProfile,
 }: {
   profile: ManagerProfile;
   onSaved: (message: string) => void;
+  onEditProfile?: () => void;
 }) {
   const queryClient = useQueryClient();
   const { notify } = useMobileFeedback();
@@ -367,8 +400,8 @@ function ProfileOverview({
           </Pressable>
           {managerDetailsExpanded ? (
             <View className="flex-row flex-wrap gap-2">
-              <ProfileTag label="Country" value={countryName || 'Not set'} tone="emerald" />
-              <ProfileTag label="Timezone" value={profile.timezone || 'Not set'} tone="sky" />
+              <ProfileTag label="Country" value={countryName || 'Not set'} tone="emerald" onPress={onEditProfile} />
+              <ProfileTag label="Timezone" value={formatTimezoneLabel(profile.timezone)} tone="sky" onPress={onEditProfile} />
               <ProfileTag label="Account" value={profile.role === 'admin' ? 'Admin access' : 'Manager'} tone="violet" />
             </View>
           ) : null}
@@ -393,9 +426,18 @@ function ProfileOverview({
             <Text className="text-lg text-brand-300">{aboutManagerExpanded ? '⌃' : '⌄'}</Text>
           </Pressable>
           {aboutManagerExpanded ? (
-            <Text className="text-sm leading-5 text-slate-300">
-              {hasBio ? profile.bio : 'Add a short bio to introduce yourself to your league rivals.'}
-            </Text>
+            onEditProfile ? (
+              <Pressable accessibilityLabel="Edit bio" accessibilityRole="button" onPress={onEditProfile}>
+                <Text className="text-sm leading-5 text-slate-300">
+                  {hasBio ? profile.bio : 'Add a short bio to introduce yourself to your league rivals.'}
+                  <Text className="text-brand-300"> {hasBio ? 'Edit' : 'Add bio'}</Text>
+                </Text>
+              </Pressable>
+            ) : (
+              <Text className="text-sm leading-5 text-slate-300">
+                {hasBio ? profile.bio : 'Add a short bio to introduce yourself to your league rivals.'}
+              </Text>
+            )
           ) : null}
         </View>
 
@@ -558,21 +600,31 @@ function ProfileTag({
   label,
   value,
   tone,
+  onPress,
 }: {
   label: string;
   value: string;
   tone: 'emerald' | 'sky' | 'violet';
+  onPress?: () => void;
 }) {
   const colors = {
     emerald: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
     sky: 'border-sky-500/40 bg-sky-500/15 text-sky-200',
     violet: 'border-violet-500/40 bg-violet-500/15 text-violet-200',
   }[tone];
-  return (
+  const content = (
     <Text className={`rounded-full border px-3 py-1.5 text-xs ${colors}`}>
       <Text className="font-semibold text-white">{label}: </Text>
       {value}
     </Text>
+  );
+
+  if (!onPress) return content;
+
+  return (
+    <Pressable accessibilityLabel={`Edit ${label.toLowerCase()}`} accessibilityRole="button" onPress={onPress}>
+      {content}
+    </Pressable>
   );
 }
 
