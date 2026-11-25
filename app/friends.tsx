@@ -359,6 +359,7 @@ export default function FriendsScreen() {
   const cutoff = now - 3 * 24 * 60 * 60 * 1000;
   const recentActivities = activities.filter((activity) => Date.parse(activity.updated_at) >= cutoff);
   const olderFeedActivities = activities.filter((activity) => Date.parse(activity.updated_at) < cutoff);
+  const recentlyActiveFriendIds = new Set(recentActivities.map((activity) => activity.user_id));
   const nextCursor = loadMoreMutation.isSuccess
     ? loadMoreMutation.data.nextCursor
     : feedQuery.data?.nextCursor ?? null;
@@ -501,9 +502,11 @@ export default function FriendsScreen() {
             <ActivityIndicator accessibilityLabel="Loading followed managers" color="#14b8a6" />
           ) : following.length ? (
             <View className="gap-2">
-              {following.map((profile) => (
+              {following.map((profile) => {
+                const isInactive = !recentlyActiveFriendIds.has(profile.id);
+                return (
                 <View
-                  className="gap-4 rounded-2xl border border-slate-700 bg-slate-900 p-4"
+                  className={`gap-4 rounded-2xl border border-slate-700 bg-slate-900 p-4 ${isInactive ? 'opacity-70' : ''}`}
                   key={profile.id}
                 >
                   <Pressable
@@ -526,7 +529,14 @@ export default function FriendsScreen() {
                       )}
                     </View>
                     <View className="flex-1 gap-1">
-                      <Text numberOfLines={1} className="text-base font-bold text-slate-50">{profileName(profile)}</Text>
+                      <View className="flex-row items-center gap-2">
+                        <Text numberOfLines={1} className="shrink text-base font-bold text-slate-50">{profileName(profile)}</Text>
+                        {isInactive ? (
+                          <View className="rounded-full border border-slate-600 bg-slate-800 px-2 py-0.5">
+                            <Text className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Inactive</Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text numberOfLines={1} className="text-sm text-slate-400">@{profile.username}</Text>
                       <Text className="mt-1 text-xs font-semibold text-brand-300">View season progress</Text>
                     </View>
@@ -551,7 +561,8 @@ export default function FriendsScreen() {
                     </Pressable>
                   </View>
                 </View>
-              ))}
+              );
+              })}
             </View>
           ) : (
             <FriendsEmptyState

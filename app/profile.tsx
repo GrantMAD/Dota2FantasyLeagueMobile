@@ -1114,6 +1114,21 @@ function ProfileEditor({
         </Link>
       </View>
 
+      <View className="gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/5 p-4">
+        <Text className="text-base font-bold text-rose-300">Danger Zone</Text>
+        <Text className="text-sm leading-5 text-slate-300">
+          Account deletion and irreversible account actions are not available in-app yet. If you need help with account removal or a sensitive security request, contact support so we can verify your identity.
+        </Text>
+        <Link href="/help" asChild>
+          <Pressable
+            accessibilityRole="link"
+            className="min-h-11 items-center justify-center self-start rounded-xl border border-rose-500/40 bg-rose-500/10 px-4"
+          >
+            <Text className="text-sm font-semibold text-rose-300">Contact support</Text>
+          </Pressable>
+        </Link>
+      </View>
+
       <View className="gap-3 border-t border-slate-800 pt-4">
         <View>
           <Text className="text-base font-semibold text-white">Appearance</Text>

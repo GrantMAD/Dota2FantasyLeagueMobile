@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -72,6 +72,8 @@ export default function LeaderboardScreen() {
   const [gameweekPickerVisible, setGameweekPickerVisible] = useState(false);
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
   const [selectedManager, setSelectedManager] = useState<LeaderboardEntry | null>(null);
+  const scrollRef = useRef<NativeScrollView>(null);
+  const currentUserRowRef = useRef<View>(null);
   const gameweeks = useQuery({
     queryKey: ['gameweeks'],
     queryFn: getGameweeks,
@@ -92,6 +94,7 @@ export default function LeaderboardScreen() {
   return (
     <Screen>
       <ScrollView
+        ref={scrollRef}
         className="flex-1"
         contentContainerClassName="gap-5 px-5 pb-8 pt-5"
         refreshControl={
@@ -261,6 +264,20 @@ export default function LeaderboardScreen() {
                       ? `${Math.max(0, managerAbove.totalPoints - currentManager.totalPoints)} points to pass #${managerAbove.rank}`
                       : 'Your rank and points are highlighted in the standings below.'}
                   </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Jump to my rank"
+                    className="mt-2 min-h-11 items-center justify-center self-start rounded-lg border border-brand-500/40 bg-brand-500/15 px-4"
+                    onPress={() => {
+                      currentUserRowRef.current?.measureLayout(
+                        scrollRef.current as any,
+                        (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true }),
+                        () => scrollRef.current?.scrollToEnd({ animated: true }),
+                      );
+                    }}
+                  >
+                    <Text className="text-sm font-semibold text-brand-200">Jump to my rank</Text>
+                  </Pressable>
                 </View>
               );
             })()}
@@ -291,6 +308,7 @@ export default function LeaderboardScreen() {
                   return (
                     <View
                       key={`${entry.id}-${entry.rank}`}
+                      ref={isCurrentUser ? currentUserRowRef : undefined}
                       className={`flex-row items-center gap-3 rounded-xl border p-3 ${
                         isTopScorer
                           ? 'border-amber-500/50 bg-amber-500/10'
