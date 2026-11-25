@@ -28,19 +28,22 @@ function ChoiceButton({
   selected,
   onPress,
   compact = false,
+  disabled = false,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
   compact?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
       className={`min-h-10 ${compact ? 'flex-none' : 'flex-1'} items-center justify-center rounded-xl border px-3 ${
         selected ? 'border-brand-500 bg-brand-500/15' : 'border-slate-700 bg-slate-900'
-      }`}
+      } ${disabled ? 'opacity-50' : ''}`}
+      disabled={disabled}
       onPress={onPress}
     >
       <Text numberOfLines={1} className={`text-sm font-semibold ${selected ? 'text-brand-300' : 'text-slate-300'}`}>
@@ -223,6 +226,7 @@ export default function LeaguesScreen() {
                 <TextInput
                   accessibilityLabel="League name"
                   className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-base text-slate-50"
+                  editable={!submitting}
                   maxLength={80}
                   onChangeText={setName}
                   placeholder="League name"
@@ -237,23 +241,25 @@ export default function LeaguesScreen() {
                   onChangeText={setDescription}
                   placeholder="Description (optional)"
                   placeholderTextColor={colors.placeholder}
+                  editable={!submitting}
                   value={description}
                 />
                 <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Format</Text>
                 <View className="flex-row gap-2">
-                  <ChoiceButton label="Classic" selected={type === 'classic'} onPress={() => setType('classic')} />
-                  <ChoiceButton label="Head-to-head" selected={type === 'h2h'} onPress={() => setType('h2h')} />
+                  <ChoiceButton label="Classic" selected={type === 'classic'} onPress={() => setType('classic')} disabled={submitting} />
+                  <ChoiceButton label="Head-to-head" selected={type === 'h2h'} onPress={() => setType('h2h')} disabled={submitting} />
                 </View>
                 <Text className="text-xs font-semibold uppercase tracking-wider text-slate-400">Privacy</Text>
                 <View className="flex-row gap-2">
-                  <ChoiceButton label="Private" selected={privacyLevel === 'private'} onPress={() => setPrivacyLevel('private')} />
-                  <ChoiceButton label="Public" selected={privacyLevel === 'public'} onPress={() => setPrivacyLevel('public')} />
+                  <ChoiceButton label="Private" selected={privacyLevel === 'private'} onPress={() => setPrivacyLevel('private')} disabled={submitting} />
+                  <ChoiceButton label="Public" selected={privacyLevel === 'public'} onPress={() => setPrivacyLevel('public')} disabled={submitting} />
                 </View>
                 <TextInput
                   accessibilityLabel="Maximum participants"
                   className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 text-base text-slate-50"
                   keyboardType="number-pad"
                   onChangeText={setMaxParticipants}
+                  editable={!submitting}
                   placeholder="Maximum participants (4–32)"
                   placeholderTextColor={colors.placeholder}
                   value={maxParticipants}
@@ -277,12 +283,19 @@ export default function LeaguesScreen() {
                   autoCapitalize="characters"
                   autoCorrect={false}
                   className="min-h-12 rounded-xl border border-slate-700 bg-slate-950 px-4 font-mono text-base text-slate-50"
+                  editable={!submitting}
                   onChangeText={(value) => setInviteCode(value.toUpperCase())}
                   placeholder="ABC-1234"
                   placeholderTextColor={colors.placeholder}
                   value={inviteCode}
                 />
-                <Pressable
+                
+                {joinMutation.isPending ? (
+                  <View accessibilityLiveRegion="polite" className="flex-row items-center gap-2 rounded-xl border border-brand-500/30 bg-brand-500/10 px-3 py-2">
+                    <ActivityIndicator color="#14b8a6" size="small" />
+                    <Text className="text-sm font-medium text-brand-300">Joining league...</Text>
+                  </View>
+                ) : null}<Pressable
                   accessibilityRole="button"
                   className="min-h-12 items-center justify-center rounded-xl bg-brand-500 px-4"
                   disabled={submitting}

@@ -273,7 +273,7 @@ export default function LeagueDetailScreen() {
                 })
               ) : (
                 <Text className="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-400">
-                  No league activity yet.
+                  No recent activity — check back after the next gameweek.
                 </Text>
               )}
             </View>
