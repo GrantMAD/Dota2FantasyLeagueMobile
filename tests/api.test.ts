@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
-import { activateChip, activateWildcard, addPlayersToSquad, getFantasyContext, getFixtureDifficultyForTeams, getPlayerMarket, getTransferHistory, getTransferHistoryAnalytics, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup, updateGoals } from '../src/features/fantasy/api';
+import { activateChip, activateWildcard, addPlayersToSquad, getDashboardFantasyContext, getFantasyContext, getFixtureDifficultyForTeams, getPlayerMarket, getTransferHistory, getTransferHistoryAnalytics, getUpcomingFixturesForTeams, getUpcomingTeamFixtures, processTransfer, saveLineup, updateGoals } from '../src/features/fantasy/api';
 import { getSupabaseClient } from '../src/lib/supabase';
 import { getGameweekHistory, getGameweeks } from '../src/features/gameweeks/api';
 import {
@@ -143,6 +143,43 @@ describe('mobile data access', () => {
       p_gameweek_id: null,
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('loads the dashboard lineup through the current-gameweek fantasy RPC', async () => {
+    mockFantasyContextRpc({
+      fantasySeasonId: 12,
+      seasonId: 3,
+      hasSquad: true,
+      budget: 45,
+      freeTransfers: 1,
+      totalPoints: 0,
+      globalRank: null,
+      gameweek: {
+        id: 7,
+        gameweekNumber: 7,
+        deadline: '2026-11-20T00:00:00Z',
+        status: 'active',
+        isLocked: true,
+        hasUpcoming: true,
+      },
+      defaultGameweekId: 7,
+      availableGameweeks: [],
+      chips: {
+        tripleCaptainUsed: false,
+        tripleCaptainGameweekId: null,
+        benchBoostUsed: false,
+        benchBoostGameweekId: null,
+        wildcardUsed: false,
+        wildcardUsedGameweekId: null,
+      },
+      lineup: [],
+      ownedPlayers: [],
+    });
+
+    await expect(getDashboardFantasyContext()).resolves.toMatchObject({
+      gameweek: { id: 7, status: 'active', isLocked: true },
+    });
+    expect(mobileFantasyContextRpc).toHaveBeenCalledWith('mobile_get_dashboard_fantasy_context');
   });
 
   it('resolves historical used chip gameweek numbers through the authenticated gameweek RPC', async () => {

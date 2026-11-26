@@ -320,12 +320,30 @@ function parseLineupEntry(value: unknown): FantasyLineupEntry {
   };
 }
 
-export async function getFantasyContext(gameweekId?: number): Promise<FantasyContext> {
-  let { data: value, error } = await getSupabaseClient().rpc('mobile_get_fantasy_lineup_context', {
-    p_gameweek_id: gameweekId ?? null,
-  });
+export function getFantasyContext(gameweekId?: number): Promise<FantasyContext> {
+  return loadFantasyContext(gameweekId, false);
+}
 
-  if (error && gameweekId === undefined && error.message.includes('not available for lineup planning')) {
+export function getDashboardFantasyContext(): Promise<FantasyContext> {
+  return loadFantasyContext(undefined, true);
+}
+
+async function loadFantasyContext(
+  gameweekId: number | undefined,
+  dashboardCurrentGameweek: boolean,
+): Promise<FantasyContext> {
+  let { data: value, error } = dashboardCurrentGameweek
+    ? await getSupabaseClient().rpc('mobile_get_dashboard_fantasy_context')
+    : await getSupabaseClient().rpc('mobile_get_fantasy_lineup_context', {
+        p_gameweek_id: gameweekId ?? null,
+      });
+
+  if (
+    error &&
+    !dashboardCurrentGameweek &&
+    gameweekId === undefined &&
+    error.message.includes('not available for lineup planning')
+  ) {
     const fallback = await getSupabaseClient().rpc('mobile_get_fantasy_context');
     if (!fallback.error && isRecord(fallback.data)) {
       let availableGameweeks: unknown[] = [];

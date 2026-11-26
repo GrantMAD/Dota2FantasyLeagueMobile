@@ -21,7 +21,7 @@ import { TransferDeadlineRush } from '@/src/features/dashboard/TransferDeadlineR
 import { PersonalGoalsProgress } from '@/src/features/fantasy/PersonalGoalsProgress';
 import { getMatches } from '@/src/features/competition/api';
 import { getDashboardSquadSummary, type FantasyLineupEntry } from '@/src/features/fantasy/api';
-import { useFantasyContext } from '@/src/features/fantasy/hooks';
+import { useDashboardFantasyContext } from '@/src/features/fantasy/hooks';
 import { getAnalytics } from '@/src/features/analytics/api';
 import { getLeagues, getLeagueActivity, getLatestRankChangeForUser } from '@/src/features/leagues/api';
 import { markNotificationRead } from '@/src/features/notifications/api';
@@ -42,6 +42,7 @@ import {
   getRankTrend,
   LineupProgress,
 } from '@/src/features/dashboard/DashboardPresentation';
+import { DashboardTransferredOutBanner } from '@/src/features/dashboard/DashboardTransferredOutBanner';
 
 function formatMetric(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—';
@@ -53,7 +54,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { theme } = useMobileTheme();
   const isDark = theme === 'dark';
-  const query = useFantasyContext();
+  const query = useDashboardFantasyContext();
   const { session } = useAuth();
   const [pointsBreakdownOpen, setPointsBreakdownOpen] = useState(false);
   const profileQuery = useQuery({
@@ -1034,6 +1035,11 @@ export default function HomeScreen() {
                   <Text className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Starting Five</Text>
                   <Text className="text-[11px] text-slate-400">Tap a player for score details</Text>
                 </View>
+                <DashboardTransferredOutBanner
+                  starters={starters}
+                  ownedPlayerIds={query.data.ownedPlayers.map((player) => player.id)}
+                  isDark={isDark}
+                />
                 {starters.length ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-3 pb-1">
                     {starters.map((entry) => {
