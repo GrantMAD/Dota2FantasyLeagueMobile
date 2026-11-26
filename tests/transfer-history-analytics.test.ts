@@ -88,4 +88,31 @@ describe('calculateTransferHistoryAnalytics', () => {
       { gameweekNumber: 3, value: null },
     ]);
   });
+
+  it('uses the outgoing player market sell price at transfer time over acquisition cost', () => {
+    const result = calculateTransferHistoryAnalytics({
+      transfers: [{
+        ...baseTransfer,
+        createdAt: '2026-10-18T10:00:00Z',
+        gameweekId: 3,
+        gameweekNumber: 3,
+      }],
+      members: [
+        { fantasySeasonId: 9, playerId: 10, cost: 5.0, acquiredAt: '2026-09-01T00:00:00Z', removedAt: '2026-10-18T10:00:00Z' },
+        { fantasySeasonId: 9, playerId: 20, cost: 6.51, acquiredAt: '2026-10-18T10:00:00Z', removedAt: null },
+      ],
+      gameweeks: weeks,
+      scores: [],
+      prices: [
+        { playerId: 10, gameweekId: 1, price: 5.05 },
+        { playerId: 10, gameweekId: 2, price: 5.12 },
+        { playerId: 10, gameweekId: 3, price: 5.99 },
+      ],
+      currentFantasySeasonId: 9,
+      currentSeasonId: 3,
+    });
+
+    expect(result.transfers[0].budgetImpact).toBe(-1.39);
+    expect(result.analytics.netBudgetChange).toBe(-1.39);
+  });
 });

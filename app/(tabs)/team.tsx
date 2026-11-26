@@ -425,7 +425,7 @@ export default function TeamScreen() {
                     }`}>
                       {!historyQuery.data || historyQuery.data.analytics.netBudgetChange === null
                         ? 'Unavailable'
-                        : `${historyQuery.data.analytics.netBudgetChange > 0 ? '+$' : historyQuery.data.analytics.netBudgetChange < 0 ? '-$' : '$'}${Math.abs(historyQuery.data.analytics.netBudgetChange).toFixed(1)}M`}
+                        : `${historyQuery.data.analytics.netBudgetChange > 0 ? '+$' : historyQuery.data.analytics.netBudgetChange < 0 ? '-$' : '$'}${Math.abs(historyQuery.data.analytics.netBudgetChange).toFixed(2)}M`}
                     </Text>
                   </View>
                   {historyQuery.isError ? (
@@ -554,7 +554,7 @@ export default function TeamScreen() {
                               <Text className="text-[10px] text-slate-400">
                                 Budget impact: {typeof analyticsMove?.budgetImpact !== 'number'
                                   ? 'unavailable'
-                                  : `${analyticsMove.budgetImpact > 0 ? '+$' : analyticsMove.budgetImpact < 0 ? '-$' : '$'}${Math.abs(analyticsMove.budgetImpact).toFixed(1)}M`}
+                                  : `${analyticsMove.budgetImpact > 0 ? '+$' : analyticsMove.budgetImpact < 0 ? '-$' : '$'}${Math.abs(analyticsMove.budgetImpact).toFixed(2)}M`}
                                 {typeof analyticsMove?.netPointsNextThreeGameweeks === 'number'
                                   ? ` · Three-gameweek net: ${analyticsMove.netPointsNextThreeGameweeks > 0 ? '+' : ''}${analyticsMove.netPointsNextThreeGameweeks.toFixed(1)} pts`
                                   : ''}
@@ -566,7 +566,7 @@ export default function TeamScreen() {
                           <Text className="text-xs text-slate-400">
                             Transaction budget impact: {typeof analyticsEntry?.budgetImpact !== 'number'
                               ? 'unavailable'
-                              : `${analyticsEntry.budgetImpact > 0 ? '+$' : analyticsEntry.budgetImpact < 0 ? '-$' : '$'}${Math.abs(analyticsEntry.budgetImpact).toFixed(1)}M`}
+                              : `${analyticsEntry.budgetImpact > 0 ? '+$' : analyticsEntry.budgetImpact < 0 ? '-$' : '$'}${Math.abs(analyticsEntry.budgetImpact).toFixed(2)}M`}
                           </Text>
                         </View>
                       </View>

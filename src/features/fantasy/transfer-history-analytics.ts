@@ -166,10 +166,49 @@ export function calculateTransferHistoryAnalytics(input: {
     const key = `${score.playerId}:${score.gameweekId}`;
     scoreByPlayerWeek.set(key, (scoreByPlayerWeek.get(key) ?? 0) + score.points);
   }
+  const gameweekById = new Map(input.gameweeks.map((week) => [week.id, week]));
+
+  function sellPriceAt(
+    playerId: number | null,
+    seasonId: number | null,
+    gameweekId: number | null,
+    transferredAt: string,
+  ): number | null {
+    if (playerId === null) return null;
+    const transferTime = parseTimestamp(transferredAt);
+    if (transferTime === null) return null;
+    let bestPrice: number | null = null;
+    let bestTime: number | null = null;
+    let bestWeekId = -1;
+    for (const p of input.prices) {
+      if (p.playerId !== playerId || !Number.isFinite(p.price)) continue;
+      const gw = gameweekById.get(p.gameweekId);
+      if (seasonId !== null && gw && gw.seasonId !== seasonId) continue;
+      const gwEnd = parseTimestamp(gw?.endDate ?? null);
+      if (gwEnd !== null) {
+        if (gwEnd > transferTime) continue;
+      } else if (gameweekId === null || p.gameweekId >= gameweekId) {
+        continue;
+      }
+      const isBetter =
+        bestPrice === null ||
+        (gwEnd !== null && bestTime !== null && gwEnd > bestTime) ||
+        (gwEnd !== null && bestTime === null) ||
+        (gwEnd === bestTime && p.gameweekId > bestWeekId);
+      if (isBetter) {
+        bestPrice = p.price;
+        bestTime = gwEnd;
+        bestWeekId = p.gameweekId;
+      }
+    }
+    return bestPrice;
+  }
 
   const transfers = input.transfers.map((transfer) => {
     const moves = transfer.moves.map((move) => {
-      const outCost = findMemberCost(input.members, transfer.fantasySeasonId, move.playerOutId, transfer.createdAt, 'removed');
+      const outCost =
+        sellPriceAt(move.playerOutId, transfer.seasonId, transfer.gameweekId, transfer.createdAt) ??
+        findMemberCost(input.members, transfer.fantasySeasonId, move.playerOutId, transfer.createdAt, 'removed');
       const inCost = findMemberCost(input.members, transfer.fantasySeasonId, move.playerInId, transfer.createdAt, 'acquired');
       const weeks = closedScoringWeeks(transfer.seasonId, transfer.gameweekId, input.gameweeks);
       const netPoints = weeks.length === 3 && move.playerOutId !== null && move.playerInId !== null
